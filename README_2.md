@@ -166,6 +166,8 @@ Tests are in `TeamCode/src/test/java/`. They check the mecanum wheel math and dr
 
 **On the robot:** run `BioBuzz System Check`. The simulation can't see wiring mistakes such as swapped motor names or wheels in the wrong corners, so a person confirms each wheel and each move.
 
+**On the field:** follow [BIOBUZZ_TEST_PLAN.md](BIOBUZZ_TEST_PLAN.md). It uses `BioBuzz Vision Test`, `BioBuzz Shot Log` and the AUTO logs (all saved on the Control Hub in `/sdcard/FIRST/BioBuzzLogs/`), with pass targets for each stage.
+
 ---
 
 ## Pulling season SDK updates
@@ -187,6 +189,8 @@ git merge upstream/master
 | `BioBuzz TeleOp` | Competition driver control, one gamepad (controls listed at the top of `BioBuzzTeleOp.java`) |
 | `BioBuzz Calibration` | Measures drive distance, IMU direction, windmill direction, flower-arm servo positions and camera range/bearing |
 | `BioBuzz System Check` | On-robot integration test: each wheel, forward/back/slide right/slide left/turns, intake, windmill, launcher, arm. Prints PASS/FAIL with fixes. Run it after every wiring or configuration change. |
+| `BioBuzz Vision Test` | Measures camera detection rate, bearing and distance against tape-measured truth; logs to CSV |
+| `BioBuzz Shot Log` | Fires one ball at a time and logs speed, battery, camera distance and IN/MISS; logs to CSV |
 | `TEST Indexer + Flywheel` | Tunes flywheel speed and windmill feed power |
 | `HelloWorld` | Telemetry only — proves the toolchain and the DS link |
 | `MotorTest` | Single motor on the left stick, with encoder position |

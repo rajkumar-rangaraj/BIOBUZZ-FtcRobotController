@@ -17,7 +17,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  * ROUTE (AutoRoute): back 12 in (LEAVE) -> turn to aim -> camera fine-aim -> fire -> face the wall ->
  *        forward to 4 in off the wall -> strafe right into the LOADING ZONE.
  *
- * INIT options on gamepad 1: D-pad up/down = start delay, X = shooting on/off.
+ * INIT options on gamepad 1: D-pad up/down = start delay, X = shooting on/off, Y = camera on/off (drill only).
+ * Every run is logged to /sdcard/FIRST/BioBuzzLogs/auto_*.csv
  */
 public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, AutoRoute.Mechanisms {
 
@@ -25,6 +26,8 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
     private BioBuzzRobot robot;
     private HiveVision vision;
+    private CsvLog log;
+    private HiveVision.Target lastTarget;
     private final ElapsedTime clock = new ElapsedTime();
     private double matchStart = 0;
     private String step = "INIT";
@@ -43,6 +46,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
         int startDelaySec = 0;
         boolean shoot = true;
+        boolean useCamera = true;
         while (opModeInInit()) {
             if (gamepad1.dpadUpWasPressed()) {
                 startDelaySec = Math.min(AUTO_MAX_START_DELAY_SEC, startDelaySec + 1);
@@ -52,6 +56,9 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             if (gamepad1.xWasPressed()) {
                 shoot = !shoot;
             }
+            if (gamepad1.yWasPressed()) {
+                useCamera = !useCamera;
+            }
             if (vision != null) {
                 vision.update();
             }
@@ -59,6 +66,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             telemetry.addData("Plan", shoot ? "LEAVE + SHOOT 4 + PARK" : "LEAVE + PARK only");
             telemetry.addData("Start delay", "%d s   (D-pad up/down)", startDelaySec);
             telemetry.addData("Shooting", "%s   (X toggles)", shoot ? "ON" : "OFF");
+            telemetry.addData("Camera aim", "%s   (Y toggles - keep ON for matches)", useCamera ? "ON" : "OFF (drill)");
             telemetry.addData("Heading", "%.1f deg", robot.headingDeg());
             if (vision == null) {
                 telemetry.addData("Camera", "NOT FOUND: %s (IMU aim only)", visionError);
@@ -75,15 +83,26 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             closeVision();
             return;
         }
+        if (!useCamera) {
+            closeVision();
+        }
 
+        log = new CsvLog("auto_" + alliance(), "t", "step", "fwd_in", "right_in", "heading_deg",
+                "launcher_tps", "launcher_target", "launcher_ready", "indexer_ticks", "battery_v",
+                "cell", "tags", "bearing_deg");
+        log.row("CONFIG", "delay=" + startDelaySec, "shoot=" + shoot, "camera=" + (vision != null),
+                "aim_heading=" + AUTO_AIM_HEADING_DEG, "launch_tps=" + AUTO_LAUNCH_VELOCITY);
         robot.imu.resetYaw();
         matchStart = clock.seconds();
         try {
             AutoRoute.run(this, this, startDelaySec, shoot);
             loopTick();
+            log.row("RESULT", "done_s=" + (clock.seconds() - matchStart), "fwd_in=" + robot.forwardInches(),
+                    "right_in=" + robot.strafeRightInches(), "heading=" + robot.headingDeg());
         } finally {
             robot.stopAll();
             closeVision();
+            log.close();
         }
     }
 
@@ -121,11 +140,23 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
     @Override
     public void loopTick() {
+        double t = clock.seconds() - matchStart;
+        double heading = robot.headingDeg();
+        double fwd = robot.forwardInches();
+        double right = robot.strafeRightInches();
+        double launcherVel = robot.launcherVelocity();
+        HiveVision.Target target = lastTarget;
+        log.row(t, step, fwd, right, heading, launcherVel, robot.launcherTarget(), robot.launcherReady(),
+                robot.indexerTicks(), robot.battery.getVoltage(), target == null ? "" : target.cell,
+                target == null ? 0 : target.tagCount, target == null ? "" : target.bearingDeg);
+        lastTarget = null;
+
         telemetry.addData("Step", step);
-        telemetry.addData("Time", "%.1f s", clock.seconds() - matchStart);
-        telemetry.addData("Heading", "%.1f deg", robot.headingDeg());
-        telemetry.addData("Moved", "fwd %.1f  right %.1f in", robot.forwardInches(), robot.strafeRightInches());
-        telemetry.addData("Launcher", "%.0f / %.0f t/s", robot.launcherVelocity(), robot.launcherTarget());
+        telemetry.addData("Time", "%.1f s", t);
+        telemetry.addData("Heading", "%.1f deg", heading);
+        telemetry.addData("Moved", "fwd %.1f  right %.1f in", fwd, right);
+        telemetry.addData("Launcher", "%.0f / %.0f t/s", launcherVel, robot.launcherTarget());
+        telemetry.addData("Log", log.status());
         telemetry.update();
     }
 
@@ -161,6 +192,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         while (opModeIsActive() && clock.seconds() < endSec) {
             vision.update();
             HiveVision.Target target = vision.target(alliance(), preferred);
+            lastTarget = target;
             double turn = target == null ? 0 : HiveVision.aimTurnCw(target.bearingDeg);
             robot.drive(0, 0, turn, 1.0);
             if (target != null && turn == 0) {

@@ -18,7 +18,7 @@ import com.qualcomm.robotcore.util.Range;
  *   B / Circle       flip the STOW direction used by Y
  *
  * Drive: zero, push the robot exactly 48 in forward along a tape measure, read "Forward in".
- *   WHEEL_DIAMETER_IN *= reported / 48. Then strafe 48 in: STRAFE_MULTIPLIER *= reported / 48.
+ *   WHEEL_DIAMETER_IN *= 48 / reported. Then strafe 48 in: STRAFE_MULTIPLIER *= reported / 48.
  * IMU: turn the robot counter-clockwise by hand; heading must INCREASE. Otherwise fix HUB_LOGO / HUB_USB.
  * Arm: jog until both arms just touch the deploy pads, add 0.002 into the stop, check Y swings to STOW
  *   without stalling, then copy "Jog position" to ARM_DEPLOY_POSITION and the direction to ARM_STOW_DIRECTION.

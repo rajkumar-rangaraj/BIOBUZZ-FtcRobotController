@@ -26,6 +26,7 @@ import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.FLOAT;
 
 import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -68,7 +69,8 @@ import com.qualcomm.robotcore.util.Range;
  */
 
 @TeleOp(name = "Mec BioBuzz StarterBot Teleop", group = "StarterBot")
-//@Disabled
+// Replaced by BioBuzz TeleOp: this one needs the old "windmillServo", which the robot no longer has.
+@Disabled
 public class BioBuzzStarterbotTeleopMecanum extends OpMode {
 
     // Declare OpMode members.

@@ -82,6 +82,8 @@ public final class BioBuzzConstants {
     public static final int CAMERA_WIDTH = 640;
     public static final int CAMERA_HEIGHT = 480;
     public static final double TARGET_MAX_AGE_SEC = 0.30;
+    public static final double CAMERA_TILT_DEG = 30.0;                           // CALIBRATE: bracket setting
+    public static final double CAMERA_LENS_HEIGHT_IN = 12.2;                     // CAD at 30 deg tilt; measure
     public static final double AIM_KP = 0.015;                                  // turn power per degree
     public static final double AIM_MAX_TURN = 0.30;
     public static final double AIM_MIN_TURN = 0.06;
