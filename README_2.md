@@ -154,6 +154,20 @@ public class MotorTest extends LinearOpMode {
 
 ---
 
+## Testing
+
+**On the laptop (no robot needed):**
+
+```powershell
+.\gradlew :TeamCode:testDebugUnitTest
+```
+
+Tests are in `TeamCode/src/test/java/`. They check the mecanum wheel math and drive a simulated robot (motor lag, mecanum kinematics, encoders, IMU) forward, back, sliding left/right and turning. They also run the real AUTO route (`AutoRoute`) and check it ends off the wall and in the LOADING ZONE before 30 s. Run them before every deploy.
+
+**On the robot:** run `BioBuzz System Check`. The simulation can't see wiring mistakes such as swapped motor names or wheels in the wrong corners, so a person confirms each wheel and each move.
+
+---
+
 ## Pulling season SDK updates
 
 ```powershell
@@ -169,5 +183,10 @@ git merge upstream/master
 
 | Op mode | What it does |
 |---|---|
+| `BioBuzz AUTO RED` / `BioBuzz AUTO BLUE` | LEAVE, launch the 4 preloads into our upward CELL, then AUTO PARK in our LOADING ZONE. Selects `BioBuzz TeleOp` afterwards. |
+| `BioBuzz TeleOp` | Competition driver control, one gamepad (controls listed at the top of `BioBuzzTeleOp.java`) |
+| `BioBuzz Calibration` | Measures drive distance, IMU direction, windmill direction, flower-arm servo positions and camera range/bearing |
+| `BioBuzz System Check` | On-robot integration test: each wheel, forward/back/slide right/slide left/turns, intake, windmill, launcher, arm. Prints PASS/FAIL with fixes. Run it after every wiring or configuration change. |
+| `TEST Indexer + Flywheel` | Tunes flywheel speed and windmill feed power |
 | `HelloWorld` | Telemetry only — proves the toolchain and the DS link |
 | `MotorTest` | Single motor on the left stick, with encoder position |
