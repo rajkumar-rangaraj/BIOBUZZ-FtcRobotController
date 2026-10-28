@@ -6,4 +6,7 @@ public final class BioBuzzMatchState {
     }
 
     public static HiveVision.Alliance alliance = HiveVision.Alliance.RED;
+
+    /** Diagnostics log on/off. Toggled in INIT (Back / Share) and kept until the robot app restarts. */
+    public static boolean diagnostics = BioBuzzConstants.DIAG_DEFAULT_ON;
 }

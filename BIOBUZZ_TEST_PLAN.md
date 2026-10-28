@@ -23,6 +23,7 @@ adb pull /sdcard/FIRST/BioBuzzLogs .\logs
 
 ## Stage 0: Hardware and calibration
 
+0. Run `BioBuzz Wiring Check` with the robot on a box. **Pass:** "WIRING OK". Fix every FAIL first: the line says which cable.
 1. Run `BioBuzz System Check`, all three parts. **Pass:** every line says PASS.
 2. Run `BioBuzz Calibration` and copy the values into `BioBuzzConstants.java`:
 
@@ -31,8 +32,10 @@ adb pull /sdcard/FIRST/BioBuzzLogs .\logs
 | Push the robot 48 in along a tape measure | "Forward in" reads 48 ± 0.5 |
 | Slide 48 in | "Strafe right in" reads 48 ± 1 |
 | Turn the robot one full turn by hand and return it to its start mark | Heading back within ±2° |
-| Arm deploy and stow | Both stops reached, no buzzing (servo fighting a stop) |
+| Arm deploy and stow (re-run after any cradle, arm or horn change) | Both stops reached, no buzzing (servo fighting a stop) |
+| Arm deployed, robot on the field floor | Wedge does not touch the floor: a sheet of paper slides under it. Drive slowly with the arm out: no scraping. |
 | Measure the camera lens height and tilt | Enter them as `CAMERA_LENS_HEIGHT_IN` and `CAMERA_TILT_DEG` |
+| Camera mount check | Camera on the robot's centre line (left/right), facing the launcher side, right side up. Off-centre aims the camera, not the launcher, at the CELL. Upside down makes auto-aim turn the wrong way. |
 
 3. Rebuild, then run System Check again.
 

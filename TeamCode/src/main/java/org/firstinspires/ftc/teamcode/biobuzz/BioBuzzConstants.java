@@ -15,19 +15,21 @@ public final class BioBuzzConstants {
     }
 
     // ---------------- Robot configuration names ----------------
-    // Control Hub motor ports 0-3
+    // Wiring: LEFT side -> Control Hub, RIGHT side -> Expansion Hub (port table in README_2.md).
+    // Control Hub: motors 0 left_front_drive, 1 left_back_drive, 2 launcher;
+    //              servo 0 left_intake_servo; built-in imu; USB Webcam 1
+    // Expansion Hub: motors 0 right_front_drive, 1 right_back_drive, 2 intake, 3 indexer;
+    //                servos 0 right_intake_servo, 1 flower_arm
     public static final String LEFT_FRONT_DRIVE = "left_front_drive";
     public static final String RIGHT_FRONT_DRIVE = "right_front_drive";
     public static final String LEFT_BACK_DRIVE = "left_back_drive";
     public static final String RIGHT_BACK_DRIVE = "right_back_drive";
-    // Expansion Hub motor ports 0-2, servo ports 0-2
     public static final String INTAKE = "intake";
     public static final String LAUNCHER = "launcher";
     public static final String INDEXER = "indexer";
     public static final String LEFT_INTAKE_SERVO = "left_intake_servo";
     public static final String RIGHT_INTAKE_SERVO = "right_intake_servo";
     public static final String FLOWER_ARM = "flower_arm";
-    // Control Hub built-in IMU and USB camera
     public static final String IMU_NAME = "imu";
     public static final String WEBCAM = "Webcam 1";
 
@@ -64,6 +66,11 @@ public final class BioBuzzConstants {
     public static final DcMotorSimple.Direction INDEXER_DIRECTION = DcMotorSimple.Direction.FORWARD;
     public static final double INDEXER_FEED_POWER = 0.6;                         // CALIBRATE with shot recovery
     public static final double INDEXER_UNJAM_POWER = 0.35;
+    // One ball per shot (ShotFeeder): one pocket, then wait for the flywheel before the next
+    public static final double SHOT_MIN_INTERVAL_SEC = 0.35;                     // CALIBRATE with BioBuzz Shot Log
+    public static final double SHOT_POCKET_TIMEOUT_SEC = 1.0;                    // a pocket taking longer = jam
+    public static final double SHOT_UNJAM_SEC = 0.25;                            // back-off time after a jam
+    public static final int SHOT_MAX_JAMS = 3;
 
     // ---------------- Intake ----------------
     public static final double FEED_INTAKE_BOOST = 0.5;
@@ -83,7 +90,7 @@ public final class BioBuzzConstants {
     public static final int CAMERA_HEIGHT = 480;
     public static final double TARGET_MAX_AGE_SEC = 0.30;
     public static final double CAMERA_TILT_DEG = 30.0;                           // CALIBRATE: bracket setting
-    public static final double CAMERA_LENS_HEIGHT_IN = 12.2;                     // CAD at 30 deg tilt; measure
+    public static final double CAMERA_LENS_HEIGHT_IN = 12.2;                     // CAD v1 mount; RE-MEASURE on the current mount
     public static final double AIM_KP = 0.015;                                  // turn power per degree
     public static final double AIM_MAX_TURN = 0.30;
     public static final double AIM_MIN_TURN = 0.06;
@@ -112,4 +119,9 @@ public final class BioBuzzConstants {
     public static final double AUTO_AIM_TIMEOUT_SEC = 2.0;
     public static final double AUTO_PARK_DEADLINE_SEC = 22.0;
     public static final int AUTO_MAX_START_DELAY_SEC = 10;
+
+    // ---------------- Diagnostics ----------------
+    public static final boolean DIAG_DEFAULT_ON = true;                         // Back / Share in INIT toggles
+    public static final double DIAG_SAMPLE_MS = 50;                              // 20 rows per second
+    public static final double DIAG_SLOW_SAMPLE_MS = 500;                        // battery + IMU (each read costs ~2 ms)
 }

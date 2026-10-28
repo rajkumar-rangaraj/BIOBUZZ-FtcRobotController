@@ -38,6 +38,10 @@ public class BioBuzzRobot {
     public final VoltageSensor battery;
 
     private boolean launcherOn = false;
+    /** Last commanded outputs, kept for diagnostics (reading them back from the hub would cost loop time). */
+    public final double[] lastDrivePower = new double[4];
+    public double lastIntakePower = 0;
+    public double lastIndexerPower = 0;
     private double launcherTarget = 0;
     private final ElapsedTime launcherTimer = new ElapsedTime();
 
@@ -99,6 +103,7 @@ public class BioBuzzRobot {
     /** forward + = intake side, strafeRight + = robot right, turnCw + = clockwise (seen from above). */
     public void drive(double forward, double strafeRight, double turnCw, double scale) {
         double[] p = MecanumMath.wheelPowers(forward, strafeRight, turnCw, scale);
+        System.arraycopy(p, 0, lastDrivePower, 0, 4);
         leftFront.setPower(p[MecanumMath.LF]);
         rightFront.setPower(p[MecanumMath.RF]);
         leftBack.setPower(p[MecanumMath.LB]);
@@ -138,6 +143,7 @@ public class BioBuzzRobot {
 
     public void setIntake(double power) {
         power = Range.clip(power, -1, 1);
+        lastIntakePower = power;
         intake.setPower(power);
         leftIntakeServo.setPower(power);
         rightIntakeServo.setPower(power);
@@ -200,7 +206,8 @@ public class BioBuzzRobot {
     // ---------------- Indexer ----------------
 
     public void setIndexerPower(double power) {
-        indexer.setPower(Range.clip(power, -1, 1));
+        lastIndexerPower = Range.clip(power, -1, 1);
+        indexer.setPower(lastIndexerPower);
     }
 
     public int indexerTicks() {

@@ -210,16 +210,22 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
     }
 
     /** Feed the windmill only while the flywheel is at speed, until the preloads (plus one pocket) have passed. */
+    /** One ball per shot (ShotFeeder) until the preloads plus one clearing pocket have gone, a jam, or the deadline. */
     private void fire(double matchDeadlineSec) {
-        int start = robot.indexerTicks();
-        double needed = AUTO_FEED_POCKETS * INDEXER_TICKS_PER_POCKET;
+        ShotFeeder feeder = ShotFeeder.standard();
         double end = Math.min(clock.seconds() + AUTO_FEED_TIMEOUT_SEC, matchDeadlineSec);
-        while (opModeIsActive() && clock.seconds() < end && Math.abs(robot.indexerTicks() - start) < needed) {
-            robot.setIndexerPower(robot.launcherReady() ? INDEXER_FEED_POWER : 0);
-            telemetry.addData("Windmill", "%d / %.0f ticks", Math.abs(robot.indexerTicks() - start), needed);
+        while (opModeIsActive() && clock.seconds() < end && feeder.shots() < AUTO_FEED_POCKETS
+                && feeder.state() != ShotFeeder.State.JAMMED) {
+            robot.setIndexerPower(feeder.update(clock.seconds(), robot.indexerTicks(), robot.launcherReady(), true));
+            if (feeder.event() != null) {
+                log.row(clock.seconds() - matchStart, "EVENT", feeder.event(), "launcher", robot.launcherVelocity());
+            }
+            step = String.format("FIRE %d/%d %s", feeder.shots(), AUTO_FEED_POCKETS, feeder.state());
             loopTick();
         }
         robot.setIndexerPower(0);
+        log.row(clock.seconds() - matchStart, "EVENT", String.format("FIRE done: %d shots, %d jams, %s", feeder.shots(),
+                feeder.jams(), feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED" : (clock.seconds() >= end ? "timeout" : "ok")));
     }
 
     private void closeVision() {

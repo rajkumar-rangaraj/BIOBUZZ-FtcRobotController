@@ -19,6 +19,7 @@ public class CsvLog {
     private BufferedWriter out;
     private final String fileName;
     private int rows = 0;
+    private final com.qualcomm.robotcore.util.ElapsedTime flushTimer = new com.qualcomm.robotcore.util.ElapsedTime();
 
     public CsvLog(String name, String... header) {
         String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
@@ -56,6 +57,10 @@ public class CsvLog {
             out.write(sb.toString());
             out.newLine();
             rows++;
+            if (flushTimer.milliseconds() > 1000) {                 // survive a power cut: at most 1 s of data lost
+                out.flush();
+                flushTimer.reset();
+            }
         } catch (IOException e) {
             out = null;
         }

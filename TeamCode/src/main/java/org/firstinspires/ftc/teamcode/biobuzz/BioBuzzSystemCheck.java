@@ -28,18 +28,23 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
     private final ElapsedTime clock = new ElapsedTime();
     private final List<String> results = new ArrayList<>();
     private int failures = 0;
+    private CsvLog log;
 
     @Override
     public void runOpMode() {
+        log = new CsvLog("systemcheck", "t", "result", "detail");
         try {
             robot = new BioBuzzRobot(hardwareMap);
         } catch (Exception e) {
+            log.row(0.0, "CONFIG_ERROR", e.getMessage());
+            log.close();
             telemetry.addData("CONFIGURATION ERROR", e.getMessage());
             telemetry.addLine("A device name is missing or misspelled in the active robot configuration.");
             telemetry.update();
             waitForStart();
             return;
         }
+        log.row(0.0, "BATTERY", String.format("%.2f V", robot.battery.getVoltage()));
         telemetry.addLine("BioBuzz System Check - press PLAY, then follow the prompts.");
         telemetry.update();
         waitForStart();
@@ -54,15 +59,19 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
             checkMechanisms();
         }
         robot.stopAll();
+        log.row(clock.seconds(), "SUMMARY", failures == 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED");
+        log.close();
 
         while (opModeIsActive()) {
             telemetry.addLine(failures == 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED");
             for (String r : results) {
                 telemetry.addLine(r);
             }
+            telemetry.addData("Saved", "/sdcard/FIRST/BioBuzzLogs/systemcheck_*.csv");
             telemetry.update();
             sleep(50);
         }
+        log.close();
     }
 
     // ---------------- PART 1 ----------------
@@ -163,6 +172,7 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
 
         if (!BioBuzzRobot.armCalibrated()) {
             results.add("SKIP flower arm: not calibrated (run BioBuzz Calibration)");
+            log.row(clock.seconds(), "SKIP", "flower arm not calibrated");
         } else if (ask("Flower arm test: keep hands clear of the arm swing. A = run, B = skip")) {
             robot.stowArm();
             pause(1.0, "Arm STOW");
@@ -217,10 +227,12 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
 
     private void pass(String text) {
         results.add("PASS " + text);
+        log.row(clock.seconds(), "PASS", text);
     }
 
     private void fail(String text) {
         results.add("FAIL " + text);
+        log.row(clock.seconds(), "FAIL", text);
         failures++;
     }
 

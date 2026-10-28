@@ -79,3 +79,5 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+# Robot logs pulled with tools/pull_robot_logs.ps1
+robot_logs/
