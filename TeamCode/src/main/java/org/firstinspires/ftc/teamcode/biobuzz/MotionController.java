@@ -72,6 +72,18 @@ public class MotionController {
         return -Math.signum(bearingDeg) * clip(Math.abs(bearingDeg) * AIM_KP, AIM_MIN_TURN, AIM_MAX_TURN);
     }
 
+    /**
+     * Forward power (intake side +) that brings the launcher-side camera to {@code spotRangeIn} from the HIVE:
+     * too far -> drive backward (launcher first) toward the HIVE, too close -> drive forward. 0 when on the spot.
+     */
+    public static double spotForward(double rangeIn, double spotRangeIn) {
+        double err = rangeIn - spotRangeIn;
+        if (Math.abs(err) <= SPOT_TOLERANCE_IN) {
+            return 0;
+        }
+        return -Math.signum(err) * clip(Math.abs(err) * SPOT_KP, SPOT_MIN_POWER, SPOT_MAX_POWER);
+    }
+
     static double clip(double v, double lo, double hi) {
         return Math.max(lo, Math.min(hi, v));
     }

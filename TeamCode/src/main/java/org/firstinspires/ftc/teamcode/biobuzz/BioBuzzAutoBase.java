@@ -46,7 +46,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             vision = null;
             visionError = e.getMessage();
         }
-        BioBuzzMatchState.alliance = alliance();
+        BioBuzzMatchState.rememberAlliance(alliance());
         pinpoint = Pinpoint.tryCreate(hardwareMap);
         if (pinpoint != null) {
             pinpoint.reset();                                   // robot sits still during INIT: IMU calibrates here
@@ -264,23 +264,40 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         robot.stopDrive();
     }
 
-    /** Feed the windmill only while the flywheel is at speed, until the preloads (plus one pocket) have passed. */
-    /** One ball per shot (ShotFeeder) until the preloads plus one clearing pocket have gone, a jam, or the deadline. */
+    /** Continuous windmill feed (pauses while the flywheel recovers) until the preloads have left, 2 full turns, or the deadline. */
     private void fire(double matchDeadlineSec) {
-        ShotFeeder feeder = ShotFeeder.standard();
+        ContinuousFeeder feeder = new ContinuousFeeder(AUTO_FEED_POCKETS * INDEXER_TICKS_PER_POCKET,
+                AUTO_FEED_POWER, INDEXER_UNJAM_POWER, SHOT_UNJAM_SEC);
         double end = Math.min(clock.seconds() + AUTO_FEED_TIMEOUT_SEC, matchDeadlineSec);
-        while (opModeIsActive() && clock.seconds() < end && feeder.shots() < AUTO_FEED_POCKETS
-                && feeder.state() != ShotFeeder.State.JAMMED) {
-            robot.setIndexerPower(feeder.update(clock.seconds(), robot.indexerTicks(), robot.launcherReady(), true));
-            if (feeder.event() != null) {
-                log.row(clock.seconds() - matchStart, "EVENT", feeder.event(), "launcher", robot.launcherVelocity());
+        robot.setIntake(FEED_INTAKE_BOOST);                     // as TeleOp: the intake pushes the balls through
+        int balls = 0;                                          // counted from flywheel slowdowns
+        boolean dipping = false;
+        double lastBallTime = -1;
+        while (opModeIsActive() && clock.seconds() < end && !feeder.done(robot.indexerTicks())
+                && !(balls >= AUTO_PRELOADS && clock.seconds() - lastBallTime > 0.2)) {
+            int ticks = robot.indexerTicks();
+            int stallsBefore = feeder.stalls();
+            robot.setIndexerPower(feeder.update(clock.seconds(), ticks, robot.launcherReady()));
+            double velocity = robot.launcherVelocity();
+            if (!dipping && velocity < AUTO_LAUNCH_VELOCITY - AUTO_SHOT_DIP_TPS) {
+                dipping = true;
+                balls++;
+                lastBallTime = clock.seconds();
+                log.row(clock.seconds() - matchStart, "EVENT", "BALL " + balls, "launcher", velocity);
+            } else if (dipping && velocity > AUTO_LAUNCH_VELOCITY - AUTO_SHOT_DIP_TPS / 2) {
+                dipping = false;
             }
-            step = String.format("FIRE %d/%d %s", feeder.shots(), AUTO_FEED_POCKETS, feeder.state());
+            if (feeder.stalls() != stallsBefore) {
+                log.row(clock.seconds() - matchStart, "EVENT", "STALL " + feeder.stalls() + " - back off", "ticks", ticks);
+            }
+            step = String.format("FIRE %d balls, %.1f pockets", balls, feeder.travelledPockets(ticks));
             loopTick();
         }
         robot.setIndexerPower(0);
-        log.row(clock.seconds() - matchStart, "EVENT", String.format("FIRE done: %d shots, %d jams, %s", feeder.shots(),
-                feeder.jams(), feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED" : (clock.seconds() >= end ? "timeout" : "ok")));
+        robot.setIntake(0);
+        log.row(clock.seconds() - matchStart, "EVENT", String.format("FIRE done: %d balls, %.1f pockets, %d stalls, %s",
+                balls, feeder.travelledPockets(robot.indexerTicks()), feeder.stalls(),
+                clock.seconds() >= end ? "timeout" : "ok"));
     }
 
     private void closeVision() {

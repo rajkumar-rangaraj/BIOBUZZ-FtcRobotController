@@ -34,16 +34,18 @@ public final class BioBuzzConstants {
     public static final String WEBCAM = "Webcam 1";
 
     // ---------------- goBILDA Pinpoint odometry (optional, AUTO only) ----------------
-    // Control Hub I2C bus 1, configured as "goBILDA Pinpoint Odometry Computer" named "pinpoint".
-    // Not in the configuration -> AUTO drives on the wheel encoders exactly as before.
+    // Any Control Hub I2C port (ours: port 0, shared with the built-in IMU - different address), configured as
+    // "goBILDA Pinpoint Odometry Computer" named "pinpoint". Not in the configuration -> AUTO uses the wheel encoders.
+    // Pod directions and positions are MEASURED by "BioBuzz Pinpoint Setup" and saved on the hub
+    // (/sdcard/biobuzz_pinpoint.txt); the values below are only used until that has been run.
     public static final String PINPOINT = "pinpoint";
     public static final boolean PINPOINT_SWINGARM_PODS = false;                   // false = 4-Bar pods
-    // Pod positions from the robot's turning centre, in mm (CAD layout: make_odometry_mount.py; measure on the robot,
-    // then check with "BioBuzz Calibration": spin in place, X and Y must stay near 0):
-    public static final double PINPOINT_X_POD_LEFT_MM = 104;                     // CALIBRATE: forward pod, + = left
-    public static final double PINPOINT_Y_POD_FORWARD_MM = -164;                 // CALIBRATE: strafe pod, + = forward
-    public static final boolean PINPOINT_X_REVERSED = false;                     // CALIBRATE: push forward -> X +
-    public static final boolean PINPOINT_Y_REVERSED = false;                     // CALIBRATE: slide left -> Y +
+    // Measured 2026-10-30 (track 410, wheelbase 270): forward pod 245 mm from the left wheels, strafe pod 310 mm behind
+    // the front axle. Robot test: forward 12 in -> forward pod +11.94, left 12 in -> strafe pod +11.83 (both normal).
+    public static final double PINPOINT_X_POD_LEFT_MM = -40;                     // forward pod, + = left of centre
+    public static final double PINPOINT_Y_POD_FORWARD_MM = -175;                 // strafe pod, + = forward of centre
+    public static final boolean PINPOINT_X_REVERSED = false;                     // push forward -> X +
+    public static final boolean PINPOINT_Y_REVERSED = false;                     // slide left -> Y +
 
     // ---------------- Control Hub IMU mounting ----------------
     // Hub stands upright at the back: its logo faces the launcher side, its USB ports face outward (robot left).
@@ -112,6 +114,11 @@ public final class BioBuzzConstants {
     public static final double AIM_MAX_TURN = 0.30;
     public static final double AIM_MIN_TURN = 0.06;
     public static final double AIM_TOLERANCE_DEG = 2.0;
+    // SHOT SPOT (TeleOp: Share saves the camera distance + speed, holding X drives back to that distance)
+    public static final double SPOT_KP = 0.03;                                  // drive power per inch of error
+    public static final double SPOT_MIN_POWER = 0.12;
+    public static final double SPOT_MAX_POWER = 0.35;
+    public static final double SPOT_TOLERANCE_IN = 1.5;
 
     // ---------------- Autonomous motion ----------------
     public static final double AUTO_DRIVE_POWER = 0.45;
@@ -131,7 +138,10 @@ public final class BioBuzzConstants {
     public static final double AUTO_WALL_GAP_IN = 4;                             // stay off the wall for LEAVE
     public static final double AUTO_PARK_STRAFE_IN = 14;                         // CALIBRATE; strafe right into zone
     public static final double AUTO_LAUNCH_VELOCITY = LAUNCHER_NEAR_VELOCITY;    // CALIBRATE at the shot spot
-    public static final int AUTO_FEED_POCKETS = 5;                               // 4 preloads + 1 clearing pocket
+    public static final int AUTO_FEED_POCKETS = 8;                               // up to 2 full turns (not every pocket launches)
+    public static final double AUTO_FEED_POWER = 0.3;                            // continuous windmill power in AUTO
+    public static final int AUTO_PRELOADS = 4;                                   // stop early once this many balls left
+    public static final double AUTO_SHOT_DIP_TPS = 60;                           // flywheel slowdown that means a ball left
     public static final double AUTO_FEED_TIMEOUT_SEC = 8.0;
     public static final double AUTO_AIM_TIMEOUT_SEC = 2.0;
     public static final double AUTO_PARK_DEADLINE_SEC = 22.0;

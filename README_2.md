@@ -126,7 +126,7 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 | Motor 3 | spare | — | — |
 | Servo 0 | Left corner intake wheel servo | Continuous Rotation Servo | `left_intake_servo` |
 | I2C bus 0 | Built-in IMU (already in the default config) | REV internal IMU (set automatically) | `imu` |
-| I2C bus 1 | goBILDA Pinpoint odometry computer (**optional**, AUTO only; without it AUTO uses the wheel encoders) | goBILDA Pinpoint Odometry Computer | `pinpoint` |
+| I2C port 0 | goBILDA Pinpoint odometry computer (**optional**, AUTO only; without it AUTO uses the wheel encoders). Shares port 0 with the built-in IMU (different address). Run `BioBuzz Pinpoint Setup` after mounting | goBILDA Pinpoint Odometry Computer | `pinpoint` |
 | USB 2.0 port | Logitech C270 webcam | Webcam | `Webcam 1` |
 
 ### Expansion Hub (right side)
@@ -253,6 +253,14 @@ git merge upstream/master
 
 Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AIM check, driver rule, TeleOp button card): `BioBuzz_Shooting_Guide.pdf`, rebuilt with `node tools/make_shooting_guide.js`.
 
+**SHOT SPOT (TeleOp):**
+1. Pick the alliance whose HIVE tags you can see. At home that's the practice goal's tags; tags 42–45 are BLUE.
+2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera distance and the current shot speed.
+3. Later, **hold X**: the robot turns to the HIVE, drives to the saved distance and sets the saved speed. The controller rumbles and the screen shows **ON SPOT - FIRE**.
+4. Push the left stick forward or back to take over the driving.
+
+The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
+
 ## Current op modes
 
 | Op mode | What it does |
@@ -260,6 +268,7 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 | `BioBuzz AUTO RED` / `BioBuzz AUTO BLUE` | LEAVE, launch the 4 preloads into our upward CELL, then AUTO PARK in our LOADING ZONE. Selects `BioBuzz TeleOp` afterwards. |
 | `BioBuzz TeleOp` | Competition driver control, one gamepad (controls listed at the top of `BioBuzzTeleOp.java`) |
 | `BioBuzz Arm Setup` | Guided flower-arm setup, one step per screen: fit the arm level, move it down onto the pads, test up/down, press X to save. Saved on the Control Hub (`/sdcard/biobuzz_arm.txt`), so no code change or re-deploy is needed |
+| `BioBuzz Pinpoint Setup` | Robot on the floor: it drives forward, slides left and spins 2 turns by itself. Finds which pod is which, their directions and their positions, and saves them on the Control Hub (`/sdcard/biobuzz_pinpoint.txt`). Run it after mounting or moving the pods |
 | `BioBuzz Calibration` | Measures drive distance, IMU direction, windmill direction, flower-arm servo positions and camera range/bearing |
 | `BioBuzz System Check` | On-robot integration test: each wheel, forward/back/slide right/slide left/turns, intake, windmill, launcher, arm. Prints PASS/FAIL with fixes. Run it after every wiring or configuration change. |
 | `BioBuzz Wiring Check` | Robot on a box: spins each motor alone and reads every encoder and the motor current. Finds missing motor cables, missing or swapped encoder cables and reversed directions; also checks both hubs, IMU and camera. Run it first after any wiring change. |

@@ -15,22 +15,39 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 public class Pinpoint {
     private final GoBildaPinpointDriver dev;
     private double x, y, heading;
+    private int rawX, rawY;
     private GoBildaPinpointDriver.DeviceStatus status = GoBildaPinpointDriver.DeviceStatus.NOT_READY;
+    private PinpointCalibration cal;
 
-    private Pinpoint(GoBildaPinpointDriver dev) {
+    private Pinpoint(GoBildaPinpointDriver dev, boolean raw) {
         this.dev = dev;
-        dev.setOffsets(PINPOINT_X_POD_LEFT_MM, PINPOINT_Y_POD_FORWARD_MM, DistanceUnit.MM);
         dev.setEncoderResolution(PINPOINT_SWINGARM_PODS ? GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_SWINGARM_POD
                 : GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        apply(raw ? new PinpointCalibration(false, false, 0, 0, false) : PinpointCalibration.load());
+    }
+
+    /** Use these pod directions / offsets from now on. */
+    public void apply(PinpointCalibration c) {
+        cal = c;
+        dev.setOffsets(c.xPodLeftMm, c.yPodForwardMm, DistanceUnit.MM);
         dev.setEncoderDirections(
-                PINPOINT_X_REVERSED ? GoBildaPinpointDriver.EncoderDirection.REVERSED : GoBildaPinpointDriver.EncoderDirection.FORWARD,
-                PINPOINT_Y_REVERSED ? GoBildaPinpointDriver.EncoderDirection.REVERSED : GoBildaPinpointDriver.EncoderDirection.FORWARD);
+                c.xReversed ? GoBildaPinpointDriver.EncoderDirection.REVERSED : GoBildaPinpointDriver.EncoderDirection.FORWARD,
+                c.yReversed ? GoBildaPinpointDriver.EncoderDirection.REVERSED : GoBildaPinpointDriver.EncoderDirection.FORWARD);
+    }
+
+    public PinpointCalibration calibration() {
+        return cal;
     }
 
     public static Pinpoint tryCreate(HardwareMap hw) {
+        return tryCreate(hw, false);
+    }
+
+    /** @param raw both pods FORWARD and offsets 0 (for BioBuzz Pinpoint Setup, which measures them). */
+    public static Pinpoint tryCreate(HardwareMap hw, boolean raw) {
         try {
             GoBildaPinpointDriver d = hw.tryGet(GoBildaPinpointDriver.class, PINPOINT);
-            return d == null ? null : new Pinpoint(d);
+            return d == null ? null : new Pinpoint(d, raw);
         } catch (Exception e) {
             return null;
         }
@@ -48,9 +65,20 @@ public class Pinpoint {
             x = dev.getPosX(DistanceUnit.INCH);
             y = dev.getPosY(DistanceUnit.INCH);
             heading = dev.getHeading(AngleUnit.DEGREES);
+            rawX = dev.getEncoderX();
+            rawY = dev.getEncoderY();
         } catch (Exception e) {
             status = GoBildaPinpointDriver.DeviceStatus.FAULT_BAD_READ;
         }
+    }
+
+    /** Raw pod encoder ticks (forward pod / strafe pod). */
+    public int rawX() {
+        return rawX;
+    }
+
+    public int rawY() {
+        return rawY;
     }
 
     public boolean ok() {

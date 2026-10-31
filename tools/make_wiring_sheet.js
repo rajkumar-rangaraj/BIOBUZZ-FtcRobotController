@@ -48,7 +48,7 @@ const CH_ROWS = [
   ['Servo 0', 'Left corner intake wheel servo', '\u2013', 'Continuous Rotation Servo', 'left_intake_servo'],
   ['USB 2.0', 'Logitech C270 webcam', '\u2013', 'Webcam', 'Webcam 1'],
   ['(built in)', 'IMU inside the Control Hub \u2013 nothing to plug', '\u2013', 'REV internal IMU', 'imu'],
-  ['I2C 1', 'goBILDA Pinpoint (OPTIONAL, AUTO only) \u2013 pods into its X / Y ports', '\u2013', 'goBILDA Pinpoint Odometry Computer', 'pinpoint'],
+  ['I2C 0', 'goBILDA Pinpoint (OPTIONAL, AUTO only) \u2013 forward pod into X, sideways pod into Y. Then run BioBuzz Pinpoint Setup', '\u2013', 'goBILDA Pinpoint Odometry Computer', 'pinpoint'],
 ];
 const EH_ROWS = [
   ['Motor 0', 'Front-right drive wheel', 'Encoder 0', 'goBILDA 5202/3/4', 'right_front_drive'],
