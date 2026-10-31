@@ -22,7 +22,7 @@ import java.util.List;
  *   - encoder cables swapped                   (a DIFFERENT motor's encoder counts)
  *   - encoder or motor direction reversed      (own encoder counts down for a forward command)
  *   - hubs found, IMU, camera, battery
- * Results: on the Driver Hub and in /sdcard/FIRST/BioBuzzLogs/wiring_*.csv
+ * Results: on the Driver Hub and in /sdcard/BioBuzzLogs/wiring_*.csv
  */
 @TeleOp(name = "BioBuzz Wiring Check", group = "BioBuzz Test")
 public class BioBuzzWiringCheck extends LinearOpMode {
@@ -129,7 +129,7 @@ public class BioBuzzWiringCheck extends LinearOpMode {
             for (String l : lines) {
                 telemetry.addLine(l);
             }
-            telemetry.addData("Saved", "/sdcard/FIRST/BioBuzzLogs/wiring_*.csv");
+            telemetry.addData("Saved", "/sdcard/BioBuzzLogs/wiring_*.csv");
             telemetry.update();
             sleep(100);
         }

@@ -13,6 +13,7 @@ import com.qualcomm.robotcore.util.Range;
  *   X / Square       zero drive encoders and IMU heading
  *   RB / LB (hold)   windmill slowly forward / backward (check FIRE direction, ticks per pocket)
  *   A / Cross        start arm jogging (arm moves to the saved DEPLOY value, or 0.50 if none) - hold the arm!
+ *                    For a first-time arm setup use "BioBuzz Arm Setup" instead: it guides and saves.
  *   D-pad up/down    arm +/- 0.010       D-pad right/left   arm +/- 0.002
  *   Y / Triangle     arm: toggle between the jog value and the computed STOW position
  *   B / Circle       flip the STOW direction used by Y
@@ -29,6 +30,7 @@ public class BioBuzzCalibration extends OpMode {
 
     private BioBuzzRobot robot;
     private HiveVision vision;
+    private Pinpoint pinpoint;
     private boolean armActive = false;
     private boolean armAtStow = false;
     private double armJog = 0.5;
@@ -43,7 +45,12 @@ public class BioBuzzCalibration extends OpMode {
             vision = null;
         }
         if (BioBuzzRobot.armCalibrated()) {
-            armJog = ARM_DEPLOY_POSITION;
+            armJog = ArmCalibration.deployPosition();
+            stowDirection = ArmCalibration.stowDirection();
+        }
+        pinpoint = Pinpoint.tryCreate(hardwareMap);
+        if (pinpoint != null) {
+            pinpoint.reset();
         }
     }
 
@@ -57,6 +64,9 @@ public class BioBuzzCalibration extends OpMode {
         if (gamepad1.xWasPressed()) {
             robot.resetDriveEncoders();
             robot.imu.resetYaw();
+            if (pinpoint != null) {
+                pinpoint.reset();
+            }
         }
 
         robot.setIndexerPower(gamepad1.right_bumper ? 0.25 : (gamepad1.left_bumper ? -0.25 : 0));
@@ -94,6 +104,14 @@ public class BioBuzzCalibration extends OpMode {
                 robot.rightFront.getCurrentPosition(), robot.leftBack.getCurrentPosition(),
                 robot.rightBack.getCurrentPosition());
         telemetry.addData("Heading (CCW +)", "%.1f deg", robot.headingDeg());
+
+        if (pinpoint == null) {
+            telemetry.addData("Pinpoint", "not in the configuration");
+        } else {
+            pinpoint.update();
+            telemetry.addData("Pinpoint", "%s   push fwd -> X+, slide LEFT -> Y+, turn CCW -> H+", pinpoint.status());
+            telemetry.addData("Pinpoint X Y H", "%.2f in  %.2f in  %.1f deg", pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg());
+        }
 
         telemetry.addLine("--- Windmill (RB fwd / LB back) ---");
         telemetry.addData("Ticks", "%d  (%.2f pockets)", robot.indexerTicks(),

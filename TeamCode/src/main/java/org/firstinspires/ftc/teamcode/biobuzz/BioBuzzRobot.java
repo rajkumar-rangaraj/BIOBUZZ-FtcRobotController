@@ -92,6 +92,7 @@ public class BioBuzzRobot {
         }
 
         imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(HUB_LOGO, HUB_USB)));
+        ArmCalibration.reload();
     }
 
     public DcMotorEx[] driveMotors() {
@@ -217,19 +218,18 @@ public class BioBuzzRobot {
     // ---------------- Flower arm ----------------
 
     public static boolean armCalibrated() {
-        double stow = armStowPosition();
-        return ARM_DEPLOY_POSITION >= 0 && ARM_DEPLOY_POSITION <= 1 && stow >= 0 && stow <= 1;
+        return ArmCalibration.valid(ArmCalibration.deployPosition(), ArmCalibration.stowDirection());
     }
 
     public static double armStowPosition() {
-        return ARM_DEPLOY_POSITION + ARM_STOW_DIRECTION * ARM_STOW_OFFSET;
+        return ArmCalibration.stowPosition(ArmCalibration.deployPosition(), ArmCalibration.stowDirection());
     }
 
     public boolean deployArm() {
         if (!armCalibrated()) {
             return false;
         }
-        flowerArm.setPosition(ARM_DEPLOY_POSITION);
+        flowerArm.setPosition(ArmCalibration.deployPosition());
         armState = ArmState.DEPLOYED;
         return true;
     }

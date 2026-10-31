@@ -24,7 +24,7 @@ import com.qualcomm.robotcore.util.Range;
  *   D-pad right / left    launcher trim +/- 25 ticks/s
  *
  * During INIT: B / Circle = RED, A / Cross = BLUE (defaults to the alliance the last AUTO ran),
- *               Back / Share = diagnostics log on/off (files in /sdcard/FIRST/BioBuzzLogs, see README_2).
+ *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2).
  * While the arm is DEPLOYED, driving is limited to precision speed.
  */
 @TeleOp(name = "BioBuzz TeleOp", group = "BioBuzz")
@@ -159,12 +159,9 @@ public class BioBuzzTeleOp extends OpMode {
         double forward = -gamepad1.left_stick_y * scale;
         double strafe = gamepad1.left_stick_x * scale;
         double turn = gamepad1.right_stick_x * scale;
-        HiveVision.Target target = null;
-        if (gamepad1.x && vision != null) {
-            target = vision.target(alliance, null);
-            if (target != null) {
-                turn = HiveVision.aimTurnCw(target.bearingDeg);
-            }
+        HiveVision.Target target = vision == null ? null : vision.target(alliance, null);   // every loop: logged + shown
+        if (gamepad1.x && target != null) {
+            turn = HiveVision.aimTurnCw(target.bearingDeg);
         }
         boolean aim = gamepad1.x;
         if (aim != lastAim) {
@@ -215,10 +212,10 @@ public class BioBuzzTeleOp extends OpMode {
 
         // ---------------- Telemetry ----------------
         telemetry.addData("Alliance", alliance);
-        telemetry.addData("Launcher", "%s  target %.0f  actual %.0f t/s (%s%+.0f)",
-                !robot.isLauncherOn() ? "OFF" : (ready ? "READY" : "spinning"),
-                robot.launcherTarget(), robot.launcherVelocity(),
-                launcherPreset == LAUNCHER_FAR_VELOCITY ? "FAR" : "NEAR", launcherTrim);
+        telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +25, LEFT -25)",
+                launcherPreset == LAUNCHER_FAR_VELOCITY ? "FAR" : "NEAR", launcherPreset, launcherTrim, launcherTarget);
+        telemetry.addData("Launcher", "%s  actual %.0f t/s",
+                !robot.isLauncherOn() ? "OFF" : (ready ? "READY" : "spinning"), robot.launcherVelocity());
         telemetry.addData("Windmill", gamepad1.b ? "UNJAM" : String.format("%s  shots %d%s", feeder.state(), feeder.shots(),
                 feeder.jams() > 0 ? "  jams " + feeder.jams() : ""));
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? robot.armState().toString() : "NOT CALIBRATED");
@@ -226,10 +223,10 @@ public class BioBuzzTeleOp extends OpMode {
         if (vision == null) {
             telemetry.addData("HIVE aim", "camera not found");
         } else if (target != null) {
-            telemetry.addData("HIVE aim", "%s  %d tags  bearing %.1f  range %.0f in",
-                    target.cell, target.tagCount, target.bearingDeg, target.rangeIn);
+            telemetry.addData("HIVE aim", "%s  %d tags  bearing %.1f  range %.0f in%s",
+                    target.cell, target.tagCount, target.bearingDeg, target.rangeIn, gamepad1.x ? "" : "  (hold X to aim)");
         } else {
-            telemetry.addData("HIVE aim", gamepad1.x ? "no %s CELL tags in view" : "hold X to aim", alliance);
+            telemetry.addData("HIVE aim", "no %s CELL tags in view (any tags: %d)", alliance, vision.visibleTagCount());
         }
         String warning = robot.launcherWarning();
         if (warning != null) {

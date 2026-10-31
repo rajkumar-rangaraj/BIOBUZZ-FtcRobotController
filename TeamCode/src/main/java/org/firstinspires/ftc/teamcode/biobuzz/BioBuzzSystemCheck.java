@@ -67,7 +67,7 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
             for (String r : results) {
                 telemetry.addLine(r);
             }
-            telemetry.addData("Saved", "/sdcard/FIRST/BioBuzzLogs/systemcheck_*.csv");
+            telemetry.addData("Saved", "/sdcard/BioBuzzLogs/systemcheck_*.csv");
             telemetry.update();
             sleep(50);
         }

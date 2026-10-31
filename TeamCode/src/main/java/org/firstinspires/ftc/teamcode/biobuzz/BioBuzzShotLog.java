@@ -13,7 +13,7 @@ import java.util.TreeMap;
 /*
  * Shot log - one ball at a time, every shot recorded with flywheel speed, battery, camera distance and result.
  * Use it to pick LAUNCHER_NEAR/FAR_VELOCITY and AUTO_LAUNCH_VELOCITY from data.
- * Log: /sdcard/FIRST/BioBuzzLogs/shots_*.csv
+ * Log: /sdcard/BioBuzzLogs/shots_*.csv
  *
  *   Sticks, LB, X(hold aim)   driving as in TeleOp
  *   Triggers                  intake in / out (reload)

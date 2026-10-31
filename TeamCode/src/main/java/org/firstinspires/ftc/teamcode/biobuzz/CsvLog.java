@@ -11,8 +11,8 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * Writes test data to /sdcard/FIRST/BioBuzzLogs/&lt;name&gt;_&lt;date&gt;.csv on the Control Hub.
- * Copy logs to a laptop with:  adb pull /sdcard/FIRST/BioBuzzLogs
+ * Writes test data to /sdcard/BioBuzzLogs/&lt;name&gt;_&lt;date&gt;.csv on the Control Hub.
+ * Copy logs to a laptop with:  adb pull /sdcard/BioBuzzLogs
  * A logging failure never stops the OpMode; it only disables the log.
  */
 public class CsvLog {

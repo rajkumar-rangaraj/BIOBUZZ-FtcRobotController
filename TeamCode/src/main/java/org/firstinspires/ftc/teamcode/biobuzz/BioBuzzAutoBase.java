@@ -18,7 +18,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *        forward to 4 in off the wall -> strafe right into the LOADING ZONE.
  *
  * INIT options on gamepad 1: D-pad up/down = start delay, X = shooting on/off, Y = camera on/off (drill only).
- * Every run is logged to /sdcard/FIRST/BioBuzzLogs/auto_*.csv
+ * Every run is logged to /sdcard/BioBuzzLogs/auto_*.csv
  */
 public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, AutoRoute.Mechanisms {
 
@@ -31,6 +31,10 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
     private final ElapsedTime clock = new ElapsedTime();
     private double matchStart = 0;
     private String step = "INIT";
+    private Pinpoint pinpoint;
+    private final OdometryAccumulator odo = new OdometryAccumulator();
+    private double lastWheelF, lastWheelS, pinpointHeading0;
+    private boolean pinpointWasOk = false;
 
     @Override
     public void runOpMode() {
@@ -43,6 +47,10 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             visionError = e.getMessage();
         }
         BioBuzzMatchState.alliance = alliance();
+        pinpoint = Pinpoint.tryCreate(hardwareMap);
+        if (pinpoint != null) {
+            pinpoint.reset();                                   // robot sits still during INIT: IMU calibrates here
+        }
 
         int startDelaySec = 0;
         boolean shoot = true;
@@ -68,6 +76,14 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             telemetry.addData("Shooting", "%s   (X toggles)", shoot ? "ON" : "OFF");
             telemetry.addData("Camera aim", "%s   (Y toggles - keep ON for matches)", useCamera ? "ON" : "OFF (drill)");
             telemetry.addData("Heading", "%.1f deg", robot.headingDeg());
+            if (pinpoint == null) {
+                telemetry.addData("Odometry", "wheel encoders (no \"pinpoint\" in the configuration)");
+            } else {
+                pinpoint.update();
+                telemetry.addData("Odometry", "Pinpoint %s  x %.1f  y %.1f in  %.1f deg%s", pinpoint.status(),
+                        pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg(),
+                        pinpoint.ok() ? "" : "  -> will use wheel encoders");
+            }
             if (vision == null) {
                 telemetry.addData("Camera", "NOT FOUND: %s (IMU aim only)", visionError);
             } else {
@@ -89,16 +105,19 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
         log = new CsvLog("auto_" + alliance(), "t", "step", "fwd_in", "right_in", "heading_deg",
                 "launcher_tps", "launcher_target", "launcher_ready", "indexer_ticks", "battery_v",
-                "cell", "tags", "bearing_deg");
+                "cell", "tags", "bearing_deg", "odometry");
         log.row("CONFIG", "delay=" + startDelaySec, "shoot=" + shoot, "camera=" + (vision != null),
                 "aim_heading=" + AUTO_AIM_HEADING_DEG, "launch_tps=" + AUTO_LAUNCH_VELOCITY);
         robot.imu.resetYaw();
         matchStart = clock.seconds();
+        startOdometry();
         try {
             AutoRoute.run(this, this, startDelaySec, shoot);
             loopTick();
-            log.row("RESULT", "done_s=" + (clock.seconds() - matchStart), "fwd_in=" + robot.forwardInches(),
-                    "right_in=" + robot.strafeRightInches(), "heading=" + robot.headingDeg());
+            log.row("RESULT", "done_s=" + (clock.seconds() - matchStart), "fwd_in=" + forwardInches(),
+                    "right_in=" + strafeRightInches(), "heading=" + headingDeg(),
+                    "odometry=" + (pinpoint == null ? "wheels" : "pinpoint " + pinpoint.status()),
+                    "wheels_fwd_in=" + robot.forwardInches(), "wheels_right_in=" + robot.strafeRightInches());
         } finally {
             robot.stopAll();
             closeVision();
@@ -120,16 +139,19 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
     @Override
     public double forwardInches() {
-        return robot.forwardInches();
+        return odo.forwardInches();
     }
 
     @Override
     public double strafeRightInches() {
-        return robot.strafeRightInches();
+        return odo.strafeRightInches();
     }
 
     @Override
     public double headingDeg() {
+        if (pinpointWasOk) {
+            return MecanumMath.normalizeDegrees(pinpoint.headingDeg() - pinpointHeading0);
+        }
         return robot.headingDeg();
     }
 
@@ -138,23 +160,56 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         robot.drive(forward, strafeRight, turnCw, 1.0);
     }
 
+    /** Called right after START: zero the robot-relative odometry on the current readings. */
+    private void startOdometry() {
+        lastWheelF = robot.forwardInches();
+        lastWheelS = robot.strafeRightInches();
+        if (pinpoint != null) {
+            pinpoint.update();
+            pinpointHeading0 = pinpoint.headingDeg();
+        }
+        updateOdometry();
+    }
+
+    /** Pinpoint when it reports READY, otherwise the wheel encoders - switches per loop, never loses the distance. */
+    private void updateOdometry() {
+        double wf = robot.forwardInches(), ws = robot.strafeRightInches();
+        if (pinpoint != null) {
+            pinpoint.update();
+        }
+        boolean ok = pinpoint != null && pinpoint.ok();
+        if (ok) {
+            odo.fieldUpdate(pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg());
+        } else {
+            odo.robotStep(wf - lastWheelF, ws - lastWheelS);
+        }
+        if (pinpointWasOk && !ok) {
+            log.row(clock.seconds() - matchStart, "EVENT", "Pinpoint lost (" + pinpoint.status() + "): wheel encoders");
+        }
+        pinpointWasOk = ok;
+        lastWheelF = wf;
+        lastWheelS = ws;
+    }
+
     @Override
     public void loopTick() {
+        updateOdometry();
         double t = clock.seconds() - matchStart;
-        double heading = robot.headingDeg();
-        double fwd = robot.forwardInches();
-        double right = robot.strafeRightInches();
+        double heading = headingDeg();
+        double fwd = forwardInches();
+        double right = strafeRightInches();
         double launcherVel = robot.launcherVelocity();
         HiveVision.Target target = lastTarget;
         log.row(t, step, fwd, right, heading, launcherVel, robot.launcherTarget(), robot.launcherReady(),
                 robot.indexerTicks(), robot.battery.getVoltage(), target == null ? "" : target.cell,
-                target == null ? 0 : target.tagCount, target == null ? "" : target.bearingDeg);
+                target == null ? 0 : target.tagCount, target == null ? "" : target.bearingDeg,
+                pinpointWasOk ? "pinpoint" : "wheels");
         lastTarget = null;
 
         telemetry.addData("Step", step);
         telemetry.addData("Time", "%.1f s", t);
         telemetry.addData("Heading", "%.1f deg", heading);
-        telemetry.addData("Moved", "fwd %.1f  right %.1f in", fwd, right);
+        telemetry.addData("Moved", "fwd %.1f  right %.1f in  (%s)", fwd, right, pinpointWasOk ? "Pinpoint" : "wheels");
         telemetry.addData("Launcher", "%.0f / %.0f t/s", launcherVel, robot.launcherTarget());
         telemetry.addData("Log", log.status());
         telemetry.update();

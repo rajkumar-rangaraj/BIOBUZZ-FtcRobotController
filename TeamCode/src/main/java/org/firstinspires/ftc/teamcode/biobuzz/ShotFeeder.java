@@ -10,6 +10,9 @@ public class ShotFeeder {
 
     public enum State { IDLE, WAIT_READY, FEEDING, UNJAM, JAMMED }
 
+    /** A pocket is done once the encoder reaches its boundary (slow approach: overshoot is small and never adds up). */
+    static final double STOP_TOLERANCE_TICKS = 0;
+
     private final double pocketTicks;
     private final double feedPower;
     private final double unjamPower;
@@ -17,10 +20,14 @@ public class ShotFeeder {
     private final double pocketTimeoutSec;
     private final double unjamSec;
     private final int maxJams;
+    private final double rampTicks;
+    private final double minPower;
 
     private State state = State.IDLE;
     private double stateStart = 0;
     private int pocketStartTicks = 0;
+    private double targetTicks = 0;
+    private boolean haveTarget = false;
     private double lastShotTime = -1e9;
     private int shots = 0;
     private int jams = 0;
@@ -29,6 +36,17 @@ public class ShotFeeder {
 
     public ShotFeeder(double pocketTicks, double feedPower, double unjamPower, double minIntervalSec,
                       double pocketTimeoutSec, double unjamSec, int maxJams) {
+        this(pocketTicks, feedPower, unjamPower, minIntervalSec, pocketTimeoutSec, unjamSec, maxJams,
+                BioBuzzConstants.INDEXER_RAMP_TICKS, BioBuzzConstants.INDEXER_MIN_POWER);
+    }
+
+    /**
+     * @param rampTicks the last ticks before the pocket boundary are driven at reduced power (proportional), so the
+     *                  windmill stops on the boundary instead of overshooting by a loop's worth of travel
+     * @param minPower  lowest power used near the boundary (must still turn the windmill with a ball in it)
+     */
+    public ShotFeeder(double pocketTicks, double feedPower, double unjamPower, double minIntervalSec,
+                      double pocketTimeoutSec, double unjamSec, int maxJams, double rampTicks, double minPower) {
         this.pocketTicks = pocketTicks;
         this.feedPower = feedPower;
         this.unjamPower = unjamPower;
@@ -36,6 +54,8 @@ public class ShotFeeder {
         this.pocketTimeoutSec = pocketTimeoutSec;
         this.unjamSec = unjamSec;
         this.maxJams = maxJams;
+        this.rampTicks = rampTicks;
+        this.minPower = minPower;
     }
 
     /** Standard robot settings from BioBuzzConstants. */
@@ -67,13 +87,22 @@ public class ShotFeeder {
                     go(State.IDLE, t);
                 } else if (launcherReady && t - lastShotTime >= minIntervalSec) {
                     pocketStartTicks = indexerTicks;
+                    if (!haveTarget) {                          // first shot: pockets are counted from here
+                        targetTicks = indexerTicks;
+                        haveTarget = true;
+                    }
+                    targetTicks += pocketTicks;                 // next pocket boundary - errors never add up
+                    while (targetTicks - indexerTicks < pocketTicks / 2) {
+                        targetTicks += pocketTicks;             // already (nearly) past it: aim for the next one
+                    }
                     go(State.FEEDING, t);
                     power = feedPower;
                 }
                 break;
             case FEEDING:                                       // a pocket, once started, is always finished
-                power = feedPower;
-                if (Math.abs(indexerTicks - pocketStartTicks) >= pocketTicks) {
+                double remaining = targetTicks - indexerTicks;
+                power = Math.max(minPower, Math.min(feedPower, feedPower * remaining / rampTicks));
+                if (remaining <= STOP_TOLERANCE_TICKS) {
                     shots++;
                     lastShotTime = t;
                     event = "SHOT " + shots;

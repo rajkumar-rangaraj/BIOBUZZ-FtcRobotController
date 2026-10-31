@@ -33,6 +33,18 @@ public final class BioBuzzConstants {
     public static final String IMU_NAME = "imu";
     public static final String WEBCAM = "Webcam 1";
 
+    // ---------------- goBILDA Pinpoint odometry (optional, AUTO only) ----------------
+    // Control Hub I2C bus 1, configured as "goBILDA Pinpoint Odometry Computer" named "pinpoint".
+    // Not in the configuration -> AUTO drives on the wheel encoders exactly as before.
+    public static final String PINPOINT = "pinpoint";
+    public static final boolean PINPOINT_SWINGARM_PODS = false;                   // false = 4-Bar pods
+    // Pod positions from the robot's turning centre, in mm (CAD layout: make_odometry_mount.py; measure on the robot,
+    // then check with "BioBuzz Calibration": spin in place, X and Y must stay near 0):
+    public static final double PINPOINT_X_POD_LEFT_MM = 104;                     // CALIBRATE: forward pod, + = left
+    public static final double PINPOINT_Y_POD_FORWARD_MM = -164;                 // CALIBRATE: strafe pod, + = forward
+    public static final boolean PINPOINT_X_REVERSED = false;                     // CALIBRATE: push forward -> X +
+    public static final boolean PINPOINT_Y_REVERSED = false;                     // CALIBRATE: slide left -> Y +
+
     // ---------------- Control Hub IMU mounting ----------------
     // Hub stands upright at the back: its logo faces the launcher side, its USB ports face outward (robot left).
     public static final RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO =
@@ -65,6 +77,11 @@ public final class BioBuzzConstants {
     // If FIRE turns the windmill away from the launcher, change this to REVERSE.
     public static final DcMotorSimple.Direction INDEXER_DIRECTION = DcMotorSimple.Direction.FORWARD;
     public static final double INDEXER_FEED_POWER = 0.6;                         // CALIBRATE with shot recovery
+    // Robot log 2026-10-30: at 0.6 power the windmill turns ~1500 ticks/s and a pocket finished 1.06-1.76 pockets
+    // late (one 13-54 ms loop = up to 80 ticks at that speed). Power now falls in proportion to the ticks left over the\r
+    // whole pocket, so the boundary is reached slowly (simulated: 87..110 ticks per shot, error never adds up):
+    public static final double INDEXER_RAMP_TICKS = INDEXER_TICKS_PER_REV / INDEXER_POCKETS;   // one pocket
+    public static final double INDEXER_MIN_POWER = 0.15;                         // CALIBRATE: must still turn with a ball
     public static final double INDEXER_UNJAM_POWER = 0.35;
     // One ball per shot (ShotFeeder): one pocket, then wait for the flywheel before the next
     public static final double SHOT_MIN_INTERVAL_SEC = 0.35;                     // CALIBRATE with BioBuzz Shot Log

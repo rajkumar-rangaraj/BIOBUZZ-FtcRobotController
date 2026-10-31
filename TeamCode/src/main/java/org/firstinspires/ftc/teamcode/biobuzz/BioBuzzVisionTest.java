@@ -8,7 +8,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
 /*
  * Vision test - measures how well the rear camera sees our HIVE CELL, against tape-measured truth.
- * Log: /sdcard/FIRST/BioBuzzLogs/vision_*.csv
+ * Log: /sdcard/BioBuzzLogs/vision_*.csv
  *
  *   Sticks           drive at 30% to reposition
  *   X / Square(hold) closed-loop aim (same code as TeleOp/AUTO) - watch it settle

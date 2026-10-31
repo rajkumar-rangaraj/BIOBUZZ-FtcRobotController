@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 /**
- * Diagnostics log for real-robot runs. Two files in /sdcard/FIRST/BioBuzzLogs/ :
+ * Diagnostics log for real-robot runs. Two files in /sdcard/BioBuzzLogs/ :
  *   diag_&lt;opmode&gt;_&lt;date&gt;.csv   - 20 rows/s: sticks + buttons, every motor command, encoders, flywheel, arm, camera, loop time
  *   events_&lt;opmode&gt;_&lt;date&gt;.csv - one row per event: button actions, state changes, warnings
  * Copy them to the laptop with tools/pull_robot_logs.ps1. When disabled, every call does nothing.

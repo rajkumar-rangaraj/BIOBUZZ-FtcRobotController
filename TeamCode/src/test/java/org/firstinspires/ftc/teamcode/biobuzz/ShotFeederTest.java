@@ -40,6 +40,38 @@ public class ShotFeederTest {
     }
 
     @Test
+    public void slowLoopDoesNotOvershootThePocket() {
+        // Robot log 2026-10-30: ~1500 ticks/s at 0.6 power and 13-54 ms loops gave 1.06-1.76 pockets per shot.
+        ShotFeeder f = new ShotFeeder(POCKET, 0.6, 0.35, 0.35, 1.0, 0.25, 3, POCKET, 0.15);
+        double t = 0, ticks = 0, vel = 0;                       // vel = windmill ticks/s (motor lag + coast)
+        java.util.Random rnd = new java.util.Random(7);
+        int lastShots = 0;
+        double lastStop = 0, worst = 0;
+        for (int i = 0; i < 4000 && f.shots() < 12; i++) {
+            double loop = 0.013 + rnd.nextDouble() * 0.041;       // 13..54 ms, as logged
+            double p = f.update(t, (int) Math.round(ticks), true, true);
+            for (double s = 0; s < loop; s += 0.001) {            // 1 ms physics inside one loop
+                vel += (p * 2500 - vel) * (0.001 / 0.010);        // 0.6 power -> 1500 ticks/s; 10 ms (log: coast 2-10 ticks)
+                ticks += vel * 0.001;
+                t += 0.001;
+            }
+            if (f.shots() > lastShots) {
+                lastShots = f.shots();
+                for (int k = 0; k < 200; k++) {                    // coast to rest (power is 0 now)
+                    vel += (0 - vel) * (0.001 / 0.010);
+                    ticks += vel * 0.001;
+                }
+                double travel = ticks - lastStop;
+                worst = Math.max(worst, Math.abs(ticks - lastShots * POCKET));
+                lastStop = ticks;
+                assertTrue("shot " + lastShots + " travel " + travel, travel > 0.8 * POCKET && travel < 1.2 * POCKET);
+            }
+        }
+        assertTrue("12 shots, got " + f.shots(), f.shots() >= 12);
+        assertTrue("error after 12 shots stays under 30 ticks (never adds up), was " + worst, worst < 30);
+    }
+
+    @Test
     public void firesOneBallPerPocketAndWaitsForTheFlywheel() {
         Sim s = new Sim();
         double minSpeedAtShot = 1e9;

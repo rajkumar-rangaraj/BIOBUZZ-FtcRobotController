@@ -108,6 +108,8 @@ Or hit **Run** in Android Studio with `TeamCode` selected and the Control Hub as
 
 ## Robot wiring and configuration
 
+Printable version (tables, wiring rules and cut-out cable tags): `BioBuzz_Wiring_Sheet.pdf`, rebuilt with `node tools/make_wiring_sheet.js`. Keep it in step with this section.
+
 Plug every motor and servo into the port below, and type the **name** exactly as shown when you create the robot configuration on the Driver Hub. Names are case-sensitive; a typo crashes the OpMode at INIT.
 
 "Left", "right", "front" and "back" are as seen from **behind the robot looking toward the intake** (the intake/flower-arm side is the FRONT, the launcher/camera side is the BACK).
@@ -124,6 +126,7 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 | Motor 3 | spare | — | — |
 | Servo 0 | Left corner intake wheel servo | Continuous Rotation Servo | `left_intake_servo` |
 | I2C bus 0 | Built-in IMU (already in the default config) | REV internal IMU (set automatically) | `imu` |
+| I2C bus 1 | goBILDA Pinpoint odometry computer (**optional**, AUTO only; without it AUTO uses the wheel encoders) | goBILDA Pinpoint Odometry Computer | `pinpoint` |
 | USB 2.0 port | Logitech C270 webcam | Webcam | `Webcam 1` |
 
 ### Expansion Hub (right side)
@@ -142,7 +145,7 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 - **Every motor's encoder cable goes in the encoder port with the same number as its power port** (motor in port 2 → encoder in port 2). All 4 drive motors, the launcher and the indexer need their encoders; the intake doesn't.
 - Connect the Expansion Hub to the Control Hub with the RS485 cable, and give it its own power cable from the Control Hub. Its address must not be the same as the Control Hub's (the Driver Hub shows this when you scan).
 - The flower arm servo must be switched to **servo (position) mode** with the goBILDA servo programmer before you install it. In continuous mode it will spin instead of stopping at the pads.
-- After replacing the servo cradle (PPA5), the arms (PPA2L/PPA2R) or the servo horn, run the flower-arm step of `BioBuzz Calibration` again. The servo positions shift when the horn goes back on a different spline tooth.
+- After replacing the servo cradle (PPA5), the arms (PPA2L/PPA2R) or the servo horn, run `BioBuzz Arm Setup` again. The servo positions shift when the horn goes back on a different spline tooth.
 - Plug each servo cable so its black (ground) wire lines up with the ground pin marked on the hub. A reversed servo plug doesn't move.
 - After any wiring change, run `BioBuzz Wiring Check` (robot on a box), then `BioBuzz System Check`. It spins each drive motor alone so you can confirm the right wheel moves, and checks every encoder.
 
@@ -208,13 +211,13 @@ Tests are in `TeamCode/src/test/java/`. They check the mecanum wheel math and dr
 
 **On the robot:** run `BioBuzz System Check`. The simulation can't see wiring mistakes such as swapped motor names or wheels in the wrong corners, so a person confirms each wheel and each move.
 
-**On the field:** follow [BIOBUZZ_TEST_PLAN.md](BIOBUZZ_TEST_PLAN.md). It uses `BioBuzz Vision Test`, `BioBuzz Shot Log` and the AUTO logs (all saved on the Control Hub in `/sdcard/FIRST/BioBuzzLogs/`), with pass targets for each stage.
+**On the field:** follow [BIOBUZZ_TEST_PLAN.md](BIOBUZZ_TEST_PLAN.md). It uses `BioBuzz Vision Test`, `BioBuzz Shot Log` and the AUTO logs (all saved on the Control Hub in `/sdcard/BioBuzzLogs/`), with pass targets for each stage.
 
 ---
 
 ## Diagnostics logs (real-robot runs)
 
-The robot saves logs on the Control Hub in `/sdcard/FIRST/BioBuzzLogs/`:
+The robot saves logs on the Control Hub in `/sdcard/BioBuzzLogs/`:
 
 | File | Written by | What's in it |
 |---|---|---|
@@ -246,12 +249,17 @@ git merge upstream/master
 
 ---
 
+## Shooting guide
+
+Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AIM check, driver rule, TeleOp button card): `BioBuzz_Shooting_Guide.pdf`, rebuilt with `node tools/make_shooting_guide.js`.
+
 ## Current op modes
 
 | Op mode | What it does |
 |---|---|
 | `BioBuzz AUTO RED` / `BioBuzz AUTO BLUE` | LEAVE, launch the 4 preloads into our upward CELL, then AUTO PARK in our LOADING ZONE. Selects `BioBuzz TeleOp` afterwards. |
 | `BioBuzz TeleOp` | Competition driver control, one gamepad (controls listed at the top of `BioBuzzTeleOp.java`) |
+| `BioBuzz Arm Setup` | Guided flower-arm setup, one step per screen: fit the arm level, move it down onto the pads, test up/down, press X to save. Saved on the Control Hub (`/sdcard/biobuzz_arm.txt`), so no code change or re-deploy is needed |
 | `BioBuzz Calibration` | Measures drive distance, IMU direction, windmill direction, flower-arm servo positions and camera range/bearing |
 | `BioBuzz System Check` | On-robot integration test: each wheel, forward/back/slide right/slide left/turns, intake, windmill, launcher, arm. Prints PASS/FAIL with fixes. Run it after every wiring or configuration change. |
 | `BioBuzz Wiring Check` | Robot on a box: spins each motor alone and reads every encoder and the motor current. Finds missing motor cables, missing or swapped encoder cables and reversed directions; also checks both hubs, IMU and camera. Run it first after any wiring change. |
