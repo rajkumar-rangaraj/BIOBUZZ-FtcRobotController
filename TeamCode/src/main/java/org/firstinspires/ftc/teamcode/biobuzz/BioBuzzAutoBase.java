@@ -34,8 +34,9 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
     private String step = "INIT";
     private Pinpoint pinpoint;
     private final OdometryAccumulator odo = new OdometryAccumulator();
-    private double lastWheelF, lastWheelS, pinpointHeading0;
+    private double lastWheelF, lastWheelS, pinpointHeading0, imuHeading0;
     private boolean pinpointWasOk = false;
+    private boolean pinpointDisabled = false;
 
     @Override
     public void runOpMode() {
@@ -110,7 +111,6 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         log.row("CONFIG", "delay=" + startDelaySec, "shoot=" + shoot, "camera=" + (vision != null),
                 "aim_heading=" + AUTO_AIM_HEADING_DEG, "launch_tps=" + launchTps(),
                 spot.hasSpot() ? String.format("spot=%.1f in @ %.0f", spot.spotRangeIn, spot.spotSpeed) : "spot=none");
-        robot.imu.resetYaw();
         matchStart = clock.seconds();
         startOdometry();
         try {
@@ -149,12 +149,10 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         return odo.strafeRightInches();
     }
 
+    /** Control Hub IMU, zeroed at START (no resetYaw: it applied late and gave -30 deg on 31 Oct). */
     @Override
     public double headingDeg() {
-        if (pinpointWasOk) {
-            return MecanumMath.normalizeDegrees(pinpoint.headingDeg() - pinpointHeading0);
-        }
-        return robot.headingDeg();
+        return MecanumMath.normalizeDegrees(robot.headingDeg() - imuHeading0);
     }
 
     @Override
@@ -164,6 +162,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
     /** Called right after START: zero the robot-relative odometry on the current readings. */
     private void startOdometry() {
+        imuHeading0 = robot.headingDeg();
         lastWheelF = robot.forwardInches();
         lastWheelS = robot.strafeRightInches();
         if (pinpoint != null) {
@@ -179,7 +178,16 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         if (pinpoint != null) {
             pinpoint.update();
         }
-        boolean ok = pinpoint != null && pinpoint.ok();
+        boolean ok = pinpoint != null && !pinpointDisabled && pinpoint.ok();
+        if (ok) {
+            double drift = MecanumMath.normalizeDegrees(pinpoint.headingDeg() - pinpointHeading0 - headingDeg());
+            if (Math.abs(drift) > PINPOINT_MAX_HEADING_ERROR_DEG) {    // bad Pinpoint gyro (moved during INIT): stop trusting it
+                pinpointDisabled = true;
+                ok = false;
+                log.row(clock.seconds() - matchStart, "EVENT",
+                        String.format("Pinpoint heading off by %.0f deg vs IMU: wheel encoders", drift));
+            }
+        }
         if (ok) {
             odo.fieldUpdate(pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg());
         } else {

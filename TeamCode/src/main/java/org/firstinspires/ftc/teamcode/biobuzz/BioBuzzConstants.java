@@ -46,6 +46,7 @@ public final class BioBuzzConstants {
     public static final double PINPOINT_Y_POD_FORWARD_MM = -175;                 // strafe pod, + = forward of centre
     public static final boolean PINPOINT_X_REVERSED = false;                     // push forward -> X +
     public static final boolean PINPOINT_Y_REVERSED = false;                     // slide left -> Y +
+    public static final double PINPOINT_MAX_HEADING_ERROR_DEG = 15;             // AUTO drops the Pinpoint if its heading drifts from the IMU
 
     // ---------------- Control Hub IMU mounting ----------------
     // Hub stands upright at the back: its logo faces the launcher side, its USB ports face outward (robot left).
