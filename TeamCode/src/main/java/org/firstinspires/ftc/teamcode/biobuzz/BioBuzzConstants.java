@@ -112,7 +112,7 @@ public final class BioBuzzConstants {
     public static final double CAMERA_LENS_HEIGHT_IN = 12.2;                     // CAD v1 mount; RE-MEASURE on the current mount
     public static final double AIM_KP = 0.015;                                  // turn power per degree
     public static final double AIM_MAX_TURN = 0.30;
-    public static final double AIM_MIN_TURN = 0.06;
+    public static final double AIM_MIN_TURN = 0.10;                                   // 0.06 stalled 4 deg short (31 Oct AUTO)
     public static final double AIM_TOLERANCE_DEG = 2.0;
     // SHOT SPOT (TeleOp: Share saves the camera distance + speed, holding X drives back to that distance)
     public static final double SPOT_KP = 0.03;                                  // drive power per inch of error
@@ -134,7 +134,7 @@ public final class BioBuzzConstants {
     // Start: intake side touching our ALLIANCE wall, robot fully outside the LOADING ZONE on its audience-side
     // (RED) / rear-side (BLUE) edge, with about 1 in between the robot and the LOADING ZONE tape.
     public static final double AUTO_LEAVE_IN = 12;                               // back away from the wall
-    public static final double AUTO_AIM_HEADING_DEG = -34;                       // CALIBRATE; + is counter-clockwise
+    public static final double AUTO_AIM_HEADING_DEG = -50;                       // camera found the BLUE CELL at about -50 (31 Oct); + is CCW
     public static final double AUTO_WALL_GAP_IN = 4;                             // stay off the wall for LEAVE
     public static final double AUTO_PARK_STRAFE_IN = 14;                         // CALIBRATE; strafe right into zone
     public static final double AUTO_LAUNCH_VELOCITY = LAUNCHER_NEAR_VELOCITY;    // CALIBRATE at the shot spot
@@ -144,8 +144,9 @@ public final class BioBuzzConstants {
     public static final int AUTO_PRELOADS = 4;                                   // stop early once this many balls left
     public static final double AUTO_SHOT_DIP_TPS = 60;                           // flywheel slowdown that means a ball left
     public static final double AUTO_FEED_TIMEOUT_SEC = 8.0;
-    public static final double AUTO_AIM_TIMEOUT_SEC = 2.0;
-    public static final double AUTO_PARK_DEADLINE_SEC = 22.0;
+    public static final double AUTO_AIM_TIMEOUT_SEC = 3.5;                              // camera aim + drive to the SHOT SPOT distance
+    public static final double AUTO_SPOT_MAX_IN = 24;                              // AUTO never drives further than this to the spot
+    public static final double AUTO_PARK_DEADLINE_SEC = 20.0;                           // leaves time for SPOT BACK + RETURN + PARK
     public static final int AUTO_MAX_START_DELAY_SEC = 10;
 
     // ---------------- Diagnostics ----------------
