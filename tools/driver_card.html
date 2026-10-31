@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<!-- BIOBUZZ Driver Card: 2-page visual cheat sheet for students.
+     Rebuild the PDF:  msedge --headless --print-to-pdf=BioBuzz_Driver_Card.pdf tools/driver_card.html
+     Keep in step with BioBuzzTeleOp.java (buttons) and BioBuzzConstants.java (speeds). -->
+<html><head><meta charset="utf-8"><title>BIOBUZZ Driver Card</title>
+<style>
+  @page { size: letter landscape; margin: 0.35in; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; color: #1a1a1a; }
+  .page { height: 7.75in; page-break-after: always; position: relative; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: .5px; }
+  .top { display: flex; justify-content: space-between; align-items: center; background: #111; color: #FFD000;
+         padding: 8px 16px; border-radius: 10px; }
+  .top small { color: #fff; font-size: 14px; }
+  .row { display: flex; gap: 14px; margin-top: 12px; }
+  .card { border-radius: 12px; padding: 10px 14px; }
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
+  .step { background: #FFF4CC; border: 3px solid #FFD000; border-radius: 14px; padding: 8px; text-align: center; }
+  .step .n { display: inline-block; width: 34px; height: 34px; line-height: 34px; border-radius: 50%; background: #111; color: #FFD000;
+             font-weight: 800; font-size: 20px; }
+  .step .big { font-size: 40px; line-height: 1.1; margin: 4px 0; }
+  .step b { display: block; font-size: 17px; }
+  .step span { font-size: 13px; }
+  .rule { background: #C00000; color: #fff; font-weight: 800; font-size: 18px; text-align: center; padding: 8px; border-radius: 10px; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  .fix td:first-child { color: #C00000; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 8px; font-weight: 700; color: #fff; }
+  .red { background: #D32F2F; } .blue { background: #1565C0; } .green { background: #2E7D32; } .gold { background: #B8860B; }
+  .ok { background: #EAF5E4; border-left: 8px solid #2E7D32; }
+  .warn { background: #FDECEC; border-left: 8px solid #C00000; }
+  .mono { font-family: Consolas, monospace; background: #eee; padding: 0 4px; border-radius: 4px; }
+  .foot { position: absolute; bottom: 0; width: 100%; text-align: center; font-size: 11px; color: #888; }
+</style></head><body>
+
+<!-- ======================= PAGE 1: DRIVER ======================= -->
+<div class="page">
+  <div class="top"><h1>🐝 BIOBUZZ DRIVER CARD</h1><small>Team 37102 · REV gamepad · BioBuzz TeleOp</small></div>
+
+  <div class="row">
+    <!-- Gamepad picture -->
+    <svg width="660" height="285" viewBox="0 0 660 285" style="flex:none">
+      <defs><style>
+        .lbl{font:700 14px "Segoe UI",Arial} .sub{font:12px "Segoe UI",Arial;fill:#444}
+        .ln{stroke:#888;stroke-width:1.5;fill:none}
+      </style></defs>
+      <g transform="translate(150,40) scale(0.62)">
+        <path d="M175 95 Q305 70 435 95 Q500 105 520 170 Q545 265 500 285 Q465 300 430 250 L390 205 L220 205 L180 250 Q145 300 110 285 Q65 265 90 170 Q110 105 175 95 Z"
+              fill="#2b2b2b" stroke="#000" stroke-width="3"/>
+        <rect x="150" y="45" width="80" height="20" rx="8" fill="#777"/><rect x="380" y="45" width="80" height="20" rx="8" fill="#C00000"/>
+        <rect x="150" y="72" width="80" height="18" rx="8" fill="#555"/><rect x="380" y="72" width="80" height="18" rx="8" fill="#C00000"/>
+        <rect x="250" y="100" width="110" height="55" rx="8" fill="#444"/>
+        <rect x="222" y="104" width="20" height="12" rx="3" fill="#FFD000"/><rect x="368" y="104" width="20" height="12" rx="3" fill="#888"/>
+        <g fill="#888"><rect x="150" y="122" width="18" height="52"/><rect x="133" y="139" width="52" height="18"/></g>
+        <circle cx="460" cy="122" r="15" fill="#2E7D32"/><text x="460" y="129" text-anchor="middle" fill="#fff" style="font:700 20px Arial">△</text>
+        <circle cx="435" cy="148" r="15" fill="#D81B60"/><text x="435" y="155" text-anchor="middle" fill="#fff" style="font:700 20px Arial">□</text>
+        <circle cx="485" cy="148" r="15" fill="#D32F2F"/><text x="485" y="155" text-anchor="middle" fill="#fff" style="font:700 20px Arial">○</text>
+        <circle cx="460" cy="174" r="15" fill="#1565C0"/><text x="460" y="181" text-anchor="middle" fill="#fff" style="font:700 20px Arial">✕</text>
+        <circle cx="235" cy="200" r="26" fill="#111" stroke="#777" stroke-width="4"/><circle cx="375" cy="200" r="26" fill="#111" stroke="#777" stroke-width="4"/>
+      </g>
+      <!-- left callouts -->
+      <path class="ln" d="M243 68 L190 26"/><text x="185" y="30" text-anchor="end" class="lbl">L2 = intake OUT</text>
+      <path class="ln" d="M243 86 L190 56"/><text x="185" y="60" text-anchor="end" class="lbl">L1 hold = SLOW drive</text>
+      <path class="ln" d="M291 108 L190 96"/><text x="185" y="100" text-anchor="end" class="lbl" style="fill:#B8860B">SHARE = save SHOT SPOT</text>
+      <path class="ln" d="M232 132 L190 138"/><text x="185" y="136" text-anchor="end" class="lbl">D-pad ↑ FAR · ↓ NEAR</text>
+      <text x="185" y="153" text-anchor="end" class="sub">→ +15 if short · ← −15 if long</text>
+      <path class="ln" d="M285 172 L190 196"/><text x="185" y="196" text-anchor="end" class="lbl">Left stick = drive</text>
+      <text x="185" y="212" text-anchor="end" class="sub">(intake side is FRONT)</text>
+      <!-- right callouts -->
+      <path class="ln" d="M410 68 L475 26"/><text x="480" y="30" class="lbl">R2 = intake IN</text>
+      <path class="ln" d="M410 86 L475 56"/><text x="480" y="60" class="lbl" style="fill:#C00000">R1 hold = FIRE 🔥</text>
+      <path class="ln" d="M445 112 L475 96"/><text x="480" y="100" class="lbl">△ flywheel on/off</text>
+      <path class="ln" d="M461 132 L475 136"/><text x="480" y="140" class="lbl">○ hold = unjam</text>
+      <path class="ln" d="M445 152 L475 176"/><text x="480" y="180" class="lbl">✕ = flower arm</text>
+      <path class="ln" d="M395 176 L475 220"/><text x="480" y="224" class="lbl">Right stick = turn</text>
+      <path class="ln" d="M420 140 L360 252"/><text x="360" y="270" text-anchor="middle" class="lbl" style="fill:#D81B60;font-size:16px">□ hold = AIM + drive to SHOT SPOT</text>
+    </svg>
+
+    <!-- Before the match -->
+    <div class="card ok" style="flex:1">
+      <div style="font-size:20px;font-weight:800">✅ BEFORE THE MATCH</div>
+      <table style="margin-top:4px">
+        <tr><td>1</td><td>Gamepad on: <b>OPTIONS + ✕</b></td></tr>
+        <tr><td>2</td><td>AUTO: pick <span class="tag red">AUTO RED</span> or <span class="tag blue">AUTO BLUE</span></td></tr>
+        <tr><td>3</td><td>4 balls, <b>one per pocket</b></td></tr>
+        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b></td></tr>
+        <tr><td>5</td><td>Battery ≥ <b>12.5 V</b></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div style="font-size:21px;font-weight:800;margin-top:6px">🎯 HOW WE SCORE (every time)</div>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div class="big">🚗</div><b>DRIVE CLOSE</b><span>launcher toward our goal<br>tap △ to spin up</span></div>
+    <div class="step"><div class="n">2</div><div class="big">□</div><b>HOLD SQUARE</b><span>robot aims + drives<br>to the spot by itself</span></div>
+    <div class="step"><div class="n">3</div><div class="big">📳</div><b>FEEL THE BUZZ</b><span>screen says<br><b>ON SPOT - FIRE</b></span></div>
+    <div class="step"><div class="n">4</div><div class="big">🔥</div><b>KEEP □ + HOLD R1</b><span>one ball every<br>half second</span></div>
+    <div class="step"><div class="n">5</div><div class="big">🏁</div><b>LET GO, DRIVE OFF</b><span>go get more balls</span></div>
+  </div>
+  <div class="rule">NO BUZZ = NO SHOT. &nbsp;Never shoot while moving. &nbsp;Last 20 s (3 buzzes) → PARK!</div>
+  <div class="foot">BIOBUZZ Driver Card · page 1 · full details: BioBuzz_Shooting_Guide.pdf</div>
+</div>
+
+<!-- ======================= PAGE 2: PIT CREW ======================= -->
+<div class="page">
+  <div class="top"><h1>🔧 PIT CREW: SET THE SHOT SPOT (5 min)</h1><small>do this once per event – the robot remembers it</small></div>
+
+  <div class="steps" style="grid-template-columns: repeat(4, 1fr)">
+    <div class="step"><div class="n">1</div><div class="big">📍</div><b>PARK ON YOUR BEST SPOT</b><span>where shots go in<br>launcher facing the goal</span></div>
+    <div class="step"><div class="n">2</div><div class="big">⚡</div><b>SET THE SPEED</b><span>↓ NEAR, then → / ←<br>until balls land IN</span></div>
+    <div class="step"><div class="n">3</div><div class="big">□</div><b>HOLD □, LET GO</b><span>robot squares up<br>to the goal</span></div>
+    <div class="step" style="border-color:#B8860B"><div class="n">4</div><div class="big">💾</div><b>PRESS SHARE</b><span>buzz + screen:<br><b>SHOT SPOT saved</b></span></div>
+  </div>
+  <div class="card ok" style="margin-top:10px;font-size:15px">
+    <b>Test it:</b> drive away, hold □ → the robot comes back, buzzes, fire 4 balls. Most go in? <b>Done!</b>
+    Not good? Move a little, fix the speed, press SHARE again (it replaces the old spot).
+  </div>
+
+  <div class="row">
+    <div class="card warn" style="flex:1.2">
+      <div style="font-size:20px;font-weight:800">🛠️ FIX IT FAST</div>
+      <table class="fix">
+        <tr><td>Balls land SHORT</td><td>D-pad → (+15) one press at a time</td></tr>
+        <tr><td>Balls go LONG</td><td>D-pad ← (−15)</td></tr>
+        <tr><td>Left / right misses</td><td>That's aim, not speed → hold □ until the buzz</td></tr>
+        <tr><td>□ does nothing</td><td>Wrong alliance! Screen says <span class="mono">no BLUE CELL tags</span> → restart TeleOp, INIT, press ○/✕</td></tr>
+        <tr><td>SHARE: "Can't save"</td><td>Camera can't see our goal's tags – turn the launcher toward the goal</td></tr>
+        <tr><td>Windmill stuck</td><td>Hold ○ (unjam) 1 s, then R1 again</td></tr>
+        <tr><td>Buttons don't work</td><td>Gamepad not connected → OPTIONS + ✕</td></tr>
+      </table>
+    </div>
+    <div class="card" style="flex:1;background:#EEF3FB;border-left:8px solid #1565C0">
+      <div style="font-size:20px;font-weight:800">📺 READ THE SCREEN</div>
+      <table>
+        <tr><td>Alliance</td><td>must match your bumper colour</td></tr>
+        <tr><td>Shot speed</td><td><span class="mono">SPOT 1265 +0</span> = what the flywheel uses</td></tr>
+        <tr><td>Launcher</td><td><span class="tag green">READY</span> = ok to fire</td></tr>
+        <tr><td>HIVE aim</td><td>tags seen + distance to the goal</td></tr>
+        <tr><td>Shot spot</td><td><span class="mono">now 58 in (+6)</span> = 6 in too far<br><b>ON SPOT - FIRE</b> = go!</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot">BIOBUZZ Driver Card · page 2 · settings saved on the robot in /sdcard/biobuzz_teleop.txt</div>
+</div>
+</body></html>
