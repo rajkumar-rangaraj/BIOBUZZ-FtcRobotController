@@ -138,8 +138,9 @@ public final class BioBuzzConstants {
     public static final double AUTO_WALL_GAP_IN = 4;                             // stay off the wall for LEAVE
     public static final double AUTO_PARK_STRAFE_IN = 14;                         // CALIBRATE; strafe right into zone
     public static final double AUTO_LAUNCH_VELOCITY = LAUNCHER_NEAR_VELOCITY;    // CALIBRATE at the shot spot
-    public static final int AUTO_FEED_POCKETS = 8;                               // up to 2 full turns (not every pocket launches)
-    public static final double AUTO_FEED_POWER = 0.3;                            // continuous windmill power in AUTO
+    public static final int AUTO_FEED_POCKETS = 12;                              // up to 3 full turns (not every pocket launches)
+    public static final double AUTO_FIRE_SETTLE_SEC = 0.5;                       // still robot before firing: balls settle
+    public static final double AUTO_FEED_POWER = 0.3;                            // ContinuousFeeder power (not used by AUTO now)
     public static final int AUTO_PRELOADS = 4;                                   // stop early once this many balls left
     public static final double AUTO_SHOT_DIP_TPS = 60;                           // flywheel slowdown that means a ball left
     public static final double AUTO_FEED_TIMEOUT_SEC = 8.0;
