@@ -51,7 +51,8 @@ const c = [
 
   h1('0.  Before you start'),
   bullet(['Practice HIVE with the ', { text: 'AprilTags on the bottom of the CELLs', bold: true }, ' (IDs 30\u201345, printed for practice from the FIRST field resources page). Without them the camera has nothing to see.']),
-  bullet(['In TeleOp INIT choose the ', { text: 'alliance that matches the HIVE you shoot at', bold: true }, ': B / Circle = RED, A / Cross = BLUE. The camera only looks for that alliance\u2019s CELLs.']),
+  bullet(['Pick the ', { text: 'alliance that matches the HIVE you shoot at', bold: true }, '. AUTO RED / AUTO BLUE sets it on its own; in TeleOp INIT press B / Circle = RED, A / Cross = BLUE. The robot remembers it (even after a restart). ',
+    { text: 'Always read the \u201cAlliance\u201d line in INIT before PLAY', bold: true }, ' \u2013 the camera only looks for that alliance\u2019s CELLs.']),
   bullet(['Fresh battery (12.5 V or more), 4 balls, tape measure, coloured tape.']),
 
   h1('1.  Pick ONE shooting spot and tape it'),
@@ -95,6 +96,16 @@ const c = [
   bullet('Rebuild, deploy, then fire 5 balls in TeleOp from the tape to confirm.'),
 
   new Paragraph({ children: [new PageBreak()] }),
+  h1('3b.  Save the SHOT SPOT on the robot (Share button, no code change)'),
+  num('Start BioBuzz TeleOp (check the alliance in INIT). Put the robot on the tape, launcher facing the CELL.', 's3'),
+  num(['Set the speed that scored: D-pad DOWN (NEAR), then RIGHT / LEFT until the \u201cShot speed\u201d line shows your Shot Log speed.'], 's3'),
+  num(['Hold X until the bearing settles, release, then press ', { text: 'Back / Share', bold: true }, '. The controller rumbles and the screen shows \u201cSHOT SPOT saved: 52 in @ 1275 t/s\u201d.'], 's3'),
+  num('Fire 4 balls to confirm. Not good? Move, re-tune the speed and press Share again \u2013 the new save replaces the old one.', 's3'),
+  box('RESULT', ['From now on, ', { text: 'holding X', bold: true }, ' turns the robot to the CELL, drives it forward/back to the saved distance and sets the saved speed. At the spot the controller rumbles and the screen shows ',
+    { text: 'ON SPOT - FIRE', bold: true }, '. The spot is a distance from the HIVE, so it works on both alliances and survives restarts.'], GREEN, '2E7D32'),
+  warn('Share only saves when the camera sees your alliance\u2019s CELL tags (otherwise: \u201cCan\u2019t save the spot\u201d). Pushing the left stick forward/back while holding X takes over the driving.'),
+
+  new Paragraph({ children: [new PageBreak()] }),
   h1('4.  Camera and AIM check: BioBuzz Vision Test'),
   num('Robot on the tape. Select BioBuzz Vision Test, INIT, PLAY. B / Circle switches alliance \u2013 pick the HIVE you face.', 's4'),
   num('The screen should show your CELL with 2\u20134 tags and a bearing near 0. Hold X / Square: the robot turns until the bearing settles.', 's4'),
@@ -105,12 +116,12 @@ const c = [
   h1('5.  DRIVER RULE (match play)'),
   new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: [W], rows: [new TableRow({ children: [new TableCell({ borders,
     shading: { fill: 'FFF4CC', type: ShadingType.CLEAR }, margins: { top: 160, bottom: 160, left: 240, right: 240 }, children: [
-      ...[['1', 'DRIVE TO THE SPOT', ' \u2013 same place every time.'], ['2', 'SQUARE UP', ' to the HIVE, launcher facing the CELL.'],
-        ['3', 'STOP', ' \u2013 sticks released, robot still.'], ['4', 'HOLD X', ' (aim) until the bearing settles \u2013 if tags are seen.'],
-        ['5', 'HOLD RB', ' \u2013 one ball every ~0.5 s while held; release to stop.']].map(([n, b, t]) =>
+      ...[['1', 'DRIVE NEAR THE SPOT', ' \u2013 launcher toward our CELL, press Y to pre-spin.'], ['2', 'HOLD X', ' \u2013 the robot turns and drives to the saved distance.'],
+        ['3', 'WAIT FOR THE RUMBLE', ' \u2013 screen shows ON SPOT - FIRE.'], ['4', 'KEEP HOLDING X + HOLD RB', ' \u2013 one ball every ~0.5 s.'],
+        ['5', 'RELEASE', ' RB when empty, then drive away.']].map(([n, b, t]) =>
         new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: n + '.  ', bold: true, size: 30 }),
           new TextRun({ text: b, bold: true, size: 30 }), new TextRun({ text: t, size: 26 })] })),
-      new Paragraph({ spacing: { before: 120 }, children: [new TextRun({ text: 'Do NOT shoot from anywhere else. Do NOT shoot while moving.', bold: true, size: 26, color: 'C00000' })] }),
+      new Paragraph({ spacing: { before: 120 }, children: [new TextRun({ text: 'No tags seen (no rumble)? Drive onto the taped spot by eye, square up, then RB. Do NOT shoot while moving.', bold: true, size: 26, color: 'C00000' })] }),
     ] })] })] }),
   p(''),
   p([{ text: 'Tip: ', bold: true }, 'press Y (pre-spin) while driving to the spot, so the flywheel is already at speed when you stop.']),
@@ -135,13 +146,14 @@ const c = [
     ['LB (hold)', 'Precision (slow) drive'],
     ['RT / LT', 'Intake IN / OUT (half LT = flower back-out)'],
     ['RB (hold)', 'FIRE: spins up and feeds one ball at a time'],
-    ['X / Square (hold)', 'HIVE auto-aim (camera turns the robot)'],
+    ['X / Square (hold)', 'HIVE aim + drive to the saved SHOT SPOT distance + spot speed; rumbles ON SPOT'],
+    ['Back / Share', 'Save the SHOT SPOT here (camera distance + current shot speed)'],
     ['Y / Triangle', 'Flywheel pre-spin ON / OFF'],
     ['D-pad UP / DOWN', 'Shot speed FAR (1450) / NEAR (1250) \u2013 see table above'],
     ['D-pad RIGHT / LEFT', 'Shot speed +25 / \u221225 per press'],
     ['A / Cross', 'Flower arm DOWN / UP (only when stopped)'],
     ['B / Circle (hold)', 'Unjam: windmill slowly backwards'],
-    ['INIT: B / A, Back', 'Alliance RED / BLUE; diagnostics log on/off'],
+    ['INIT: B / A, Back', 'Alliance RED / BLUE (remembered; AUTO sets it); diagnostics log on/off'],
   ], [3600, 6480]),
 ];
 
@@ -150,7 +162,7 @@ const doc = new Document({
   styles: { default: { document: { run: { font: 'Arial', size: 22 } } } },
   numbering: { config: [{ reference: 'b', levels: [{ level: 0, format: LevelFormat.BULLET, text: '\u2022', alignment: AlignmentType.LEFT,
       style: { paragraph: { indent: { left: 400, hanging: 260 } } } }] },
-    ...['s1', 's2', 's4'].map(ref => ({ reference: ref, levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.LEFT,
+    ...['s1', 's2', 's3', 's4'].map(ref => ({ reference: ref, levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.LEFT,
       style: { paragraph: { indent: { left: 460, hanging: 300 } } } }] }))] },
   sections: [{
     properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1000, right: 1080, bottom: 1000, left: 1080 } } },
