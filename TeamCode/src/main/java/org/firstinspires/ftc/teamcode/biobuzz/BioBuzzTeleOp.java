@@ -23,7 +23,7 @@ import com.qualcomm.robotcore.util.Range;
  *   A / Cross             flower arm DEPLOY / STOW (deploys only while the sticks are released)
  *   B / Circle   (hold)   unjam: windmill slowly backwards
  *   D-pad up / down       launcher FAR / NEAR preset
- *   D-pad right / left    launcher trim +/- 25 ticks/s
+ *   D-pad right / left    launcher trim +/- LAUNCHER_TRIM_STEP ticks/s (15)
  *
  * During INIT: B / Circle = RED, A / Cross = BLUE (defaults to the alliance the last AUTO ran),
  *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2).
@@ -258,8 +258,8 @@ public class BioBuzzTeleOp extends OpMode {
 
         // ---------------- Telemetry ----------------
         telemetry.addData("Alliance", alliance);
-        telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +25, LEFT -25)",
-                presetName, launcherPreset, launcherTrim, launcherTarget);
+        telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +%.0f, LEFT -%.0f)",
+                presetName, launcherPreset, launcherTrim, launcherTarget, LAUNCHER_TRIM_STEP, LAUNCHER_TRIM_STEP);
         telemetry.addData("Launcher", "%s  actual %.0f t/s",
                 !robot.isLauncherOn() ? "OFF" : (ready ? "READY" : "spinning"), robot.launcherVelocity());
         telemetry.addData("Windmill", gamepad1.b ? "UNJAM" : String.format("%s  shots %d%s", feeder.state(), feeder.shots(),

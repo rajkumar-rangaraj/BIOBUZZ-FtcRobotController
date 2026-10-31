@@ -67,7 +67,7 @@ public final class BioBuzzConstants {
     public static final PIDFCoefficients LAUNCHER_PIDF = new PIDFCoefficients(40, 0, 0, 12.5);
     public static final double LAUNCHER_NEAR_VELOCITY = 1250;                    // CALIBRATE by test shots
     public static final double LAUNCHER_FAR_VELOCITY = 1450;                     // CALIBRATE by test shots
-    public static final double LAUNCHER_TRIM_STEP = 25;
+    public static final double LAUNCHER_TRIM_STEP = 15;                          // D-pad RIGHT/LEFT; encoder reads in ~20 t/s steps
     public static final double LAUNCHER_MAX_VELOCITY = 2600;
     public static final double LAUNCHER_READY_MARGIN = 100;
     public static final double LAUNCHER_ENCODER_WARNING_SEC = 1.0;
@@ -78,7 +78,7 @@ public final class BioBuzzConstants {
     public static final double INDEXER_TICKS_PER_POCKET = INDEXER_TICKS_PER_REV / INDEXER_POCKETS;
     // If FIRE turns the windmill away from the launcher, change this to REVERSE.
     public static final DcMotorSimple.Direction INDEXER_DIRECTION = DcMotorSimple.Direction.FORWARD;
-    public static final double INDEXER_FEED_POWER = 0.6;                         // CALIBRATE with shot recovery
+    public static final double INDEXER_FEED_POWER = 0.45;                        // was 0.6: lone balls hit the pocket corners
     // Robot log 2026-10-30: at 0.6 power the windmill turns ~1500 ticks/s and a pocket finished 1.06-1.76 pockets
     // late (one 13-54 ms loop = up to 80 ticks at that speed). Power now falls in proportion to the ticks left over the\r
     // whole pocket, so the boundary is reached slowly (simulated: 87..110 ticks per shot, error never adds up):
