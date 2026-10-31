@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 
 /*
  * Vision test - measures how well the rear camera sees our HIVE CELL, against tape-measured truth.
@@ -82,7 +83,8 @@ public class BioBuzzVisionTest extends OpMode {
             frames++;
             StringBuilder ids = new StringBuilder();
             for (AprilTagDetection d : vision.latestDetections()) {
-                ids.append(d.id).append(' ');
+                ids.append(d instanceof AprilTagSingleDetection ? String.valueOf(((AprilTagSingleDetection) d).id) : "cluster")
+                        .append(' ');
             }
             if (target != null) {
                 hits++;

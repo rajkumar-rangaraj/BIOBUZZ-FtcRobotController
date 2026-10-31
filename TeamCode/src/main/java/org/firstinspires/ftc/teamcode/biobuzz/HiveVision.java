@@ -14,6 +14,7 @@ import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagLibrary;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 
 import java.util.List;
 
@@ -155,7 +156,11 @@ public class HiveVision {
             double x = 0;
             double y = 0;
             double z = 0;
-            for (AprilTagDetection d : latest) {
+            for (AprilTagDetection det : latest) {
+                if (!(det instanceof AprilTagSingleDetection)) {
+                    continue;                                   // our library defines single tags only (SDK 12 clusters skipped)
+                }
+                AprilTagSingleDetection d = (AprilTagSingleDetection) det;
                 if (d.metadata != null && d.ftcPose != null && cell.contains(d.id)) {
                     count++;
                     bearing += d.ftcPose.bearing;
