@@ -73,6 +73,18 @@ public class MotionController {
     }
 
     /**
+     * Clockwise turn power that keeps the robot on {@code targetDeg} (IMU, CCW +) while it stands still, e.g. firing.
+     * Small dead band so it does not twitch; enough minimum power to actually move the robot.
+     */
+    public static double holdTurnCw(double targetDeg, double headingDeg) {
+        double err = MecanumMath.normalizeDegrees(targetDeg - headingDeg);
+        if (Math.abs(err) <= HOLD_TOLERANCE_DEG) {
+            return 0;
+        }
+        return -Math.signum(err) * clip(Math.abs(err) * HEADING_KP * 4, TURN_MIN_POWER, HOLD_MAX_TURN);
+    }
+
+    /**
      * Forward power (intake side +) that brings the launcher-side camera to {@code spotRangeIn} from the HIVE:
      * too far -> drive backward (launcher first) toward the HIVE, too close -> drive forward. 0 when on the spot.
      */

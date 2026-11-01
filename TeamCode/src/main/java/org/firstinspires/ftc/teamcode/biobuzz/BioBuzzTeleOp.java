@@ -49,7 +49,7 @@ public class BioBuzzTeleOp extends OpMode {
     private final ElapsedTime matchTimer = new ElapsedTime();
     private final ElapsedTime statusTimer = new ElapsedTime();
     private BioBuzzDiag diag = new BioBuzzDiag("teleop", false);
-    private final ShotFeeder feeder = ShotFeeder.standard();
+    private ShotFeeder feeder = ShotFeeder.standard();
     private boolean lastFire = false;
     private boolean lastAim = false;
     private boolean lastAimHadTarget = false;
@@ -59,8 +59,10 @@ public class BioBuzzTeleOp extends OpMode {
     public void init() {
         robot = new BioBuzzRobot(hardwareMap);
         settings = TeleOpSettings.load();
+        feeder = ShotFeeder.fromSettings(settings);
         try {
             vision = new HiveVision(hardwareMap);
+            vision.setAimTrimDeg(settings.aimTrimDeg);
         } catch (Exception e) {
             vision = null;
             visionError = e.getMessage();
@@ -93,9 +95,12 @@ public class BioBuzzTeleOp extends OpMode {
         settings.alliance = alliance;
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
-        diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f",
+        diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
+                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f spot=%s",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
-                LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage()));
+                LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
+                settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
+                settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none"));
         robot.stowArm();
     }
 

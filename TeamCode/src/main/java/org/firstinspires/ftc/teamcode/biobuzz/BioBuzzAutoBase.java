@@ -44,6 +44,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         String visionError = null;
         try {
             vision = new HiveVision(hardwareMap);
+            vision.setAimTrimDeg(spot.aimTrimDeg);
         } catch (Exception e) {
             vision = null;
             visionError = e.getMessage();
@@ -297,13 +298,14 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
 
     /** Same pocket-by-pocket feed as TeleOp (ShotFeeder), after a short settle, until 4 balls left (flywheel dips), 3 turns, or the deadline. */
     private void fire(double matchDeadlineSec) {
+        double aimedHeading = headingDeg();                     // hold the camera-aimed heading with the IMU while firing
         double settleEnd = clock.seconds() + AUTO_FIRE_SETTLE_SEC;    // balls settle in their pockets after the drive + turn
         while (opModeIsActive() && clock.seconds() < settleEnd) {
-            robot.stopDrive();
+            robot.drive(0, 0, MotionController.holdTurnCw(aimedHeading, headingDeg()), 1.0);
             step = "FIRE settle";
             loopTick();
         }
-        ShotFeeder feeder = ShotFeeder.standard();
+        ShotFeeder feeder = ShotFeeder.fromSettings(spot);
         double end = Math.min(clock.seconds() + AUTO_FEED_TIMEOUT_SEC, matchDeadlineSec);
         robot.setIntake(FEED_INTAKE_BOOST);                     // as TeleOp: the intake pushes the balls through
         int balls = 0;                                          // counted from flywheel slowdowns
@@ -312,6 +314,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
                 && feeder.state() != ShotFeeder.State.JAMMED
                 && !(balls >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
             int ticks = robot.indexerTicks();
+            robot.drive(0, 0, MotionController.holdTurnCw(aimedHeading, headingDeg()), 1.0);
             robot.setIndexerPower(feeder.update(clock.seconds(), ticks, robot.launcherReady(), true));
             double velocity = robot.launcherVelocity();
             if (!dipping && velocity < launchTps() - AUTO_SHOT_DIP_TPS) {

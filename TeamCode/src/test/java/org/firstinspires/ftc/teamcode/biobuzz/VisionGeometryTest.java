@@ -19,7 +19,7 @@ public class VisionGeometryTest {
         double range = Math.hypot(x, y);                                     // SDK: range = hypot(x, y)
         double bearing = Math.toDegrees(Math.atan2(-x, y));
         double elevation = Math.toDegrees(Math.atan2(z, y));
-        return new HiveVision.Target(HiveVision.Cell.RED_AUDIENCE, 4, bearing, range, elevation, x, y, z);
+        return new HiveVision.Target(HiveVision.Cell.RED_AUDIENCE, 4, bearing, 0, range, elevation, x, y, z);
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.vision.apriltag.AprilTagClusterDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 
@@ -83,7 +84,8 @@ public class BioBuzzVisionTest extends OpMode {
             frames++;
             StringBuilder ids = new StringBuilder();
             for (AprilTagDetection d : vision.latestDetections()) {
-                ids.append(d instanceof AprilTagSingleDetection ? String.valueOf(((AprilTagSingleDetection) d).id) : "cluster")
+                ids.append(d instanceof AprilTagSingleDetection ? String.valueOf(((AprilTagSingleDetection) d).id)
+                                : ((AprilTagClusterDetection) d).metadata.shortName + " " + ((AprilTagClusterDetection) d).percentClusterFound + "%")
                         .append(' ');
             }
             if (target != null) {

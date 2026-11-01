@@ -11,34 +11,44 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.apriltag.AprilTagClusterDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
-import org.firstinspires.ftc.vision.apriltag.AprilTagLibrary;
+import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
-import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 
 import java.util.List;
 
 /**
  * Finds our ALLIANCE's HIVE CELL with the rear (launcher-side) camera.
  *
- * Each CELL has a 4-tag cluster on its downward-facing bottom. The upward-facing CELL is the one that
- * can be seen from the floor, so the cluster with the most visible tags is chosen.
+ * Each CELL has a 4-tag cluster on its downward-facing bottom. SDK 12 reports each cluster as ONE detection whose
+ * pose is the centre of the CELL opening, even when only some of its tags are visible (averaging the visible tags
+ * aimed at a corner: 31 Oct, always 2 of 4 tags seen). The cluster with the most visible tags is chosen.
  */
 public class HiveVision {
 
     public enum Alliance { RED, BLUE }
 
     public enum Cell {
-        RED_REAR(30), RED_AUDIENCE(34), BLUE_AUDIENCE(38), BLUE_REAR(42);
+        RED_REAR(30, "RED SCORING"), RED_AUDIENCE(34, "RED AUDIENCE"), BLUE_AUDIENCE(38, "BLUE AUDIENCE"),
+        BLUE_REAR(42, "BLUE SCORING");
 
         public final int firstId;
+        /** Cluster name in the SDK 12 BIOBUZZ tag library. */
+        public final String clusterName;
 
-        Cell(int firstId) {
+        Cell(int firstId, String clusterName) {
             this.firstId = firstId;
+            this.clusterName = clusterName;
         }
 
-        boolean contains(int id) {
-            return id >= firstId && id < firstId + 4;
+        static Cell forCluster(String name) {
+            for (Cell c : values()) {
+                if (c.clusterName.equals(name)) {
+                    return c;
+                }
+            }
+            return null;
         }
 
         boolean belongsTo(Alliance alliance) {
@@ -54,8 +64,13 @@ public class HiveVision {
     public static class Target {
         public final Cell cell;
         public final int tagCount;
-        /** Degrees; positive means the CELL is left of the camera centre, so the robot must turn counter-clockwise. */
+        /**
+         * Degrees to aim at, aim trim included; positive means turn counter-clockwise. Aiming drives it to 0, which
+         * leaves the camera {@code -aimTrim} off the CELL: + trim turns the robot (and the shots) LEFT.
+         */
         public final double bearingDeg;
+        /** Camera bearing to the centre of the CELL opening, no trim. */
+        public final double rawBearingDeg;
         /** SDK range (camera-frame horizontal distance, not straight-line). */
         public final double rangeIn;
         public final double elevationDeg;
@@ -64,11 +79,12 @@ public class HiveVision {
         public final double yIn;
         public final double zIn;
 
-        Target(Cell cell, int tagCount, double bearingDeg, double rangeIn, double elevationDeg,
+        Target(Cell cell, int tagCount, double rawBearingDeg, double aimTrimDeg, double rangeIn, double elevationDeg,
                double xIn, double yIn, double zIn) {
             this.cell = cell;
             this.tagCount = tagCount;
-            this.bearingDeg = bearingDeg;
+            this.rawBearingDeg = rawBearingDeg;
+            this.bearingDeg = rawBearingDeg + aimTrimDeg;
             this.rangeIn = rangeIn;
             this.elevationDeg = elevationDeg;
             this.xIn = xIn;
@@ -94,17 +110,11 @@ public class HiveVision {
     private final ElapsedTime sinceFrame = new ElapsedTime();
     private List<AprilTagDetection> latest = null;
     private long frames = 0;
+    private double aimTrimDeg = 0;
 
     public HiveVision(HardwareMap hw) {
-        AprilTagLibrary.Builder library = new AprilTagLibrary.Builder();
-        for (Cell cell : Cell.values()) {
-            for (int i = 0; i < 4; i++) {
-                int id = cell.firstId + i;
-                library.addTag(id, cell.name() + "_" + id, TAG_SIZE_IN, DistanceUnit.INCH);
-            }
-        }
         tags = new AprilTagProcessor.Builder()
-                .setTagLibrary(library.build())
+                .setTagLibrary(AprilTagGameDatabase.getBioBuzzTagLibrary())   // CELL clusters 30-45, origin = CELL opening
                 .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
                 .build();
         portal = new VisionPortal.Builder()
@@ -139,43 +149,33 @@ public class HiveVision {
         return portal.getCameraState() == VisionPortal.CameraState.STREAMING;
     }
 
-    /** Best visible CELL of our ALLIANCE, or null if nothing recent was seen. */
+    /** Aim trim from "BioBuzz Tune" (+ = shots LEFT), applied to every {@link Target#bearingDeg}. */
+    public void setAimTrimDeg(double deg) {
+        aimTrimDeg = deg;
+    }
+
+    public double aimTrimDeg() {
+        return aimTrimDeg;
+    }
+
+    /** Best visible CELL of our ALLIANCE (SDK 12 cluster = centre of the CELL opening), or null if nothing recent. */
     public Target target(Alliance alliance, Cell preferred) {
         if (latest == null || sinceFrame.seconds() > TARGET_MAX_AGE_SEC) {
             return null;
         }
         Target best = null;
-        for (Cell cell : Cell.values()) {
-            if (!cell.belongsTo(alliance)) {
+        for (AprilTagDetection det : latest) {
+            if (!(det instanceof AprilTagClusterDetection) || det.ftcPose == null) {
                 continue;
             }
-            int count = 0;
-            double bearing = 0;
-            double range = 0;
-            double elevation = 0;
-            double x = 0;
-            double y = 0;
-            double z = 0;
-            for (AprilTagDetection det : latest) {
-                if (!(det instanceof AprilTagSingleDetection)) {
-                    continue;                                   // our library defines single tags only (SDK 12 clusters skipped)
-                }
-                AprilTagSingleDetection d = (AprilTagSingleDetection) det;
-                if (d.metadata != null && d.ftcPose != null && cell.contains(d.id)) {
-                    count++;
-                    bearing += d.ftcPose.bearing;
-                    range += d.ftcPose.range;
-                    elevation += d.ftcPose.elevation;
-                    x += d.ftcPose.x;
-                    y += d.ftcPose.y;
-                    z += d.ftcPose.z;
-                }
-            }
-            if (count == 0) {
+            AprilTagClusterDetection d = (AprilTagClusterDetection) det;
+            Cell cell = d.metadata == null ? null : Cell.forCluster(d.metadata.name);
+            if (cell == null || !cell.belongsTo(alliance)) {
                 continue;
             }
-            Target t = new Target(cell, count, bearing / count, range / count, elevation / count,
-                    x / count, y / count, z / count);
+            int count = Math.max(1, (int) Math.round(d.percentClusterFound * 4 / 100.0));
+            Target t = new Target(cell, count, d.ftcPose.bearing, aimTrimDeg, d.ftcPose.range, d.ftcPose.elevation,
+                    d.ftcPose.x, d.ftcPose.y, d.ftcPose.z);
             if (best == null || t.tagCount > best.tagCount
                     || (t.tagCount == best.tagCount && cell == preferred)) {
                 best = t;

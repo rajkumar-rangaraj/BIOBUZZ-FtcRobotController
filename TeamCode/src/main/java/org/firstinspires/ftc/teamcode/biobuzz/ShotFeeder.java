@@ -65,6 +65,13 @@ public class ShotFeeder {
                 BioBuzzConstants.SHOT_POCKET_TIMEOUT_SEC, BioBuzzConstants.SHOT_UNJAM_SEC, BioBuzzConstants.SHOT_MAX_JAMS);
     }
 
+    /** Windmill power and pause between pockets as saved on the robot by "BioBuzz Tune" (the rest from constants). */
+    public static ShotFeeder fromSettings(TeleOpSettings s) {
+        return new ShotFeeder(BioBuzzConstants.INDEXER_TICKS_PER_POCKET, s.feedPower,
+                BioBuzzConstants.INDEXER_UNJAM_POWER, s.feedPauseSec,
+                BioBuzzConstants.SHOT_POCKET_TIMEOUT_SEC, BioBuzzConstants.SHOT_UNJAM_SEC, BioBuzzConstants.SHOT_MAX_JAMS);
+    }
+
     /**
      * @param t              time in seconds (any monotonic clock)
      * @param indexerTicks   windmill encoder

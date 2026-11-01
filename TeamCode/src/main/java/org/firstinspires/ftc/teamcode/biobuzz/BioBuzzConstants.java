@@ -114,7 +114,9 @@ public final class BioBuzzConstants {
     public static final double AIM_KP = 0.015;                                  // turn power per degree
     public static final double AIM_MAX_TURN = 0.30;
     public static final double AIM_MIN_TURN = 0.10;                                   // 0.06 stalled 4 deg short (31 Oct AUTO)
-    public static final double AIM_TOLERANCE_DEG = 2.0;
+    public static final double AIM_TOLERANCE_DEG = 1.5;                         // 2.0 = ~2 in sideways at 55 in
+    public static final double HOLD_TOLERANCE_DEG = 0.75;                       // AUTO holds the aimed heading while firing
+    public static final double HOLD_MAX_TURN = 0.20;
     // SHOT SPOT (TeleOp: Share saves the camera distance + speed, holding X drives back to that distance)
     public static final double SPOT_KP = 0.03;                                  // drive power per inch of error
     public static final double SPOT_MIN_POWER = 0.12;

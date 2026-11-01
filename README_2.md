@@ -264,6 +264,15 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
 
+**Aim + windmill tuning (`BioBuzz Tune`, no code change):**
+- **D-pad ← / →:** aim trim, so the shots go more left or more right, seen from behind the launcher.
+- **D-pad ↑ / ↓:** pause between pockets.
+- **LB + D-pad ↑ / ↓:** windmill power.
+- The screen counts balls launched per pocket.
+- **SHARE** saves everything to the same file. TeleOp and AUTO use it.
+
+Aiming uses the SDK 12 BIOBUZZ tag clusters, so the robot aims at the centre of the CELL opening even when only some of the 4 tags are visible. A SHOT SPOT saved before this change (measured to the tag average) is ignored and must be saved again.
+
 ## Current op modes
 
 | Op mode | What it does |
@@ -277,6 +286,7 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
 | `BioBuzz Wiring Check` | Robot on a box: spins each motor alone and reads every encoder and the motor current. Finds missing motor cables, missing or swapped encoder cables and reversed directions; also checks both hubs, IMU and camera. Run it first after any wiring change. |
 | `BioBuzz Vision Test` | Measures camera detection rate, bearing and distance against tape-measured truth; logs to CSV |
 | `BioBuzz Shot Log` | Fires one ball at a time and logs speed, battery, camera distance and IN/MISS; logs to CSV |
+| `BioBuzz Tune` | Live tuning of aim trim, windmill power and pause between pockets with the D-pad; counts balls per pocket; SHARE saves for TeleOp + AUTO |
 | `TEST Indexer + Flywheel` | Tunes flywheel speed and windmill feed power |
 | `HelloWorld` | Telemetry only — proves the toolchain and the DS link |
 | `MotorTest` | Single motor on the left stick, with encoder position |
