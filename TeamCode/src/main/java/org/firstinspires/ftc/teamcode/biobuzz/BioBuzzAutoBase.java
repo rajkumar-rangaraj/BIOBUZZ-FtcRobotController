@@ -111,7 +111,9 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
                 "cell", "tags", "bearing_deg", "odometry", "range_in");
         log.row("CONFIG", "delay=" + startDelaySec, "shoot=" + shoot, "camera=" + (vision != null),
                 "aim_heading=" + AUTO_AIM_HEADING_DEG, "launch_tps=" + launchTps(),
-                spot.hasSpot() ? String.format("spot=%.1f in @ %.0f", spot.spotRangeIn, spot.spotSpeed) : "spot=none");
+                spot.hasSpot() ? String.format("spot=%.1f in @ %.0f", spot.spotRangeIn, spot.spotSpeed) : "spot=none",
+                spot.hasShootPose() ? String.format("pose=fwd %.1f left %.1f hdg %.1f", spot.shootFwdIn, spot.shootLeftIn,
+                        spot.shootHeadingDeg) : "pose=none", String.format("aim_trim=%.1f", spot.aimTrimDeg));
         matchStart = clock.seconds();
         startOdometry();
         try {
@@ -244,6 +246,11 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
     }
 
     @Override
+    public double[] shootPose() {
+        return spot.hasShootPose() ? new double[]{spot.shootFwdIn, -spot.shootLeftIn, spot.shootHeadingDeg} : null;
+    }
+
+    @Override
     public void stopLauncher() {
         robot.setLauncherVelocity(0);
     }
@@ -274,7 +281,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             lastTarget = target;
             double turn = target == null ? 0 : HiveVision.aimTurnCw(target.bearingDeg);
             double fwd = 0;
-            if (target != null && spot.hasSpot()) {
+            if (target != null && spot.hasSpot() && !spot.hasShootPose()) {   // taught position: already there
                 fwd = MotionController.spotForward(target.rangeIn, spot.spotRangeIn);
                 double moved = forwardInches() - f0;
                 if ((fwd > 0 && moved >= AUTO_SPOT_MAX_IN) || (fwd < 0 && moved <= -AUTO_SPOT_MAX_IN)) {

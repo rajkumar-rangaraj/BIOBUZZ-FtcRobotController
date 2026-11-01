@@ -19,6 +19,7 @@ import com.qualcomm.robotcore.util.Range;
  *   X / Square   (hold)   HIVE auto-aim: camera turns the robot; with a saved SHOT SPOT it also drives to that
  *                         distance and sets the spot's shot speed (push the left stick to take over)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
+ *   LB + Back / Share     same, AND teach AUTO this exact position (TeleOp must be INIT-ed at the AUTO start)
  *   Y / Triangle          launcher pre-spin ON/OFF
  *   A / Cross             flower arm DEPLOY / STOW (deploys only while the sticks are released)
  *   B / Circle   (hold)   unjam: windmill slowly backwards
@@ -54,12 +55,19 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean lastAim = false;
     private boolean lastAimHadTarget = false;
     private boolean lastUnjam = false;
+    private Pinpoint pinpoint;                                  // zeroed at INIT: SHARE teaches AUTO where to shoot
+    private double imuAtInit;
 
     @Override
     public void init() {
         robot = new BioBuzzRobot(hardwareMap);
         settings = TeleOpSettings.load();
         feeder = ShotFeeder.fromSettings(settings);
+        pinpoint = Pinpoint.tryCreate(hardwareMap);
+        if (pinpoint != null) {
+            pinpoint.reset();                                   // robot still at INIT (AUTO start position to teach AUTO)
+        }
+        imuAtInit = robot.headingDeg();
         try {
             vision = new HiveVision(hardwareMap);
             vision.setAimTrimDeg(settings.aimTrimDeg);
@@ -108,6 +116,9 @@ public class BioBuzzTeleOp extends OpMode {
     public void loop() {
         if (vision != null) {
             vision.update();
+        }
+        if (pinpoint != null) {
+            pinpoint.update();
         }
 
         // ---------------- Launcher ----------------
@@ -208,10 +219,26 @@ public class BioBuzzTeleOp extends OpMode {
                 settings.alliance = alliance;
                 settings.spotRangeIn = target.rangeIn;
                 settings.spotSpeed = launcherTarget;
+                String poseNote = "";
+                if (gamepad1.left_bumper) {                     // LB + SHARE: also teach AUTO this exact position
+                    double imuHeading = MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit);
+                    if (pinpoint == null || !pinpoint.ok()) {
+                        poseNote = " - AUTO position NOT saved (Pinpoint not ready)";
+                    } else if (Math.abs(MecanumMath.normalizeDegrees(pinpoint.headingDeg() - imuHeading)) > 5) {
+                        poseNote = " - AUTO position NOT saved (Pinpoint moved during INIT: restart TeleOp)";
+                    } else {
+                        settings.shootFwdIn = pinpoint.xIn();
+                        settings.shootLeftIn = pinpoint.yIn();
+                        settings.shootHeadingDeg = imuHeading;
+                        poseNote = String.format(" + AUTO position fwd %.0f left %.0f hdg %.0f",
+                                pinpoint.xIn(), pinpoint.yIn(), imuHeading);
+                    }
+                }
                 boolean saved = settings.trySave();
-                setStatus(saved ? String.format("SHOT SPOT saved: %.0f in @ %.0f t/s", target.rangeIn, launcherTarget)
+                setStatus(saved ? String.format("SHOT SPOT saved: %.0f in @ %.0f t/s%s", target.rangeIn, launcherTarget, poseNote)
                         : "SHOT SPOT save FAILED");
-                diag.event("SPOT_SAVED", String.format("range %.1f speed %.0f saved=%s", target.rangeIn, launcherTarget, saved));
+                diag.event("SPOT_SAVED", String.format("range %.1f speed %.0f saved=%s%s", target.rangeIn, launcherTarget,
+                        saved, poseNote));
                 gamepad1.rumble(600);
             }
         }
@@ -285,6 +312,13 @@ public class BioBuzzTeleOp extends OpMode {
                             ? String.format("  now %.0f in (%+.0f)", target.rangeIn, target.rangeIn - settings.spotRangeIn) : ""));
         } else {
             telemetry.addData("Shot spot", "none - press Share where shots score");
+        }
+        if (pinpoint != null) {
+            telemetry.addData("From INIT", "fwd %.0f  left %.0f in  hdg %.0f  %s   (LB+Share teaches AUTO)%s",
+                    pinpoint.xIn(), pinpoint.yIn(), MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit),
+                    pinpoint.ok() ? "" : pinpoint.status(),
+                    settings.hasShootPose() ? String.format("  AUTO: %.0f/%.0f/%.0f", settings.shootFwdIn,
+                            settings.shootLeftIn, settings.shootHeadingDeg) : "  AUTO: not taught");
         }
         String warning = robot.launcherWarning();
         if (warning != null) {

@@ -24,8 +24,17 @@ public final class TeleOpSettings {
     public double aimTrimDeg = 0;
     /** Windmill power while turning one pocket. */
     public double feedPower = BioBuzzConstants.INDEXER_FEED_POWER;
-    /** Pause after each pocket before the next one may turn. */
+    /** Feed pause after each pocket before the next one may turn. */
     public double feedPauseSec = BioBuzzConstants.SHOT_MIN_INTERVAL_SEC;
+    /**
+     * Where AUTO shoots from, taught in TeleOp (SHARE) when TeleOp was INIT-ed at the AUTO start position:
+     * Pinpoint inches forward / left of the start and heading (CCW +). NaN = not taught.
+     */
+    public double shootFwdIn = Double.NaN, shootLeftIn = Double.NaN, shootHeadingDeg = Double.NaN;
+
+    public boolean hasShootPose() {
+        return !Double.isNaN(shootFwdIn) && !Double.isNaN(shootLeftIn) && !Double.isNaN(shootHeadingDeg);
+    }
 
     public boolean hasSpot() {
         return !Double.isNaN(spotRangeIn) && !Double.isNaN(spotSpeed);
@@ -56,6 +65,12 @@ public final class TeleOpSettings {
                     s.feedPower = clipOr(Double.parseDouble(v), FEED_POWER_MIN, FEED_POWER_MAX, s.feedPower);
                 } else if (k.equals("feed_pause_sec")) {
                     s.feedPauseSec = clipOr(Double.parseDouble(v), FEED_PAUSE_MIN, FEED_PAUSE_MAX, s.feedPauseSec);
+                } else if (k.equals("shoot_fwd_in")) {
+                    s.shootFwdIn = clipOr(Double.parseDouble(v), -SHOOT_MAX_IN, SHOOT_MAX_IN, Double.NaN);
+                } else if (k.equals("shoot_left_in")) {
+                    s.shootLeftIn = clipOr(Double.parseDouble(v), -SHOOT_MAX_IN, SHOOT_MAX_IN, Double.NaN);
+                } else if (k.equals("shoot_heading_deg")) {
+                    s.shootHeadingDeg = clipOr(Double.parseDouble(v), -180, 180, Double.NaN);
                 }
             } catch (IllegalArgumentException ignored) {
                 // keep the default for a bad line
@@ -72,6 +87,8 @@ public final class TeleOpSettings {
     static final double AIM_TRIM_MAX_DEG = 10;
     static final double FEED_POWER_MIN = 0.25, FEED_POWER_MAX = 0.8;
     static final double FEED_PAUSE_MIN = 0.1, FEED_PAUSE_MAX = 2.0;
+    /** AUTO never drives further than this from its start to a taught shooting position. */
+    static final double SHOOT_MAX_IN = 72;
 
     /** v when it is inside [lo, hi], otherwise the fallback (a bad value in the file must not reach the robot). */
     private static double clipOr(double v, double lo, double hi, double fallback) {
@@ -86,6 +103,10 @@ public final class TeleOpSettings {
         }
         sb.append(String.format(Locale.US, "aim_trim_deg=%.1f\nfeed_power=%.2f\nfeed_pause_sec=%.2f\n",
                 aimTrimDeg, feedPower, feedPauseSec));
+        if (hasShootPose()) {
+            sb.append(String.format(Locale.US, "shoot_fwd_in=%.1f\nshoot_left_in=%.1f\nshoot_heading_deg=%.1f\n",
+                    shootFwdIn, shootLeftIn, shootHeadingDeg));
+        }
         return sb.toString();
     }
 

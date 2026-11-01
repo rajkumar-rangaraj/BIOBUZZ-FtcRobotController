@@ -264,6 +264,20 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
 
+**Teach AUTO its exact shooting position (LB + Share):**
+1. Put the robot at the AUTO start position.
+2. INIT `BioBuzz TeleOp` there. This zeroes the Pinpoint.
+3. Drive to the spot where shots score and aim (hold X).
+4. Press **LB + Share**. This saves the SHOT SPOT plus the Pinpoint position and heading from INIT.
+
+AUTO then:
+- backs off the wall
+- drives straight to that position, staying square
+- turns to the saved heading and fine-aims with the camera
+- fires, returns and parks
+
+Plain Share saves only the spot. The "From INIT" telemetry line shows the position and what AUTO has been taught.
+
 **Aim + windmill tuning (`BioBuzz Tune`, no code change):**
 - **D-pad ← / →:** aim trim, so the shots go more left or more right, seen from behind the launcher.
 - **D-pad ↑ / ↓:** pause between pockets.

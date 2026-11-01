@@ -82,4 +82,19 @@ public class TeleOpSettingsTest {
         assertEquals(2, t.bearingDeg, 1e-9);
         assertTrue(HiveVision.aimTurnCw(t.bearingDeg) < 0);
     }
+
+    @Test
+    public void taughtAutoPositionRoundTripsAndIsOptional() {
+        assertFalse(new TeleOpSettings().hasShootPose());
+        TeleOpSettings s = new TeleOpSettings();
+        s.shootFwdIn = -31.5;
+        s.shootLeftIn = -8;
+        s.shootHeadingDeg = -42;
+        TeleOpSettings back = TeleOpSettings.parse(s.format());
+        assertTrue(back.hasShootPose());
+        assertEquals(-31.5, back.shootFwdIn, 0.05);
+        assertEquals(-8, back.shootLeftIn, 0.05);
+        assertEquals(-42, back.shootHeadingDeg, 0.05);
+        assertFalse(TeleOpSettings.parse("shoot_fwd_in=-500\nshoot_left_in=0\nshoot_heading_deg=0\n").hasShootPose());
+    }
 }

@@ -21,6 +21,8 @@ public class AutoRouteSimulationTest {
         boolean launcherOn = false;
         boolean fired = false;
         double headingAtFire = Double.NaN;
+        double xAtFire = Double.NaN, rightAtFire = Double.NaN;
+        double[] pose = null;
         double doneAt = Double.NaN;
 
         FakeMechanisms(SimMecanumDrive sim, double fireSeconds) {
@@ -51,11 +53,19 @@ public class AutoRouteSimulationTest {
             assertTrue("launcher spun up before firing", launcherOn);
             fired = true;
             headingAtFire = sim.headingDeg();
+            xAtFire = sim.x;
+            rightAtFire = sim.rightOfStart();
             double end = Math.min(sim.seconds() + fireSeconds, matchDeadlineSec);
             while (sim.active() && sim.seconds() < end) {
                 sim.drive(0, 0, 0);
                 sim.loopTick();
             }
+        }
+
+
+        @Override
+        public double[] shootPose() {
+            return pose;
         }
     }
 
@@ -97,6 +107,21 @@ public class AutoRouteSimulationTest {
 
         assertFalse(mech.fired);
         assertFalse(mech.steps.contains("FIRE"));
+        assertLeaveAndPark(sim, mech);
+    }
+
+    @Test
+    public void taughtShootingPositionIsReachedThenParks() {
+        SimMecanumDrive sim = new SimMecanumDrive();
+        FakeMechanisms mech = new FakeMechanisms(sim, 5.0);
+        mech.pose = new double[]{-30, 10, -40};                 // 30 in back, 10 in right of the start, facing -40 deg
+        AutoRoute.run(sim, mech, 0, true);
+
+        assertTrue(mech.fired);
+        assertTrue(mech.steps.contains("GOTO"));
+        assertEquals("forward at fire", -30, mech.xAtFire, 1.5);
+        assertEquals("right at fire", 10, mech.rightAtFire, 1.5);
+        assertEquals("heading at fire", -40, mech.headingAtFire, 2.0);
         assertLeaveAndPark(sim, mech);
     }
 }
