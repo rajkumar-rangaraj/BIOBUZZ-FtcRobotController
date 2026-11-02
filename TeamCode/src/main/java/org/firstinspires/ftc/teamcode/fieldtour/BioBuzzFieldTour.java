@@ -145,7 +145,7 @@ public class BioBuzzFieldTour extends OpMode {
         TourPlanner.Point p = plan.get(index);
         Path path = line(follower.pose(), pedro(p.x, p.y))
                 .constant(Math.toRadians(homeHeadingDeg))                  // never turns: footprint stays square
-                .with(Constants.foresightConfig.maxPathSpeed.at(speedInPerSec));
+                .with(Constants.foresightConfig.maxPathSpeed.at(TOUR_SPEED_FRACTION));   // a FRACTION of top speed
         follower.follow(path);
         segmentTimer.reset();
         moveTimer.reset();
@@ -153,14 +153,21 @@ public class BioBuzzFieldTour extends OpMode {
         lastMoveY = fieldY();
     }
 
+    /** Follower.stop() only zeroes the motors on a later update(): cut them here, at once. */
+    private void halt(State newState) {
+        follower.stop();
+        follower.drivetrain.stop();
+        state = newState;
+    }
+
     @Override
     public void loop() {
+        if (follower != null && gamepad1.b && (state == State.DRIVING || state == State.DONE)) {
+            halt(State.STOPPED);                                // before any new drive command this loop
+        }
         if (follower != null && state == State.DRIVING) {
             follower.update();
-            if (gamepad1.b) {
-                follower.stop();
-                state = State.STOPPED;
-            } else if (segmentTimer.seconds() > 0.2 && !follower.isBusy()) {
+            if (segmentTimer.seconds() > 0.2 && !follower.isBusy()) {
                 index++;
                 if (index >= plan.size()) {
                     state = State.DONE;
@@ -173,15 +180,10 @@ public class BioBuzzFieldTour extends OpMode {
                 lastMoveY = fieldY();
                 moveTimer.reset();
             } else if (segmentTimer.seconds() > 1.0 && moveTimer.seconds() > STUCK_SEC) {
-                follower.stop();
-                state = State.STUCK;
+                halt(State.STUCK);
             }
-        } else if (follower != null && state == State.DONE) {
-            follower.update();                                  // keep holding HOME
-            if (gamepad1.b) {
-                follower.stop();
-                state = State.STOPPED;
-            }
+        } else if (follower != null && (state == State.DONE || state == State.STOPPED || state == State.STUCK)) {
+            follower.update();                                  // DONE: keep holding HOME; STOPPED/STUCK: idle = motors 0
         }
 
         telemetry.addData("State", "%s   (B = stop)", state);
@@ -222,7 +224,7 @@ public class BioBuzzFieldTour extends OpMode {
     @Override
     public void stop() {
         if (follower != null) {
-            follower.stop();
+            halt(State.STOPPED);
         }
     }
 }
