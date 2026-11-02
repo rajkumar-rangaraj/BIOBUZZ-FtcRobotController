@@ -28,3 +28,12 @@ dependencies {
     implementation project(':FtcRobotController')
     testImplementation 'junit:junit:4.13.2'
 }
+
+// Pedro Pathing 3 (field-tour branch): path follower + AutoTune web tuning at http://192.168.43.1:10158
+repositories {
+    maven { url 'https://repo.dairy.foundation/releases/' }
+}
+dependencies {
+    implementation 'com.pedropathing:revhub:3.0.2'
+    implementation 'com.pedropathing:tuning:1.0.3'
+}
