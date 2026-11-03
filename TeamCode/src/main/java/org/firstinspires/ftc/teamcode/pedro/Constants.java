@@ -40,18 +40,16 @@ public class Constants {
         c.manualBrakeMode.set(true);
     });
 
-    /** Measured 2026-10-30 (see BioBuzzConstants PINPOINT_*); re-check with the AutoTune Pinpoint procedure. */
+    /** From the AutoTune Pinpoint procedure, 2026-11-02 (tape measure was -40 mm / -175 mm). */
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
         c.name.set(PINPOINT);
-        c.podType.set(PINPOINT_SWINGARM_PODS ? GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_SWINGARM_POD
-                : GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.offsetUnits.set(DistanceUnit.MM);
-        c.xPodOffset.set(PINPOINT_X_POD_LEFT_MM);
-        c.yPodOffset.set(PINPOINT_Y_POD_FORWARD_MM);
-        c.xPodDirection.set(PINPOINT_X_REVERSED ? GoBildaPinpointDriver.EncoderDirection.REVERSED
-                : GoBildaPinpointDriver.EncoderDirection.FORWARD);
-        c.yPodDirection.set(PINPOINT_Y_REVERSED ? GoBildaPinpointDriver.EncoderDirection.REVERSED
-                : GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        c.xPodOffset.set(-1.8471144128033496);
+        c.yPodOffset.set(-5.917046013779528);
+        c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.globalDistanceUnit.set(DistanceUnit.INCH);
+        c.offsetUnits.set(DistanceUnit.INCH);
     });
 
     /** PLACEHOLDER (Pedro docs example) until the AutoTune Foresight procedure has been run on this robot. */
