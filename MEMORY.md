@@ -2,7 +2,7 @@
 
 Read this first. It records what was built, why, what was measured on the robot, and what is still open, so a new agent session can continue without starting over. Keep it up to date when you change something important.
 
-Last updated: 2026-11-02 (branch `field-tour`, commit after `a5ccafe`).
+Last updated: 2026-11-03 (branch `field-tour`).
 
 ---
 
@@ -203,23 +203,58 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - `FIELD_TOUR.md`: the team's steps.
 - **Reviewed** by GPT-6.1 and Claude Opus 5.5 subagents (2 Nov). They found 2 bugs: stop not stopping, and speed cap units. Both fixed in `a5ccafe` and re-confirmed by both reviewers.
 
-**Status:** not yet installed or run on the robot. Next steps:
-1. When the robot is on: install `field-tour`.
-2. The team runs AutoTune and pastes the generated Pinpoint and Foresight config here.
-3. The agent pastes it into `Constants` and sets `FORESIGHT_TUNED = true`.
-4. Tour tests from several tiles; the target is under 2 in / 2° back at HOME.
-5. **Before matches, reinstall `master`.**
+**Status (2026-11-03):**
+- **Installed on the robot:** the `field-tour` build (commit `7484134`, Pedro + AutoTune + Field Tour). It also contains all the match code, so TeleOp and AUTO work as on `master`. **Reinstall `master` before competitions.**
+- **AutoTune progress (2 Nov):**
+  - The Pinpoint procedure gave `xPodOffset -1.847 in`, `yPodOffset -5.917 in`, 4-bar pods, both directions FORWARD. This is now in `Constants.localizerConfig` (commit `7484134`).
+  - Foresight was **not** finished. The team only had about 5–6 ft of space, so the forward/strafe distance was set to **36 in** instead of 48.
+  - **The user wants to redo AutoTune later FROM THE START:** Mecanum → Pinpoint → Foresight → Tests. Re-paste the new Pinpoint result too.
+- **AutoTune page answers** (HTTP 200) at http://192.168.43.1:10158. Op modes now register through Pedro's loader ("SinisterRegisteredOpModes" in logcat, not "OpmodeRegistration").
+- **What the user does in AutoTune:**
+  - Mecanum: enter the 4 motor names, answer which way each wheel spun.
+  - Pinpoint: pod type **goBILDA 4-Bar**, push/turn by hand.
+  - Foresight: the robot drives forward and left by itself, so it needs space.
+  - Copy the Java tab text for Pinpoint and Foresight into chat.
+- **What the agent does then:**
+  1. Paste into `Constants`.
+  2. Set `FORESIGHT_TUNED = true`.
+  3. Build, install, commit.
+  4. The team runs BioBuzz Field Tour from a few tiles; the target is under 2 in / 2° back at HOME.
 
 **For later AUTO reuse:**
 - Move the leg-following loop into a reusable class.
 - Use short routes (shoot / collect / park), not the full 40 s tour.
 - Allow turning legs, which needs a rotated-footprint keep-out.
 
-## 9. Open items / backlog
+## 9. Driver Hub freezes (REV support case, 2026-11-02)
+
+- **Symptom:** the Driver Hub becomes unresponsive and needs a restart. This happened during the 1 Nov competition match.
+- **REV Support (Ezra)** asked for: (1) photos, (2) video, (3) whether REV Hardware Client sees it, (4) versions, (5) logs, (6) whether it can be reproduced, (7) when it started.
+- **Done by the agent:** #4 and #5 collected over USB, read-only, as `robot_logs/driver_hub_20261102_211535.zip` (with `REV_SUMMARY.txt`). Logs aren't committed.
+- **USB adb tip:** the Driver Hub first shows as "(no serial number) offline". The fix is to accept "Allow USB debugging" on the hub, then run `adb reconnect offline`; it then appears as serial `4315Q2U9R9`. The Driver Hub (192.168.43.194) has adb over Wi-Fi switched off.
+- **Versions:** Driver Hub OS 1.2.0 (Android 10, build 2021-12-21), DS app 12.0, Wi-Fi chip Realtek RTL8821CU (internal USB).
+- **What's on the Driver Hub:**
+  - logs in `/sdcard/driverStationLog.txt(.1-.4)` (26 Sep → 2 Nov) and `/sdcard/WifiLog.txt` (from 1 Apr)
+  - crash/reboot records via `dumpsys dropbox --print` (only the last 300 entries, about 1–2 days, so pull soon after a freeze)
+- **Findings:**
+  - 6 restarts between 13:48 and 15:27 on 1 Nov.
+  - The Control Hub logged "Lost connection while running OpMode: BioBuzz TeleOp" at 13:49:46 and 14:03:04 (the Control Hub clock is about 1–2 min ahead).
+  - The Driver Hub disconnected from 37102-RC on its own (reason 0) at 14:01:21.
+  - A `wificond` tombstone: "Driver is in a bad state, restarting wificond".
+  - Kernel logs show `RTW ... SurpriseRemoved(True)` / `USB disconnect`: the **Wi-Fi chip dropped off the internal USB bus**. It happened again on 2 Nov at 21:10.
+  - The DS app's `WifiMuteStateMachine` lines are only the state list printed at app start, **not** the cause.
+- **Conclusion:** most likely the Driver Hub's built-in Wi-Fi module or driver (hardware/warranty). We can't be 100 % sure because the freeze itself isn't logged.
+- **Advice given to the team:**
+  - take a spare Driver Hub or phone to events
+  - ask REV about an OS newer than 1.2.0
+  - plug the hub in for logs right after any new freeze
+
+## 10. Open items / backlog
 
 - [ ] Aim test (□ + 10 balls from the spot) to decide between camera offset and driver aim. Then set `aim_trim_deg` or retrain the drivers. Consider "R1 also aims and only feeds when on target".
 - [ ] Set `feed_pause_sec` to about 0.6 (BioBuzz Tune or adb sed).
 - [ ] Maybe a 3D-printed windmill rotor (the guide exists in goBildaStarter). Do the hand-feed test first: if balls fed by hand score well, the windmill is the problem.
-- [ ] Pedro tuning + Field Tour test (§8).
+- [ ] Pedro AutoTune from the start, then the Field Tour test (§8). Reinstall `master` before matches (the robot currently runs `field-tour`).
+- [ ] Driver Hub: the user sends REV photos, video, the Hardware Client check and the log zip (§9).
 - [ ] Push commits to `origin` (ask the user first).
 - [ ] goBildaStarter has an uncommitted README change and several zip files.
