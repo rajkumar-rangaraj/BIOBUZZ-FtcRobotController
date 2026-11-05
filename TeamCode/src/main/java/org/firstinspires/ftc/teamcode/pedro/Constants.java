@@ -40,12 +40,12 @@ public class Constants {
         c.manualBrakeMode.set(true);
     });
 
-    /** From the AutoTune Pinpoint procedure, 2026-11-02 (tape measure was -40 mm / -175 mm). */
+    /** From the AutoTune Pinpoint procedure, 2026-11-04 (2 Nov run: -1.85 / -5.92 in; tape measure: -40 mm / -175 mm). */
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
         c.name.set(PINPOINT);
         c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.xPodOffset.set(-1.8471144128033496);
-        c.yPodOffset.set(-5.917046013779528);
+        c.xPodOffset.set(-1.2882707250399854);
+        c.yPodOffset.set(-7.2705378494863435);
         c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.globalDistanceUnit.set(DistanceUnit.INCH);
