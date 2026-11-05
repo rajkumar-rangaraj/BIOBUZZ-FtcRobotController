@@ -26,7 +26,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 public class Constants {
 
     /** Field Tour refuses to drive until the Foresight values below come from the AutoTune Foresight procedure. */
-    public static final boolean FORESIGHT_TUNED = false;
+    public static final boolean FORESIGHT_TUNED = true;
 
     public static MecanumConfig drivetrainConfig = new MecanumConfig(c -> {
         c.frontLeftName.set(LEFT_FRONT_DRIVE);
@@ -52,20 +52,29 @@ public class Constants {
         c.offsetUnits.set(DistanceUnit.INCH);
     });
 
-    /** PLACEHOLDER (Pedro docs example) until the AutoTune Foresight procedure has been run on this robot. */
+    /** From the AutoTune Foresight procedure, 2026-11-04. */
     public static ForesightConfig foresightConfig = new ForesightConfig(c -> {
-        c.forwardTranslational.set(Controller.piecewise(Controller.proportional(0.1)).put(2.5, Controller.proportional(0.3)));
-        c.strafeTranslational.set(Controller.piecewise(Controller.proportional(0.1)).put(2.5, Controller.proportional(0.3)));
-        c.coast.set(Controller.proportionalFeedforward(0.010978350889324107));
-        c.brake.set(Controller.proportionalFeedforward(0.008731598255925491));
-        c.headingFeedback.set(Controller.proportional(5.258721785960744));
-        c.headingBrakeCoefficients.set(Vector2D.cartesian(0.05642143125655298, 0.0063829525363003695));
-        c.linearBrakeCoefficients.set(Matrix.diag(0.10605894992901523, 0.08719146175596092));
-        c.quadraticBrakeCoefficients.set(Matrix.diag(0.0014663966976606565, 0.0013837064502458813));
-        c.maxAchievableForwardVelocity.set(72.72923108818539);
-        c.maxAchievableStrafeVelocity.set(52.34323936525474);
-        c.naturalForwardDeceleration.set(85.01144677379789);
-        c.naturalStrafeDeceleration.set(104.49787535782846);
+        Controller primaryTranslationalForward = Controller.proportional(0.21631146018329875);
+        Controller secondaryTranslationalForward = Controller.proportional(0.07992130458906194);
+        Controller primaryTranslationalLateral = Controller.proportional(0.27236376951218844);
+        Controller secondaryTranslationalLateral = Controller.proportional(0.10063113514079707);
+
+        c.forwardTranslational.set(Controller.piecewise(secondaryTranslationalForward).put(2.5, primaryTranslationalForward));
+        c.strafeTranslational.set(Controller.piecewise(secondaryTranslationalLateral).put(2.5, primaryTranslationalLateral));
+
+        c.coast.set(Controller.proportionalFeedforward(0.016453592398691385));
+        c.brake.set(Controller.proportionalFeedforward(0.013985553538887677));
+
+        c.headingFeedback.set(Controller.proportional(3.9329043862132984));
+        c.headingBrakeCoefficients.set(Vector2D.cartesian(0.05495723593955732, 0.0033123865056223713));
+
+        c.linearBrakeCoefficients.set(Matrix.diag(0.0749135997896932, 0.07688701227589287));
+        c.quadraticBrakeCoefficients.set(Matrix.diag(0.0013044997782294713, 9.807392296463033E-4));
+
+        c.maxAchievableForwardVelocity.set(61.38983901518153);
+        c.maxAchievableStrafeVelocity.set(50.279659611815866);
+        c.naturalForwardDeceleration.set(30.33899445527);
+        c.naturalStrafeDeceleration.set(61.79525763531984);
     });
 
     public static Follower create(HardwareMap h) {
