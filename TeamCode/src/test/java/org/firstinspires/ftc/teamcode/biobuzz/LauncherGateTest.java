@@ -91,4 +91,33 @@ public class LauncherGateTest {
         assertFalse(g.update(2.0, 1150, 1240));             // and the fallback never fires a ball long
         assertFalse(g.usedFallback());
     }
+
+    @Test
+    public void launcherOffAndOnRestartsTheFallbackTimer() {
+        LauncherGate g = gate();
+        g.update(0.0, 1150, 1090);
+        assertFalse(g.update(0.9, 1150, 1090));
+        assertFalse(g.update(0.95, 0, 0));                  // launcher off
+        assertFalse(g.update(1.0, 1150, 1090));             // on again: the timer starts over
+        assertFalse(g.update(1.9, 1150, 1090));
+        assertTrue(g.update(2.0, 1150, 1090));
+    }
+
+    @Test
+    public void sameTimeGivesTheSameAnswer() {
+        LauncherGate g = gate();
+        g.update(0.0, 1150, 1150);
+        assertTrue(g.update(0.2, 1150, 1150));
+        assertTrue(g.update(0.2, 1150, 1150));
+        assertFalse(g.update(0.25, 1150, 1050));
+        assertFalse(g.update(0.25, 1150, 1050));
+    }
+
+    @Test
+    public void huntingDoesNotFallBackEarly() {
+        LauncherGate g = gate();
+        for (int i = 0; i < 39; i++) {                      // up to 0.95 s, readings 1120 / 1100
+            assertFalse(g.update(i * 0.025, 1150, i % 2 == 0 ? 1120 : 1100));
+        }
+    }
 }

@@ -46,6 +46,10 @@ public class BioBuzzRobot {
     private final ElapsedTime launcherTimer = new ElapsedTime();
     private final LauncherGate launcherGate = LauncherGate.standard();
     private final ElapsedTime clock = new ElapsedTime();
+    private boolean readyCached = false;
+    private double readyAt = -1;
+    /** launcherReady() reuses its last answer for this long: one decision per loop, the same one logs and checks see. */
+    static final double READY_CACHE_SEC = 0.03;
 
     public enum ArmState { UNKNOWN, STOWED, DEPLOYED }
     private ArmState armState = ArmState.UNKNOWN;
@@ -164,6 +168,8 @@ public class BioBuzzRobot {
             launcherOn = false;
             launcherTarget = 0;
             launcherGate.reset();
+            readyCached = false;
+            readyAt = -1;
             return;
         }
         if (!launcherOn) {
@@ -190,14 +196,26 @@ public class BioBuzzRobot {
 
     /**
      * Ready to fire the next ball: speed within LAUNCHER_READY_TOLERANCE of the target for LAUNCHER_READY_HOLD_SEC
-     * (see {@link LauncherGate}). Safe to call several times per loop.
+     * (see {@link LauncherGate}). Decided at most once per READY_CACHE_SEC, so several calls in one loop (feed decision,
+     * diagnostics log, checks) all see the same answer.
      */
     public boolean launcherReady() {
+        if (readyAt >= 0 && clock.seconds() - readyAt < READY_CACHE_SEC) {
+            return readyCached;
+        }
+        return updateLauncherReady();
+    }
+
+    /** Re-decides now (with a fresh speed reading); launcherReady() calls this when its last answer is too old. */
+    public boolean updateLauncherReady() {
+        readyAt = clock.seconds();
         if (!launcherOn) {
             launcherGate.reset();
-            return false;
+            readyCached = false;
+        } else {
+            readyCached = launcherGate.update(readyAt, launcherTarget, launcherVelocity());
         }
-        return launcherGate.update(clock.seconds(), launcherTarget, launcherVelocity());
+        return readyCached;
     }
 
     /** True when the last {@link #launcherReady()} was only allowed by the 1 s fallback (speed not settled). */

@@ -84,6 +84,12 @@ public final class TeleOpSettings {
             s.spotRangeIn = Double.NaN;
             s.spotSpeed = Double.NaN;
         }
+        if (!SPOT_REF.equals(spotRef)) {
+            // taught with the polycarbonate hood (and its speeds): AUTO must be taught again (LB + Share)
+            s.shootFwdIn = Double.NaN;
+            s.shootLeftIn = Double.NaN;
+            s.shootHeadingDeg = Double.NaN;
+        }
         return s;
     }
 
@@ -99,10 +105,10 @@ public final class TeleOpSettings {
     }
 
     String format() {
-        StringBuilder sb = new StringBuilder("alliance=" + alliance + "\n");
+        // spot_ref is written every time: it marks the file as printed-hood era (see parse)
+        StringBuilder sb = new StringBuilder("alliance=" + alliance + "\nspot_ref=" + SPOT_REF + "\n");
         if (hasSpot()) {
-            sb.append(String.format(Locale.US, "spot_range_in=%.1f\nspot_speed=%.0f\nspot_ref=%s\n",
-                    spotRangeIn, spotSpeed, SPOT_REF));
+            sb.append(String.format(Locale.US, "spot_range_in=%.1f\nspot_speed=%.0f\n", spotRangeIn, spotSpeed));
         }
         sb.append(String.format(Locale.US, "aim_trim_deg=%.1f\nfeed_power=%.2f\nfeed_pause_sec=%.2f\n",
                 aimTrimDeg, feedPower, feedPauseSec));

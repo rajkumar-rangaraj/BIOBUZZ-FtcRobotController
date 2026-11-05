@@ -47,6 +47,7 @@ public class BioBuzzShotLog extends OpMode {
         robot = new BioBuzzRobot(hardwareMap);
         try {
             vision = new HiveVision(hardwareMap);
+            vision.setAimTrimDeg(TeleOpSettings.load().aimTrimDeg);     // aim like TeleOp does
         } catch (Exception e) {
             vision = null;
         }
@@ -144,12 +145,15 @@ public class BioBuzzShotLog extends OpMode {
         telemetry.addData("Log", log.status());
     }
 
+    /**
+     * Dip = the flywheel fell more than AUTO_SHOT_DIP_TPS below the target (a ball went through). Recovery = time from
+     * the feed until the launcher is READY again by the real fire rule (LauncherGate: within the band, held).
+     */
     private void trackDip(double vel) {
         minVel = Math.min(minVel, vel);
-        double readyAt = firedTarget - LAUNCHER_READY_MARGIN;
-        if (vel < readyAt) {
+        if (vel < firedTarget - AUTO_SHOT_DIP_TPS) {
             dipped = true;
-        } else if (dipped && recoverySec < 0) {
+        } else if (dipped && recoverySec < 0 && robot.launcherReady()) {
             recoverySec = shotTimer.seconds();
         }
     }

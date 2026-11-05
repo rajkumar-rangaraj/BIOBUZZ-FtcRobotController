@@ -70,18 +70,21 @@ public final class BioBuzzConstants {
     // unstable. If the speed hunts (READY flickers with no balls), step back toward 40.
     public static final PIDFCoefficients LAUNCHER_PIDF = new PIDFCoefficients(100, 0, 0, 12.5);
     // Printed hood PPL1 (74 deg exit, 9 in high), upward CELL lips 53.5 / 65.1 in (field CAD), tools/shot_model.py:
-    // 5.52 m/s scores from 28 to 44 in (exit to the CELL opening, horizontal); 5.94 m/s from 46 to 54 in.
-    // Ball speed ~0.89 x half the tread speed -> 1150 / 1240 t/s. The 0.89 is the uncertain part (0.85-0.93):
-    // CALIBRATE with one-ball test shots and the D-pad trim. Old polycarbonate hood (66 deg): 1250 / 1450.
+    // 5.52 m/s scores from about 28 to 42 in (exit to the CELL opening, horizontal; +/-4.7 % at 30-36 in), 5.94 m/s
+    // from about 46 to 54 in (+/-3.6-3.8 %). Ball speed ~0.89 x half the tread speed -> 1150 / 1240 t/s. The 0.89 is
+    // the uncertain part (0.85-0.93; the old hood's 1250 t/s spot implies 0.86-0.89): CALIBRATE with one-ball test
+    // shots (BioBuzz Shot Log) and the D-pad trim. Old polycarbonate hood (66 deg): 1250 / 1450.
     public static final double LAUNCHER_NEAR_VELOCITY = 1150;                    // CALIBRATE by test shots
     public static final double LAUNCHER_FAR_VELOCITY = 1240;                     // CALIBRATE by test shots
     public static final double LAUNCHER_TRIM_STEP = 15;                          // D-pad RIGHT/LEFT; encoder reads in ~20 t/s steps
     public static final double LAUNCHER_MAX_VELOCITY = 2600;
-    // Ready to fire (LauncherGate): within +/-30 t/s (2.6 %, the scoring window is +/-4.7 %) for 0.1 s. If it never
-    // settles there, the old rule (at least target - 100) fires after 1 s, so a weak battery can't block shooting.
+    // Ready to fire (LauncherGate): within +/-30 t/s (2.6 %; the scoring window is about +/-4 %) for 0.1 s. If it can't
+    // settle there for 1 s, the fallback fires anyway when the speed is between target - 60 and target + 30, so a weak
+    // battery or a hunting speed can't block shooting. (P 100 keeps the steady error under ~16 t/s, so normally the
+    // fallback never runs: the log shows READY_FALLBACK if it does.)
     public static final double LAUNCHER_READY_TOLERANCE = 30;
     public static final double LAUNCHER_READY_HOLD_SEC = 0.10;
-    public static final double LAUNCHER_READY_MARGIN = 100;
+    public static final double LAUNCHER_FALLBACK_MARGIN = 60;
     public static final double LAUNCHER_READY_FALLBACK_SEC = 1.0;
     public static final double LAUNCHER_ENCODER_WARNING_SEC = 1.0;
 
@@ -127,10 +130,17 @@ public final class BioBuzzConstants {
     public static final double AIM_MAX_TURN = 0.30;
     public static final double AIM_MIN_TURN = 0.10;                                   // 0.06 stalled 4 deg short (31 Oct AUTO)
     public static final double AIM_TOLERANCE_DEG = 1.5;                         // 2.0 = ~2 in sideways at 55 in
-    // Aim gate (TeleOp FIRE): while our CELL is in view, no ball is fed unless the aim (trim included) is within this.
-    // 1 Nov: 285 of 447 feeds were outside the opening sideways. No CELL in view -> the driver's call, no gate.
+    // Aim gate (TeleOp FIRE, see AimGate): no ball is fed unless the aim (trim included) is within this and the robot
+    // isn't turning. 1 Nov: 285 of 447 feeds were outside the opening sideways. The bearing is in the tilted camera's
+    // frame: 2.0 deg there is ~2.6-3 deg of robot yaw, ~2 in sideways at 36 in. Must stay above AIM_TOLERANCE_DEG (X).
+    // If the CELL drops out of view, the hold lasts AIM_LOST_HOLD_SEC; after that (no CELL) it is the driver's call.
+    // The gate gives way after AIM_GATE_GIVEWAY_SEC of holding a ready shot (logged AIM_GIVEWAY), so a knocked camera
+    // or a stale trim can only slow the shooting, not stop it. X in TeleOp INIT turns the gate off for the match.
     public static final boolean AIM_GATE_ENABLED = true;
-    public static final double AIM_FIRE_TOLERANCE_DEG = 2.5;                    // ~1.5 in sideways at 36 in
+    public static final double AIM_FIRE_TOLERANCE_DEG = 2.0;
+    public static final double AIM_LOST_HOLD_SEC = 0.75;
+    public static final double AIM_GATE_GIVEWAY_SEC = 1.5;
+    public static final double AIM_GATE_MAX_TURN = 0.05;                        // turn power still counted as "not turning"
     public static final double HOLD_TOLERANCE_DEG = 0.75;                       // AUTO holds the aimed heading while firing
     public static final double HOLD_MAX_TURN = 0.20;
     // SHOT SPOT (TeleOp: Share saves the camera's FLOOR distance to the CELL + speed, holding X drives back to it)
@@ -161,7 +171,9 @@ public final class BioBuzzConstants {
     public static final double AUTO_FIRE_SETTLE_SEC = 0.5;                       // still robot before firing: balls settle
     public static final double AUTO_FEED_POWER = 0.3;                            // ContinuousFeeder power (not used by AUTO now)
     public static final int AUTO_PRELOADS = 4;                                   // stop early once this many balls left
-    public static final double AUTO_SHOT_DIP_TPS = 60;                           // flywheel slowdown that means a ball left
+    // Flywheel slowdown that means a ball left. The old hood dipped 40-130 t/s; the printed hood at 1150 t/s is expected
+    // to dip ~50-70 (simulated), so 60 was borderline. CALIBRATE: ~0.6 x the dips BioBuzz Shot Log measures.
+    public static final double AUTO_SHOT_DIP_TPS = 35;
     public static final double AUTO_FEED_TIMEOUT_SEC = 8.0;
     public static final double AUTO_AIM_TIMEOUT_SEC = 3.5;                              // camera aim + drive to the SHOT SPOT distance
     public static final double AUTO_SPOT_MAX_IN = 24;                              // AUTO never drives further than this to the spot

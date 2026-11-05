@@ -8,8 +8,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * about +/-4.7 % of speed for a ball to score with the printed hood, so the band must sit well inside that.
  *
  * If the speed doesn't settle in the band for {@code fallbackSec} (for example it droops on a weak battery, or it hunts
- * across the band edge), the old rule takes over: at least {@code target - fallbackMargin} and not overspeed. So the
- * robot never refuses to shoot.
+ * across the band edge), a fallback fires anyway while the speed is between {@code target - fallbackMargin} and
+ * {@code target + tolerance}. So a ball is never held back for long while the speed is close, and never fired long
+ * on an overspeed.
  * No FTC SDK dependency: unit-tested on the laptop.
  */
 public class LauncherGate {
@@ -34,7 +35,7 @@ public class LauncherGate {
     /** Robot settings from BioBuzzConstants. */
     public static LauncherGate standard() {
         return new LauncherGate(BioBuzzConstants.LAUNCHER_READY_TOLERANCE, BioBuzzConstants.LAUNCHER_READY_HOLD_SEC,
-                BioBuzzConstants.LAUNCHER_READY_MARGIN, BioBuzzConstants.LAUNCHER_READY_FALLBACK_SEC);
+                BioBuzzConstants.LAUNCHER_FALLBACK_MARGIN, BioBuzzConstants.LAUNCHER_READY_FALLBACK_SEC);
     }
 
     /**

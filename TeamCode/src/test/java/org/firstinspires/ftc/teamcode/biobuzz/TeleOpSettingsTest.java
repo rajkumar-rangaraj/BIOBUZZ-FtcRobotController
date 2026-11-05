@@ -69,6 +69,22 @@ public class TeleOpSettingsTest {
     }
 
     @Test
+    public void autoPositionTaughtWithTheOldHoodIsDroppedToo() {
+        String old = "spot_range_in=55.6\nspot_speed=1250\nspot_ref=cluster\n"
+                + "shoot_fwd_in=-31.5\nshoot_left_in=-8\nshoot_heading_deg=-42\naim_trim_deg=1.5\n";
+        TeleOpSettings s = TeleOpSettings.parse(old);
+        assertFalse(s.hasSpot());
+        assertFalse(s.hasShootPose());
+        assertEquals(1.5, s.aimTrimDeg, 1e-9);                                       // the trim is kept
+        // a new-era file keeps the taught position even without a spot
+        TeleOpSettings n = new TeleOpSettings();
+        n.shootFwdIn = -30;
+        n.shootLeftIn = -5;
+        n.shootHeadingDeg = -40;
+        assertTrue(TeleOpSettings.parse(n.format()).hasShootPose());
+    }
+
+    @Test
     public void holdTurnTurnsBackToTheAimedHeading() {
         assertEquals(0, MotionController.holdTurnCw(-35, -35.5), 0);                 // inside the dead band
         assertTrue(MotionController.holdTurnCw(-35, -30) > 0);                        // drifted CCW -> turn clockwise

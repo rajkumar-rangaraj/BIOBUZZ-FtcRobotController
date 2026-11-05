@@ -19,9 +19,14 @@ public class ShotFeederTest {
         int ballsOut = 0;
         double lastBallBoundary = 0;
         final ShotFeeder f = new ShotFeeder(POCKET, 0.6, 0.35, 0.35, 1.0, 0.25, 3);
+        final LauncherGate gate = LauncherGate.standard();         // the robot's real fire rule
+
+        Sim() {
+            gate.update(-1.0, target, vel);                          // flywheel already settled at speed
+        }
 
         boolean ready() {
-            return vel >= target - 100;
+            return gate.update(t, target, vel);
         }
 
         void step(boolean wantFire) {
@@ -76,17 +81,19 @@ public class ShotFeederTest {
         Sim s = new Sim();
         double minSpeedAtShot = 1e9;
         int lastBalls = 0;
-        for (int i = 0; i < 300; i++) {                              // hold FIRE for 3 s
+        for (int i = 0; i < 400; i++) {                              // hold FIRE for 3 s, then let the last pocket finish
             double velBefore = s.vel;
-            s.step(true);
+            s.step(i < 300);
             if (s.ballsOut > lastBalls) {
                 minSpeedAtShot = Math.min(minSpeedAtShot, velBefore);
                 lastBalls = s.ballsOut;
             }
         }
+        assertEquals(ShotFeeder.State.IDLE, s.f.state());
         assertTrue("several shots in 3 s, got " + s.f.shots(), s.f.shots() >= 4);
         assertEquals("one ball per counted shot", s.f.shots(), s.ballsOut);
-        assertTrue("every ball left at speed (>= target-100), worst " + minSpeedAtShot, minSpeedAtShot >= 1150);
+        assertTrue("every ball left inside the ready band, worst " + minSpeedAtShot,
+                minSpeedAtShot >= s.target - BioBuzzConstants.LAUNCHER_READY_TOLERANCE);
     }
 
     @Test

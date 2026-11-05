@@ -15,8 +15,8 @@ import com.qualcomm.robotcore.util.Range;
  *   Left bumper  (hold)   precision drive
  *   Right trigger         intake IN (analog)
  *   Left trigger          intake OUT (analog) - half pull = the flower "back-out" reverse
- *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed (and aimed, if the CELL
- *                         is in view: see AIM_GATE_ENABLED)
+ *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed, and (with the CELL in
+ *                         view) aimed and not turning; a held ball goes anyway after 1.5 s (AimGate)
  *   X / Square   (hold)   HIVE auto-aim: camera turns the robot; with a saved SHOT SPOT it also drives to that
  *                         distance and sets the spot's shot speed (push the left stick to take over)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
@@ -28,7 +28,8 @@ import com.qualcomm.robotcore.util.Range;
  *   D-pad right / left    launcher trim +/- LAUNCHER_TRIM_STEP ticks/s (15)
  *
  * During INIT: B / Circle = RED, A / Cross = BLUE (defaults to the alliance the last AUTO ran),
- *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2).
+ *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2),
+ *               X / Square = aim gate on/off (off = FIRE never waits for the camera).
  * While the arm is DEPLOYED, driving is limited to precision speed.
  */
 @TeleOp(name = "BioBuzz TeleOp", group = "BioBuzz")
@@ -48,6 +49,8 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean readyRumbled = false;
     private boolean lastFallback = false;
     private boolean lastAimHold = false;
+    private boolean lastGiveWay = false;
+    private final AimGate aimGate = AimGate.standard();
     private boolean endgameWarned = false;
     private String status = "";
     private final ElapsedTime matchTimer = new ElapsedTime();
@@ -90,7 +93,12 @@ public class BioBuzzTeleOp extends OpMode {
         if (gamepad1.backWasPressed()) {
             BioBuzzMatchState.diagnostics = !BioBuzzMatchState.diagnostics;
         }
+        if (gamepad1.xWasPressed()) {
+            aimGate.setEnabled(!aimGate.enabled());
+        }
         telemetry.addData("Alliance", "%s   (B/Circle = RED, A/Cross = BLUE)  <-- CHECK", alliance);
+        telemetry.addData("Aim gate", "%s   (X/Square toggles; OFF = fire without the camera check)",
+                aimGate.enabled() ? "ON" : "OFF");
         telemetry.addData("Shot spot", settings.hasSpot()
                 ? String.format("%.0f in @ %.0f t/s (hold X to go there)", settings.spotRangeIn, settings.spotSpeed)
                 : "none saved (press Share at a spot that scores)");
@@ -107,11 +115,12 @@ public class BioBuzzTeleOp extends OpMode {
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
         diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
-                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f spot=%s",
+                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f spot=%s aim_gate=%s",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
                 settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
-                settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none"));
+                settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none",
+                aimGate.enabled() ? "on" : "off"));
         robot.stowArm();
     }
 
@@ -266,14 +275,25 @@ public class BioBuzzTeleOp extends OpMode {
         robot.drive(forward, strafe, turn, 1.0);
 
         // ---------------- Intake + windmill (one ball per shot, see ShotFeeder) ----------------
-        // Aim gate: with our CELL in view, the next ball waits until the aim is inside AIM_FIRE_TOLERANCE_DEG.
-        boolean aimOk = !AIM_GATE_ENABLED || target == null || Math.abs(target.bearingDeg) <= AIM_FIRE_TOLERANCE_DEG;
+        // Aim gate (AimGate): with our CELL in view the next ball waits for a good, steady aim; holding X with a saved
+        // spot also waits until the robot is on the spot.
+        boolean spotHold = aim && settings.hasSpot() && target != null && !onSpot;
+        boolean aimOk = aimGate.update(matchTimer.seconds(), fire, ready, target != null,
+                target != null ? target.bearingDeg : 0, turn) && !spotHold;
         boolean aimHold = fire && ready && !aimOk;
         if (aimHold != lastAimHold) {
-            diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END",
-                    target != null ? String.format("bearing %.1f", target.bearingDeg) : "no target");
+            diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END", (spotHold ? "to spot " : aimGate.state() + " ")
+                    + (target != null ? String.format("bearing %.1f", target.bearingDeg) : "no target"));
+            if (aimHold) {
+                gamepad1.rumbleBlips(1);
+            }
             lastAimHold = aimHold;
         }
+        boolean giveWay = aimGate.gaveWay();
+        if (giveWay && !lastGiveWay) {
+            diag.event("AIM_GIVEWAY", target != null ? String.format("bearing %.1f", target.bearingDeg) : "CELL lost");
+        }
+        lastGiveWay = giveWay;
         double intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
         if (gamepad1.b) {
             feeder.reset();
@@ -283,6 +303,9 @@ public class BioBuzzTeleOp extends OpMode {
             String feedEvent = feeder.event();
             if (feedEvent != null) {
                 diag.event("FEED", feedEvent + String.format(" | launcher %.0f t/s", robot.launcherVelocity()));
+                if (feedEvent.startsWith("SHOT")) {
+                    aimGate.ballFed();                          // the next ball earns its own give-way time
+                }
                 if (feedEvent.startsWith("JAM")) {
                     setStatus("Windmill " + feedEvent + " - hold B to unjam");
                     gamepad1.rumbleBlips(1);
@@ -290,7 +313,7 @@ public class BioBuzzTeleOp extends OpMode {
             }
         }
         boolean feeding = feeder.feeding();
-        if (fire) {
+        if (fire && !aimHold) {                                 // don't press balls into a windmill that is held
             intakePower = Math.max(intakePower, 0) + FEED_INTAKE_BOOST;
         }
         robot.setIntake(intakePower);
@@ -316,8 +339,20 @@ public class BioBuzzTeleOp extends OpMode {
                 !robot.isLauncherOn() ? "OFF" : (ready ? (fallback ? "READY (speed not settled)" : "READY") : "settling"),
                 robot.launcherVelocity());
         if (aimHold) {
-            telemetry.addData("FIRE HELD", "aim %.1f deg off: hold X, or turn %s", target.bearingDeg,
-                    target.bearingDeg > 0 ? "LEFT" : "RIGHT");
+            String why;
+            if (spotHold) {
+                why = String.format("driving to the SHOT SPOT (%+.0f in)", floorIn - settings.spotRangeIn);
+            } else if (aimGate.state() == AimGate.State.HOLD_AIM) {
+                why = String.format("aim %.1f deg off: hold X, or turn %s", target.bearingDeg,
+                        target.bearingDeg > 0 ? "LEFT" : "RIGHT");
+            } else if (aimGate.state() == AimGate.State.HOLD_TURNING) {
+                why = "robot still turning";
+            } else {
+                why = "CELL just lost - wait";
+            }
+            telemetry.addData("FIRE HELD", "%s  (fires anyway after %.1f s)", why, AIM_GATE_GIVEWAY_SEC);
+        } else if (!aimGate.enabled()) {
+            telemetry.addData("Aim gate", "OFF (X in INIT)");
         }
         telemetry.addData("Windmill", gamepad1.b ? "UNJAM" : String.format("%s  shots %d%s", feeder.state(), feeder.shots(),
                 feeder.jams() > 0 ? "  jams " + feeder.jams() : ""));
