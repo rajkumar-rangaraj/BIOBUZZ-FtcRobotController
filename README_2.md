@@ -258,11 +258,23 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 
 **SHOT SPOT (TeleOp):**
 1. Pick the alliance whose HIVE tags you can see. At home that's the practice goal's tags; tags 42–45 are BLUE.
-2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera distance and the current shot speed.
+2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera's floor distance to the CELL and the current shot speed.
 3. Later, **hold X**: the robot turns to the HIVE, drives to the saved distance and sets the saved speed. The controller rumbles and the screen shows **ON SPOT - FIRE**.
 4. Push the left stick forward or back to take over the driving.
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
+
+**Shooting with the printed hood (5 Nov 2026):**
+- **Speeds:** NEAR **1150 t/s** scores from about 28 to 44 in (ball exit to the CELL opening, horizontal), FAR **1240 t/s** from about 46 to 54 in.
+  - They come from `tools/shot_model.py`: upward CELL lips 53.5 / 65.1 in from the field CAD, 74° exit 9 in above the tiles, drag and topspin included.
+  - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press).
+- **FIRE waits** until the flywheel has held within ±30 t/s of the target for 0.1 s.
+  - The old rule (at least target − 100) was much looser.
+  - The ball would score within about ±4.7 % of the right speed.
+  - If the speed can't settle for 1 s, the old rule takes over. The screen then shows `READY (speed not settled)` and the log records `READY_FALLBACK`.
+- **Aim gate:** while our CELL is in view, FIRE also waits until the aim is within 2.5°. The screen shows `FIRE HELD` with the way to turn. Holding X aims for you. With no CELL in view, there's no aim gate.
+- **Flywheel P is 100 (was 40),** so it recovers from a shot in about 0.2 s instead of about 0.6 s. If READY flickers with no balls, step P back toward 40 in `BioBuzzConstants`.
+- **Old spots are dropped.** Spots saved before this change (SDK camera range, polycarbonate-hood speeds) are ignored, so save the spot again.
 
 **Teach AUTO its exact shooting position (LB + Share):**
 1. Put the robot at the AUTO start position.

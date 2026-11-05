@@ -60,10 +60,12 @@ public class TeleOpSettingsTest {
     }
 
     @Test
-    public void spotSavedBeforeClusterAimingIsDropped() {
-        // 31 Oct saves measured to the visible-tag average, not the CELL opening: must be saved again
+    public void spotSavedBeforeFloorDistanceIsDropped() {
+        // 31 Oct saves measured to the visible-tag average; 1-4 Nov saves to the SDK range with the old hood's speeds:
+        // both must be saved again
         assertFalse(TeleOpSettings.parse("alliance=BLUE\nspot_range_in=55.6\nspot_speed=1250\n").hasSpot());
-        assertTrue(TeleOpSettings.parse("spot_range_in=55.6\nspot_speed=1250\nspot_ref=cluster\n").hasSpot());
+        assertFalse(TeleOpSettings.parse("spot_range_in=55.6\nspot_speed=1250\nspot_ref=cluster\n").hasSpot());
+        assertTrue(TeleOpSettings.parse("spot_range_in=36.0\nspot_speed=1150\nspot_ref=floor\n").hasSpot());
     }
 
     @Test

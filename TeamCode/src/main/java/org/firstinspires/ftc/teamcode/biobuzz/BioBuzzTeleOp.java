@@ -15,7 +15,8 @@ import com.qualcomm.robotcore.util.Range;
  *   Left bumper  (hold)   precision drive
  *   Right trigger         intake IN (analog)
  *   Left trigger          intake OUT (analog) - half pull = the flower "back-out" reverse
- *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed
+ *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed (and aimed, if the CELL
+ *                         is in view: see AIM_GATE_ENABLED)
  *   X / Square   (hold)   HIVE auto-aim: camera turns the robot; with a saved SHOT SPOT it also drives to that
  *                         distance and sets the spot's shot speed (push the left stick to take over)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
@@ -44,7 +45,9 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean lastOnSpot = false;
     private double launcherTrim = 0;
     private boolean launcherToggledOn = false;
-    private boolean lastReady = false;
+    private boolean readyRumbled = false;
+    private boolean lastFallback = false;
+    private boolean lastAimHold = false;
     private boolean endgameWarned = false;
     private String status = "";
     private final ElapsedTime matchTimer = new ElapsedTime();
@@ -147,11 +150,19 @@ public class BioBuzzTeleOp extends OpMode {
         double launcherTarget = Range.clip(launcherPreset + launcherTrim, 0, LAUNCHER_MAX_VELOCITY);
         robot.setLauncherVelocity(launcherToggledOn || fire ? launcherTarget : 0);
         boolean ready = robot.launcherReady();
-        if (ready && !lastReady) {
+        if (!robot.isLauncherOn()) {
+            readyRumbled = false;
+        } else if (ready && !readyRumbled) {                    // once per spin-up: READY now drops after every shot
+            readyRumbled = true;
             gamepad1.rumble(250);
             diag.event("LAUNCHER_READY", String.format("%.0f t/s", robot.launcherVelocity()));
         }
-        lastReady = ready;
+        boolean fallback = ready && robot.launcherReadyByFallback();
+        if (fallback && !lastFallback) {
+            diag.event("READY_FALLBACK", String.format("target %.0f vel %.0f: speed never settled within %.0f t/s",
+                    launcherTarget, robot.launcherVelocity(), LAUNCHER_READY_TOLERANCE));
+        }
+        lastFallback = fallback;
         if (fire != lastFire) {
             diag.event(fire ? "FIRE_PRESS" : "FIRE_RELEASE", String.format("ready=%s vel=%.0f", ready, robot.launcherVelocity()));
             lastFire = fire;
@@ -196,10 +207,11 @@ public class BioBuzzTeleOp extends OpMode {
             diag.event("PRESET", "SPOT " + settings.spotSpeed);
         }
         boolean onSpot = false;
+        double floorIn = target == null ? Double.NaN : target.horizontalIn();
         if (aim && target != null) {
             turn = HiveVision.aimTurnCw(target.bearingDeg);
             if (settings.hasSpot()) {
-                double toSpot = MotionController.spotForward(target.rangeIn, settings.spotRangeIn);
+                double toSpot = MotionController.spotForward(floorIn, settings.spotRangeIn);
                 if (Math.abs(gamepad1.left_stick_y) < 0.1 && !armDeployed) {
                     forward = toSpot;
                 }
@@ -208,7 +220,7 @@ public class BioBuzzTeleOp extends OpMode {
         }
         if (onSpot && !lastOnSpot) {
             gamepad1.rumble(400);
-            diag.event("ON_SPOT", String.format("range %.1f bearing %.1f", target.rangeIn, target.bearingDeg));
+            diag.event("ON_SPOT", String.format("floor %.1f bearing %.1f", floorIn, target.bearingDeg));
         }
         lastOnSpot = onSpot;
         if (gamepad1.backWasPressed()) {
@@ -217,7 +229,7 @@ public class BioBuzzTeleOp extends OpMode {
                 gamepad1.rumbleBlips(2);
             } else {
                 settings.alliance = alliance;
-                settings.spotRangeIn = target.rangeIn;
+                settings.spotRangeIn = floorIn;
                 settings.spotSpeed = launcherTarget;
                 String poseNote = "";
                 if (gamepad1.left_bumper) {                     // LB + SHARE: also teach AUTO this exact position
@@ -235,10 +247,10 @@ public class BioBuzzTeleOp extends OpMode {
                     }
                 }
                 boolean saved = settings.trySave();
-                setStatus(saved ? String.format("SHOT SPOT saved: %.0f in @ %.0f t/s%s", target.rangeIn, launcherTarget, poseNote)
+                setStatus(saved ? String.format("SHOT SPOT saved: %.0f in @ %.0f t/s%s", floorIn, launcherTarget, poseNote)
                         : "SHOT SPOT save FAILED");
-                diag.event("SPOT_SAVED", String.format("range %.1f speed %.0f saved=%s%s", target.rangeIn, launcherTarget,
-                        saved, poseNote));
+                diag.event("SPOT_SAVED", String.format("floor %.1f range %.1f speed %.0f saved=%s%s", floorIn, target.rangeIn,
+                        launcherTarget, saved, poseNote));
                 gamepad1.rumble(600);
             }
         }
@@ -254,12 +266,20 @@ public class BioBuzzTeleOp extends OpMode {
         robot.drive(forward, strafe, turn, 1.0);
 
         // ---------------- Intake + windmill (one ball per shot, see ShotFeeder) ----------------
+        // Aim gate: with our CELL in view, the next ball waits until the aim is inside AIM_FIRE_TOLERANCE_DEG.
+        boolean aimOk = !AIM_GATE_ENABLED || target == null || Math.abs(target.bearingDeg) <= AIM_FIRE_TOLERANCE_DEG;
+        boolean aimHold = fire && ready && !aimOk;
+        if (aimHold != lastAimHold) {
+            diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END",
+                    target != null ? String.format("bearing %.1f", target.bearingDeg) : "no target");
+            lastAimHold = aimHold;
+        }
         double intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
         if (gamepad1.b) {
             feeder.reset();
             robot.setIndexerPower(-INDEXER_UNJAM_POWER);
         } else {
-            robot.setIndexerPower(feeder.update(matchTimer.seconds(), robot.indexerTicks(), ready, fire));
+            robot.setIndexerPower(feeder.update(matchTimer.seconds(), robot.indexerTicks(), ready && aimOk, fire));
             String feedEvent = feeder.event();
             if (feedEvent != null) {
                 diag.event("FEED", feedEvent + String.format(" | launcher %.0f t/s", robot.launcherVelocity()));
@@ -293,7 +313,12 @@ public class BioBuzzTeleOp extends OpMode {
         telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +%.0f, LEFT -%.0f)",
                 presetName, launcherPreset, launcherTrim, launcherTarget, LAUNCHER_TRIM_STEP, LAUNCHER_TRIM_STEP);
         telemetry.addData("Launcher", "%s  actual %.0f t/s",
-                !robot.isLauncherOn() ? "OFF" : (ready ? "READY" : "spinning"), robot.launcherVelocity());
+                !robot.isLauncherOn() ? "OFF" : (ready ? (fallback ? "READY (speed not settled)" : "READY") : "settling"),
+                robot.launcherVelocity());
+        if (aimHold) {
+            telemetry.addData("FIRE HELD", "aim %.1f deg off: hold X, or turn %s", target.bearingDeg,
+                    target.bearingDeg > 0 ? "LEFT" : "RIGHT");
+        }
         telemetry.addData("Windmill", gamepad1.b ? "UNJAM" : String.format("%s  shots %d%s", feeder.state(), feeder.shots(),
                 feeder.jams() > 0 ? "  jams " + feeder.jams() : ""));
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? robot.armState().toString() : "NOT CALIBRATED");
@@ -301,15 +326,15 @@ public class BioBuzzTeleOp extends OpMode {
         if (vision == null) {
             telemetry.addData("HIVE aim", "camera not found");
         } else if (target != null) {
-            telemetry.addData("HIVE aim", "%s  %d tags  bearing %.1f  range %.0f in%s",
-                    target.cell, target.tagCount, target.bearingDeg, target.rangeIn, gamepad1.x ? "" : "  (hold X to aim)");
+            telemetry.addData("HIVE aim", "%s  %d tags  bearing %.1f  floor %.0f in%s",
+                    target.cell, target.tagCount, target.bearingDeg, floorIn, gamepad1.x ? "" : "  (hold X to aim)");
         } else {
             telemetry.addData("HIVE aim", "no %s CELL tags in view (any tags: %d)", alliance, vision.visibleTagCount());
         }
         if (settings.hasSpot()) {
             telemetry.addData("Shot spot", "%.0f in @ %.0f t/s%s", settings.spotRangeIn, settings.spotSpeed,
                     onSpot ? "  ** ON SPOT - FIRE **" : (target != null
-                            ? String.format("  now %.0f in (%+.0f)", target.rangeIn, target.rangeIn - settings.spotRangeIn) : ""));
+                            ? String.format("  now %.0f in (%+.0f)", floorIn, floorIn - settings.spotRangeIn) : ""));
         } else {
             telemetry.addData("Shot spot", "none - press Share where shots score");
         }

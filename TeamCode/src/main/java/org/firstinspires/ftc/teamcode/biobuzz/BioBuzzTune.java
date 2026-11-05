@@ -145,7 +145,7 @@ public class BioBuzzTune extends OpMode {
             turn = HiveVision.aimTurnCw(target.bearingDeg);
             double toSpot = 0;
             if (settings.hasSpot() && Math.abs(gamepad1.left_stick_y) < 0.1) {
-                toSpot = MotionController.spotForward(target.rangeIn, settings.spotRangeIn);
+                toSpot = MotionController.spotForward(target.horizontalIn(), settings.spotRangeIn);
                 forward = toSpot;
             }
             onTarget = turn == 0 && toSpot == 0;
@@ -189,8 +189,8 @@ public class BioBuzzTune extends OpMode {
         telemetry.addData("Launcher", "%s %.0f / %.0f t/s %s", robot.isLauncherOn() ? "ON" : "OFF (Y)", vel, speed(),
                 ready ? "READY" : "");
         if (target != null) {
-            telemetry.addData("CELL", "%s %d tags  camera %.1f  aim %.1f deg  range %.0f in%s", target.cell,
-                    target.tagCount, target.rawBearingDeg, target.bearingDeg, target.rangeIn,
+            telemetry.addData("CELL", "%s %d tags  camera %.1f  aim %.1f deg  floor %.0f in%s", target.cell,
+                    target.tagCount, target.rawBearingDeg, target.bearingDeg, target.horizontalIn(),
                     onTarget ? "  ** ON TARGET **" : "");
         } else {
             telemetry.addData("CELL", vision == null ? "camera missing" : "no " + settings.alliance + " CELL in view");

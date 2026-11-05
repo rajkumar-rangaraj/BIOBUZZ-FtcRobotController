@@ -282,7 +282,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             double turn = target == null ? 0 : HiveVision.aimTurnCw(target.bearingDeg);
             double fwd = 0;
             if (target != null && spot.hasSpot() && !spot.hasShootPose()) {   // taught position: already there
-                fwd = MotionController.spotForward(target.rangeIn, spot.spotRangeIn);
+                fwd = MotionController.spotForward(target.horizontalIn(), spot.spotRangeIn);
                 double moved = forwardInches() - f0;
                 if ((fwd > 0 && moved >= AUTO_SPOT_MAX_IN) || (fwd < 0 && moved <= -AUTO_SPOT_MAX_IN)) {
                     fwd = 0;
@@ -296,8 +296,8 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             } else {
                 settled = 0;
             }
-            telemetry.addData("Target", target == null ? "none" : String.format("%s bearing %.1f range %.0f",
-                    target.cell, target.bearingDeg, target.rangeIn));
+            telemetry.addData("Target", target == null ? "none" : String.format("%s bearing %.1f floor %.0f",
+                    target.cell, target.bearingDeg, target.horizontalIn()));
             loopTick();
         }
         robot.stopDrive();

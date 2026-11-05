@@ -13,11 +13,14 @@ import java.util.Locale;
  */
 public final class TeleOpSettings {
     public static final String FILE_NAME = "biobuzz_teleop.txt";
-    /** Spot distances measured to the SDK 12 CELL cluster origin; older saves (tag average) are dropped. */
-    static final String SPOT_REF = "cluster";
+    /**
+     * Spot distances are the camera's FLOOR distance to the CELL opening (HiveVision.Target.horizontalIn), saved with
+     * the printed hood's speeds. Older saves (SDK camera range, polycarbonate-hood speeds) are dropped.
+     */
+    static final String SPOT_REF = "floor";
 
     public HiveVision.Alliance alliance = HiveVision.Alliance.RED;
-    /** Camera range to the HIVE CELL opening at the saved spot (NaN = no spot saved). */
+    /** Camera floor distance to the HIVE CELL opening at the saved spot (NaN = no spot saved). */
     public double spotRangeIn = Double.NaN;
     public double spotSpeed = Double.NaN;
     /** Aim trim, degrees: + moves the shots LEFT, - moves them RIGHT (camera vs launcher). */

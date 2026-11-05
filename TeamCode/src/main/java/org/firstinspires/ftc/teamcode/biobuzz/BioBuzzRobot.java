@@ -44,6 +44,8 @@ public class BioBuzzRobot {
     public double lastIndexerPower = 0;
     private double launcherTarget = 0;
     private final ElapsedTime launcherTimer = new ElapsedTime();
+    private final LauncherGate launcherGate = LauncherGate.standard();
+    private final ElapsedTime clock = new ElapsedTime();
 
     public enum ArmState { UNKNOWN, STOWED, DEPLOYED }
     private ArmState armState = ArmState.UNKNOWN;
@@ -161,6 +163,7 @@ public class BioBuzzRobot {
             }
             launcherOn = false;
             launcherTarget = 0;
+            launcherGate.reset();
             return;
         }
         if (!launcherOn) {
@@ -185,8 +188,21 @@ public class BioBuzzRobot {
         return launcher.getVelocity();
     }
 
+    /**
+     * Ready to fire the next ball: speed within LAUNCHER_READY_TOLERANCE of the target for LAUNCHER_READY_HOLD_SEC
+     * (see {@link LauncherGate}). Safe to call several times per loop.
+     */
     public boolean launcherReady() {
-        return launcherOn && launcherVelocity() >= launcherTarget - LAUNCHER_READY_MARGIN;
+        if (!launcherOn) {
+            launcherGate.reset();
+            return false;
+        }
+        return launcherGate.update(clock.seconds(), launcherTarget, launcherVelocity());
+    }
+
+    /** True when the last {@link #launcherReady()} was only allowed by the 1 s fallback (speed not settled). */
+    public boolean launcherReadyByFallback() {
+        return launcherOn && launcherGate.usedFallback();
     }
 
     /** Non-null when the launcher has had time to spin up but its encoder reading makes no sense. */
