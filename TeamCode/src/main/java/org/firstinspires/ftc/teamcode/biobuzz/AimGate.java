@@ -4,18 +4,21 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * TeleOp aim gate: decides whether the windmill may feed the next ball, from the camera's view of our CELL.
  *
  * <ul>
- *   <li>CELL in view: feed only when the aim (trim included) is within the tolerance and the robot isn't turning.</li>
+ *   <li>CELL in view: feed only when the aim (trim included) is within the tolerance and the robot isn't turning.
+ *       While X drives to a saved SHOT SPOT, also wait until the distance is right.</li>
  *   <li>CELL just lost (seen within {@code lostHoldSec}): still hold. Most dropouts are motion blur while turning,
  *       exactly when the aim is bad, and one empty frame must not release a held burst.</li>
  *   <li>CELL not seen for longer: no gate. The driver aims by eye.</li>
- *   <li>A ready shot held back for {@code givewaySec} goes anyway ({@link #gaveWay()}), so a knocked camera or a stale
- *       aim trim can slow the shooting but never stop it.</li>
+ *   <li>Every hold gives way {@code givewaySec} after the first ready ball was held back ({@link #gaveWay()}), so a
+ *       knocked camera, a stale aim trim or a blocked SHOT SPOT can slow the shooting but never stop it. The clock
+ *       keeps running while READY flickers; it restarts only when FIRE is released or a ball is fed.</li>
+ *   <li>Off (X in INIT): never holds.</li>
  * </ul>
- * The give-way clock restarts when FIRE is released or after a ball is fed. No FTC SDK dependency: unit-tested.
+ * The flywheel speed gate is separate: a ball never goes before the flywheel is ready. No FTC SDK dependency: unit-tested.
  */
 public class AimGate {
 
-    public enum State { OFF, NO_CELL, AIMED, HOLD_AIM, HOLD_TURNING, HOLD_LOST, GIVE_WAY }
+    public enum State { OFF, NO_CELL, AIMED, HOLD_SPOT, HOLD_AIM, HOLD_TURNING, HOLD_LOST, GIVE_WAY }
 
     private final double toleranceDeg;
     private final double lostHoldSec;
@@ -49,21 +52,31 @@ public class AimGate {
         return enabled;
     }
 
+    /** Same as {@link #update(double, boolean, boolean, boolean, double, double, boolean)} with no SHOT SPOT drive. */
+    public boolean update(double t, boolean fire, boolean shotReady, boolean cellInView, double bearingDeg,
+                          double turnPower) {
+        return update(t, fire, shotReady, cellInView, bearingDeg, turnPower, false);
+    }
+
     /**
      * Call once per loop.
      *
      * @param t            seconds, monotonic
      * @param fire         driver holds FIRE
-     * @param shotReady    flywheel ready (only a ready shot can be "held back")
+     * @param shotReady    flywheel ready (the give-way clock starts at the first ready ball held back)
      * @param cellInView   our CELL is in view this loop
      * @param bearingDeg   aim error to the CELL, trim included (ignored when not in view)
      * @param turnPower    commanded turn power this loop (auto-aim or stick)
-     * @return true when the next ball may be fed
+     * @param spotHold     X is driving the robot to the saved SHOT SPOT distance and isn't there yet
+     * @return true when the next ball may be fed (as far as the aim is concerned)
      */
     public boolean update(double t, boolean fire, boolean shotReady, boolean cellInView, double bearingDeg,
-                          double turnPower) {
+                          double turnPower, boolean spotHold) {
         if (cellInView) {
             lastSeen = t;
+        }
+        if (!fire) {
+            holdSince = Double.NaN;                 // a new FIRE press earns a fresh give-way time
         }
         if (!enabled) {
             state = State.OFF;
@@ -71,7 +84,9 @@ public class AimGate {
             return true;
         }
         if (cellInView) {
-            if (Math.abs(bearingDeg) > toleranceDeg) {
+            if (spotHold) {
+                state = State.HOLD_SPOT;
+            } else if (Math.abs(bearingDeg) > toleranceDeg) {
                 state = State.HOLD_AIM;
             } else if (Math.abs(turnPower) > maxTurn) {
                 state = State.HOLD_TURNING;
@@ -83,15 +98,13 @@ public class AimGate {
         } else {
             state = State.NO_CELL;
         }
-        boolean holding = state == State.HOLD_AIM || state == State.HOLD_TURNING || state == State.HOLD_LOST;
-        if (!fire || !shotReady || !holding) {
-            holdSince = Double.NaN;                 // nothing held back right now
-            return !holding;
+        if (!holding()) {
+            return true;
         }
-        if (Double.isNaN(holdSince)) {
-            holdSince = t;
+        if (fire && shotReady && Double.isNaN(holdSince)) {
+            holdSince = t;                          // the first ready ball held back starts the clock
         }
-        if (t - holdSince >= givewaySec) {
+        if (!Double.isNaN(holdSince) && t - holdSince >= givewaySec) {
             state = State.GIVE_WAY;
             return true;
         }
@@ -112,8 +125,9 @@ public class AimGate {
         return state == State.GIVE_WAY;
     }
 
-    /** True when a ready shot is being held back right now. */
+    /** True when the gate holds the next ball back right now (whether or not the flywheel is ready). */
     public boolean holding() {
-        return state == State.HOLD_AIM || state == State.HOLD_TURNING || state == State.HOLD_LOST;
+        return state == State.HOLD_SPOT || state == State.HOLD_AIM || state == State.HOLD_TURNING
+                || state == State.HOLD_LOST;
     }
 }

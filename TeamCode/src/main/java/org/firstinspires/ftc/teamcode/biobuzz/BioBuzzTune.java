@@ -30,9 +30,9 @@ public class BioBuzzTune extends OpMode {
     private ShotFeeder feeder;
     private double trim, power, pause;
     private boolean launcherOn = false;
-    private int pockets = 0, balls = 0, jams = 0;
+    private int pockets = 0, jams = 0;
     private int feederShotsSeen = 0;
-    private boolean dipping = false;
+    private final BallCounter ballCounter = BallCounter.forTuning();
     private String note = "";
     private final ElapsedTime noteTimer = new ElapsedTime();
     private final ElapsedTime clock = new ElapsedTime();
@@ -113,7 +113,7 @@ public class BioBuzzTune extends OpMode {
         }
         if (gamepad1.aWasPressed()) {
             pockets = 0;
-            balls = 0;
+            ballCounter.reset();
             jams = 0;
             say("Counter reset");
         }
@@ -133,7 +133,7 @@ public class BioBuzzTune extends OpMode {
         }
         boolean fire = gamepad1.right_bumper;
         robot.setLauncherVelocity(launcherOn || fire ? speed() : 0);
-        boolean ready = robot.launcherReady();
+        boolean ready = robot.updateLauncherReady();            // one fresh decision per loop
 
         // ---------------- Drive + aim ----------------
         double scale = gamepad1.left_bumper ? SLOW_DRIVE_SCALE : 1.0;
@@ -173,19 +173,14 @@ public class BioBuzzTune extends OpMode {
         }
         robot.setIntake(intake);
         double vel = robot.launcherVelocity();
-        if (!dipping && robot.isLauncherOn() && vel < speed() - AUTO_SHOT_DIP_TPS) {
-            dipping = true;
-            balls++;
-        } else if (dipping && vel > speed() - AUTO_SHOT_DIP_TPS / 2) {
-            dipping = false;
-        }
+        ballCounter.update(clock.seconds(), feeder.feeding(), robot.isLauncherOn() ? speed() : 0, vel);
 
         // ---------------- Screen ----------------
         telemetry.addData("AIM TRIM", "%+.1f deg   (D-pad LEFT = shots more left, RIGHT = more right, seen from behind the launcher)", trim);
         telemetry.addData("PAUSE", "%.2f s between pockets   (D-pad UP / DOWN)", pause);
         telemetry.addData("WINDMILL", "power %.2f   (LB + D-pad UP / DOWN)", power);
-        telemetry.addData("Balls / pockets", "%d / %d  = %s   jams %d   (A resets)", balls, pockets,
-                pockets == 0 ? "-" : String.format("%.0f%%", 100.0 * balls / pockets), jams);
+        telemetry.addData("Balls / pockets", "%d / %d  = %s   jams %d   (A resets)", ballCounter.balls(), pockets,
+                pockets == 0 ? "-" : String.format("%.0f%%", 100.0 * ballCounter.balls() / pockets), jams);
         telemetry.addData("Launcher", "%s %.0f / %.0f t/s %s", robot.isLauncherOn() ? "ON" : "OFF (Y)", vel, speed(),
                 ready ? "READY" : "");
         if (target != null) {

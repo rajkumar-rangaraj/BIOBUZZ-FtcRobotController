@@ -16,7 +16,8 @@ import com.qualcomm.robotcore.util.Range;
  *   Right trigger         intake IN (analog)
  *   Left trigger          intake OUT (analog) - half pull = the flower "back-out" reverse
  *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed, and (with the CELL in
- *                         view) aimed and not turning; a held ball goes anyway after 1.5 s (AimGate)
+ *                         view) aimed, not turning and - while X drives to a SHOT SPOT - at its distance; a held ball
+ *                         goes anyway 1.5 s after the hold starts (AimGate)
  *   X / Square   (hold)   HIVE auto-aim: camera turns the robot; with a saved SHOT SPOT it also drives to that
  *                         distance and sets the spot's shot speed (push the left stick to take over)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
@@ -49,6 +50,7 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean readyRumbled = false;
     private boolean lastFallback = false;
     private boolean lastAimHold = false;
+    private boolean aimHoldBlipped = false;
     private boolean lastGiveWay = false;
     private final AimGate aimGate = AimGate.standard();
     private boolean endgameWarned = false;
@@ -158,7 +160,7 @@ public class BioBuzzTeleOp extends OpMode {
         boolean fire = gamepad1.right_bumper;
         double launcherTarget = Range.clip(launcherPreset + launcherTrim, 0, LAUNCHER_MAX_VELOCITY);
         robot.setLauncherVelocity(launcherToggledOn || fire ? launcherTarget : 0);
-        boolean ready = robot.launcherReady();
+        boolean ready = robot.updateLauncherReady();            // one fresh decision per loop; logs reuse it
         if (!robot.isLauncherOn()) {
             readyRumbled = false;
         } else if (ready && !readyRumbled) {                    // once per spin-up: READY now drops after every shot
@@ -216,6 +218,7 @@ public class BioBuzzTeleOp extends OpMode {
             diag.event("PRESET", "SPOT " + settings.spotSpeed);
         }
         boolean onSpot = false;
+        boolean spotHold = false;                               // X is still driving to the saved distance
         double floorIn = target == null ? Double.NaN : target.horizontalIn();
         if (aim && target != null) {
             turn = HiveVision.aimTurnCw(target.bearingDeg);
@@ -223,6 +226,7 @@ public class BioBuzzTeleOp extends OpMode {
                 double toSpot = MotionController.spotForward(floorIn, settings.spotRangeIn);
                 if (Math.abs(gamepad1.left_stick_y) < 0.1 && !armDeployed) {
                     forward = toSpot;
+                    spotHold = toSpot != 0;                     // the heading is AimGate's own check
                 }
                 onSpot = toSpot == 0 && turn == 0;
             }
@@ -275,19 +279,22 @@ public class BioBuzzTeleOp extends OpMode {
         robot.drive(forward, strafe, turn, 1.0);
 
         // ---------------- Intake + windmill (one ball per shot, see ShotFeeder) ----------------
-        // Aim gate (AimGate): with our CELL in view the next ball waits for a good, steady aim; holding X with a saved
-        // spot also waits until the robot is on the spot.
-        boolean spotHold = aim && settings.hasSpot() && target != null && !onSpot;
+        // Aim gate (AimGate): with our CELL in view the next ball waits for a good, steady aim and, while X drives to a
+        // saved spot, for the right distance. Every hold gives way after AIM_GATE_GIVEWAY_SEC; X in INIT turns it off.
         boolean aimOk = aimGate.update(matchTimer.seconds(), fire, ready, target != null,
-                target != null ? target.bearingDeg : 0, turn) && !spotHold;
+                target != null ? target.bearingDeg : 0, turn, spotHold);
         boolean aimHold = fire && ready && !aimOk;
         if (aimHold != lastAimHold) {
-            diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END", (spotHold ? "to spot " : aimGate.state() + " ")
-                    + (target != null ? String.format("bearing %.1f", target.bearingDeg) : "no target"));
-            if (aimHold) {
+            diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END", aimGate.state() + " "
+                    + (target != null ? String.format("bearing %.1f floor %.1f", target.bearingDeg, floorIn) : "no target"));
+            if (aimHold && !aimHoldBlipped) {                   // one blip per FIRE press, not per hold
                 gamepad1.rumbleBlips(1);
+                aimHoldBlipped = true;
             }
             lastAimHold = aimHold;
+        }
+        if (!fire) {
+            aimHoldBlipped = false;
         }
         boolean giveWay = aimGate.gaveWay();
         if (giveWay && !lastGiveWay) {
@@ -340,7 +347,7 @@ public class BioBuzzTeleOp extends OpMode {
                 robot.launcherVelocity());
         if (aimHold) {
             String why;
-            if (spotHold) {
+            if (aimGate.state() == AimGate.State.HOLD_SPOT) {
                 why = String.format("driving to the SHOT SPOT (%+.0f in)", floorIn - settings.spotRangeIn);
             } else if (aimGate.state() == AimGate.State.HOLD_AIM) {
                 why = String.format("aim %.1f deg off: hold X, or turn %s", target.bearingDeg,

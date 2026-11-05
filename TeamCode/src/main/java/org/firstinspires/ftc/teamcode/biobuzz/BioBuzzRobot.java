@@ -178,7 +178,11 @@ public class BioBuzzRobot {
             launcherTimer.reset();
             launcherOn = true;
         }
-        launcherTarget = Range.clip(ticksPerSecond, 0, LAUNCHER_MAX_VELOCITY);
+        double newTarget = Range.clip(ticksPerSecond, 0, LAUNCHER_MAX_VELOCITY);
+        if (newTarget != launcherTarget) {
+            readyAt = -1;                                       // a new target must qualify on its own
+        }
+        launcherTarget = newTarget;
         launcher.setVelocity(launcherTarget);
     }
 
@@ -196,8 +200,9 @@ public class BioBuzzRobot {
 
     /**
      * Ready to fire the next ball: speed within LAUNCHER_READY_TOLERANCE of the target for LAUNCHER_READY_HOLD_SEC
-     * (see {@link LauncherGate}). Decided at most once per READY_CACHE_SEC, so several calls in one loop (feed decision,
-     * diagnostics log, checks) all see the same answer.
+     * (see {@link LauncherGate}). Op modes decide once per loop with {@link #updateLauncherReady()} (right after setting
+     * the speed); this returns that answer for READY_CACHE_SEC, so logs and checks in the same loop see the same one.
+     * A new target speed always forces a fresh decision.
      */
     public boolean launcherReady() {
         if (readyAt >= 0 && clock.seconds() - readyAt < READY_CACHE_SEC) {

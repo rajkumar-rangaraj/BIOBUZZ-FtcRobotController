@@ -174,6 +174,9 @@ public final class BioBuzzConstants {
     // Flywheel slowdown that means a ball left. The old hood dipped 40-130 t/s; the printed hood at 1150 t/s is expected
     // to dip ~50-70 (simulated), so 60 was borderline. CALIBRATE: ~0.6 x the dips BioBuzz Shot Log measures.
     public static final double AUTO_SHOT_DIP_TPS = 35;
+    // ... and only while a pocket turns or up to this long after it (BallCounter), so reading noise, spin-up and speed
+    // changes are never counted as balls.
+    public static final double AUTO_DIP_WINDOW_SEC = 0.6;
     public static final double AUTO_FEED_TIMEOUT_SEC = 8.0;
     public static final double AUTO_AIM_TIMEOUT_SEC = 3.5;                              // camera aim + drive to the SHOT SPOT distance
     public static final double AUTO_SPOT_MAX_IN = 24;                              // AUTO never drives further than this to the spot

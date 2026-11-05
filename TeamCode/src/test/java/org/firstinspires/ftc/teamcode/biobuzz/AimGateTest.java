@@ -63,15 +63,41 @@ public class AimGateTest {
     }
 
     @Test
-    public void giveWayCountsOnlyReadyHeldTime() {
+    public void readyFlickerDoesNotRestartTheGiveWayClock() {
+        AimGate g = gate();                                         // reviews: READY flickers while the speed hunts
+        assertFalse(g.update(0.0, true, false, true, 5.0, 0));      // not ready yet: the clock hasn't started
+        assertFalse(g.update(0.5, true, true, true, 5.0, 0));       // first ready ball held back: clock starts
+        for (int i = 1; i < 70; i++) {                              // READY on/off every loop until 1.88 s
+            assertFalse(g.update(0.5 + i * 0.02, true, i % 2 == 0, true, 5.0, 0));
+        }
+        assertTrue(g.update(2.0, true, true, true, 5.0, 0));        // 1.5 s after the hold started
+        assertTrue(g.gaveWay());
+        assertFalse(g.update(2.1, false, true, true, 5.0, 0));      // FIRE released
+        assertFalse(g.update(2.2, true, true, true, 5.0, 0));       // pressed again: a fresh 1.5 s
+        assertFalse(g.update(3.6, true, true, true, 5.0, 0));
+        assertTrue(g.update(3.7, true, true, true, 5.0, 0));
+    }
+
+    @Test
+    public void spotHoldWaitsForTheDistanceButGivesWayToo() {
         AimGate g = gate();
-        assertFalse(g.update(0.0, true, true, true, 5.0, 0));
-        assertFalse(g.update(1.0, true, false, true, 5.0, 0));      // flywheel not ready: nothing is held back
-        assertFalse(g.update(1.1, true, true, true, 5.0, 0));       // ready again: the timer restarts
-        assertFalse(g.update(2.5, true, true, true, 5.0, 0));
-        assertTrue(g.update(2.6, true, true, true, 5.0, 0));
-        assertFalse(g.update(2.7, false, true, true, 5.0, 0));      // FIRE released
-        assertFalse(g.update(2.8, true, true, true, 5.0, 0));       // pressed again: a fresh 1.5 s
+        assertFalse(g.update(0.0, true, true, true, 0.5, 0, true));  // aimed, but X still driving to the spot
+        assertEquals(AimGate.State.HOLD_SPOT, g.state());
+        assertTrue(g.holding());
+        assertFalse(g.update(1.0, true, true, true, 0.5, 0, true));
+        assertTrue(g.update(1.5, true, true, true, 0.5, 0, true));   // blocked spot (robot in the way): goes anyway
+        assertTrue(g.gaveWay());
+        g.ballFed();
+        assertTrue(g.update(1.6, true, true, true, 0.5, 0, false));  // on the spot and aimed
+        assertEquals(AimGate.State.AIMED, g.state());
+    }
+
+    @Test
+    public void onTheSpotTheHeadingIsStillChecked() {
+        AimGate g = gate();
+        assertFalse(g.update(0.0, true, true, true, 1.7, 0.10, false));  // distance right, X still turning
+        assertEquals(AimGate.State.HOLD_TURNING, g.state());
+        assertTrue(g.update(0.1, true, true, true, 1.2, 0.0, false));
     }
 
     @Test
@@ -79,6 +105,8 @@ public class AimGateTest {
         AimGate g = gate();
         g.setEnabled(false);
         assertTrue(g.update(0, true, true, true, 30.0, 0.5));
+        assertEquals(AimGate.State.OFF, g.state());
+        assertTrue(g.update(0.1, true, true, true, 0.0, 0.0, true));    // no SHOT SPOT hold either
         assertEquals(AimGate.State.OFF, g.state());
     }
 }

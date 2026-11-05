@@ -76,6 +76,7 @@ public class BioBuzzShotLog extends OpMode {
         }
         target = Range.clip(target, 0, LAUNCHER_MAX_VELOCITY);
         robot.setLauncherVelocity(launcherOn ? target : 0);
+        robot.updateLauncherReady();                            // one fresh decision per loop; the checks below reuse it
         double vel = robot.launcherVelocity();
 
         double scale = gamepad1.left_bumper ? SLOW_DRIVE_SCALE : 1.0;
