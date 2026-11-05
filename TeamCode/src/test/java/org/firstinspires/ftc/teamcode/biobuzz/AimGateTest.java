@@ -93,6 +93,31 @@ public class AimGateTest {
     }
 
     @Test
+    public void aSpotThatGaveWayStillWaitsForTheAim() {
+        AimGate g = gate();                                         // Opus review: never fire while still turning
+        assertFalse(g.update(0.0, true, true, true, 3.0, 0.1, true));   // off the spot and still turning
+        assertEquals(AimGate.State.HOLD_SPOT, g.state());
+        assertFalse(g.update(1.5, true, true, true, 3.0, 0.1, true));   // the spot gives way, the aim doesn't yet
+        assertEquals(AimGate.State.HOLD_AIM, g.state());
+        assertFalse(g.update(2.9, true, true, true, 3.0, 0.1, true));
+        assertTrue(g.update(3.0, true, true, true, 3.0, 0.1, true));    // the aim gets its own 1.5 s
+        assertTrue(g.gaveWay());
+    }
+
+    @Test
+    public void aReleasedSpotStaysReleasedUntilFireIsLetGo() {
+        AimGate g = gate();
+        assertFalse(g.update(0.0, true, true, true, 0.5, 0, true));
+        assertTrue(g.update(1.5, true, true, true, 0.5, 0, true));      // blocked spot: shoot from here
+        g.ballFed();
+        assertTrue(g.update(1.6, true, true, true, 0.5, 0, true));      // next ball: no new wait for the spot
+        assertEquals(AimGate.State.AIMED, g.state());
+        assertFalse(g.update(1.7, false, true, true, 0.5, 0, true));    // FIRE let go
+        assertFalse(g.update(1.8, true, true, true, 0.5, 0, true));     // pressed again: the spot counts again
+        assertEquals(AimGate.State.HOLD_SPOT, g.state());
+    }
+
+    @Test
     public void onTheSpotTheHeadingIsStillChecked() {
         AimGate g = gate();
         assertFalse(g.update(0.0, true, true, true, 1.7, 0.10, false));  // distance right, X still turning

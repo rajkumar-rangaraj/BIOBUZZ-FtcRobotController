@@ -175,8 +175,10 @@ public final class BioBuzzConstants {
     // to dip ~50-70 (simulated), so 60 was borderline. CALIBRATE: ~0.6 x the dips BioBuzz Shot Log measures.
     public static final double AUTO_SHOT_DIP_TPS = 35;
     // ... and only while a pocket turns or up to this long after it (BallCounter), so reading noise, spin-up and speed
-    // changes are never counted as balls.
+    // changes are never counted as balls. The dip is measured from the pre-feed speed and must last AUTO_DIP_MIN_SEC:
+    // one odd hub reading (~50 ms) never counts, a real ball keeps the flywheel down for 100 ms or more.
     public static final double AUTO_DIP_WINDOW_SEC = 0.6;
+    public static final double AUTO_DIP_MIN_SEC = 0.06;
     public static final double AUTO_FEED_TIMEOUT_SEC = 8.0;
     public static final double AUTO_AIM_TIMEOUT_SEC = 3.5;                              // camera aim + drive to the SHOT SPOT distance
     public static final double AUTO_SPOT_MAX_IN = 24;                              // AUTO never drives further than this to the spot

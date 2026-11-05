@@ -11,7 +11,8 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  *   <li>CELL not seen for longer: no gate. The driver aims by eye.</li>
  *   <li>Every hold gives way {@code givewaySec} after the first ready ball was held back ({@link #gaveWay()}), so a
  *       knocked camera, a stale aim trim or a blocked SHOT SPOT can slow the shooting but never stop it. The clock
- *       keeps running while READY flickers; it restarts only when FIRE is released or a ball is fed.</li>
+ *       keeps running while READY flickers; it restarts only when FIRE is released or a ball is fed. A SHOT SPOT that
+ *       gave way stays released until FIRE is let go, but aim and turning are still checked (with their own time).</li>
  *   <li>Off (X in INIT): never holds.</li>
  * </ul>
  * The flywheel speed gate is separate: a ball never goes before the flywheel is ready. No FTC SDK dependency: unit-tested.
@@ -28,6 +29,7 @@ public class AimGate {
     private boolean enabled = true;
     private double lastSeen = Double.NaN;
     private double holdSince = Double.NaN;
+    private boolean spotReleased = false;
     private State state = State.NO_CELL;
 
     public AimGate(double toleranceDeg, double lostHoldSec, double givewaySec, double maxTurn) {
@@ -77,38 +79,52 @@ public class AimGate {
         }
         if (!fire) {
             holdSince = Double.NaN;                 // a new FIRE press earns a fresh give-way time
+            spotReleased = false;
         }
         if (!enabled) {
             state = State.OFF;
             holdSince = Double.NaN;
+            spotReleased = false;
             return true;
         }
+        State aim;                                  // what the camera says, apart from the SHOT SPOT distance
         if (cellInView) {
-            if (spotHold) {
-                state = State.HOLD_SPOT;
-            } else if (Math.abs(bearingDeg) > toleranceDeg) {
-                state = State.HOLD_AIM;
+            if (Math.abs(bearingDeg) > toleranceDeg) {
+                aim = State.HOLD_AIM;
             } else if (Math.abs(turnPower) > maxTurn) {
-                state = State.HOLD_TURNING;
+                aim = State.HOLD_TURNING;
             } else {
-                state = State.AIMED;
+                aim = State.AIMED;
             }
         } else if (!Double.isNaN(lastSeen) && t - lastSeen < lostHoldSec) {
-            state = State.HOLD_LOST;
+            aim = State.HOLD_LOST;
         } else {
-            state = State.NO_CELL;
+            aim = State.NO_CELL;
         }
+        boolean spot = cellInView && spotHold && !spotReleased;
+        state = spot ? State.HOLD_SPOT : aim;
         if (!holding()) {
             return true;
         }
         if (fire && shotReady && Double.isNaN(holdSince)) {
             holdSince = t;                          // the first ready ball held back starts the clock
         }
-        if (!Double.isNaN(holdSince) && t - holdSince >= givewaySec) {
-            state = State.GIVE_WAY;
-            return true;
+        if (Double.isNaN(holdSince) || t - holdSince < givewaySec) {
+            return false;
         }
-        return false;
+        if (spot) {
+            // The distance gives way (e.g. a robot in the way) until FIRE is released; aim and turning are still
+            // checked, with their own give-way time, so the ball never leaves while the robot is still turning.
+            spotReleased = true;
+            holdSince = Double.NaN;
+            if (aim != State.AIMED && aim != State.NO_CELL) {
+                state = aim;
+                holdSince = t;
+                return false;
+            }
+        }
+        state = State.GIVE_WAY;
+        return true;
     }
 
     /** Call when a ball was fed: the next one must earn its own give-way time. */
