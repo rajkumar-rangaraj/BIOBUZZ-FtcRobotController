@@ -60,10 +60,28 @@ public class TeleOpSettingsTest {
     }
 
     @Test
-    public void spotSavedBeforeClusterAimingIsDropped() {
-        // 31 Oct saves measured to the visible-tag average, not the CELL opening: must be saved again
+    public void spotSavedBeforeFloorDistanceIsDropped() {
+        // 31 Oct saves measured to the visible-tag average; 1-4 Nov saves to the SDK range with the old hood's speeds:
+        // both must be saved again
         assertFalse(TeleOpSettings.parse("alliance=BLUE\nspot_range_in=55.6\nspot_speed=1250\n").hasSpot());
-        assertTrue(TeleOpSettings.parse("spot_range_in=55.6\nspot_speed=1250\nspot_ref=cluster\n").hasSpot());
+        assertFalse(TeleOpSettings.parse("spot_range_in=55.6\nspot_speed=1250\nspot_ref=cluster\n").hasSpot());
+        assertTrue(TeleOpSettings.parse("spot_range_in=36.0\nspot_speed=1150\nspot_ref=floor\n").hasSpot());
+    }
+
+    @Test
+    public void autoPositionTaughtWithTheOldHoodIsDroppedToo() {
+        String old = "spot_range_in=55.6\nspot_speed=1250\nspot_ref=cluster\n"
+                + "shoot_fwd_in=-31.5\nshoot_left_in=-8\nshoot_heading_deg=-42\naim_trim_deg=1.5\n";
+        TeleOpSettings s = TeleOpSettings.parse(old);
+        assertFalse(s.hasSpot());
+        assertFalse(s.hasShootPose());
+        assertEquals(1.5, s.aimTrimDeg, 1e-9);                                       // the trim is kept
+        // a new-era file keeps the taught position even without a spot
+        TeleOpSettings n = new TeleOpSettings();
+        n.shootFwdIn = -30;
+        n.shootLeftIn = -5;
+        n.shootHeadingDeg = -40;
+        assertTrue(TeleOpSettings.parse(n.format()).hasShootPose());
     }
 
     @Test

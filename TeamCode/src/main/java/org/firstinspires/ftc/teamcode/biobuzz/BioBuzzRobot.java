@@ -44,6 +44,12 @@ public class BioBuzzRobot {
     public double lastIndexerPower = 0;
     private double launcherTarget = 0;
     private final ElapsedTime launcherTimer = new ElapsedTime();
+    private final LauncherGate launcherGate = LauncherGate.standard();
+    private final ElapsedTime clock = new ElapsedTime();
+    private boolean readyCached = false;
+    private double readyAt = -1;
+    /** launcherReady() reuses its last answer for this long: one decision per loop, the same one logs and checks see. */
+    static final double READY_CACHE_SEC = 0.03;
 
     public enum ArmState { UNKNOWN, STOWED, DEPLOYED }
     private ArmState armState = ArmState.UNKNOWN;
@@ -161,6 +167,9 @@ public class BioBuzzRobot {
             }
             launcherOn = false;
             launcherTarget = 0;
+            launcherGate.reset();
+            readyCached = false;
+            readyAt = -1;
             return;
         }
         if (!launcherOn) {
@@ -169,7 +178,11 @@ public class BioBuzzRobot {
             launcherTimer.reset();
             launcherOn = true;
         }
-        launcherTarget = Range.clip(ticksPerSecond, 0, LAUNCHER_MAX_VELOCITY);
+        double newTarget = Range.clip(ticksPerSecond, 0, LAUNCHER_MAX_VELOCITY);
+        if (newTarget != launcherTarget) {
+            readyAt = -1;                                       // a new target must qualify on its own
+        }
+        launcherTarget = newTarget;
         launcher.setVelocity(launcherTarget);
     }
 
@@ -185,8 +198,34 @@ public class BioBuzzRobot {
         return launcher.getVelocity();
     }
 
+    /**
+     * Ready to fire the next ball: speed within LAUNCHER_READY_TOLERANCE of the target for LAUNCHER_READY_HOLD_SEC
+     * (see {@link LauncherGate}). Op modes decide once per loop with {@link #updateLauncherReady()} (right after setting
+     * the speed); this returns that answer for READY_CACHE_SEC, so logs and checks in the same loop see the same one.
+     * A new target speed always forces a fresh decision.
+     */
     public boolean launcherReady() {
-        return launcherOn && launcherVelocity() >= launcherTarget - LAUNCHER_READY_MARGIN;
+        if (readyAt >= 0 && clock.seconds() - readyAt < READY_CACHE_SEC) {
+            return readyCached;
+        }
+        return updateLauncherReady();
+    }
+
+    /** Re-decides now (with a fresh speed reading); launcherReady() calls this when its last answer is too old. */
+    public boolean updateLauncherReady() {
+        readyAt = clock.seconds();
+        if (!launcherOn) {
+            launcherGate.reset();
+            readyCached = false;
+        } else {
+            readyCached = launcherGate.update(readyAt, launcherTarget, launcherVelocity());
+        }
+        return readyCached;
+    }
+
+    /** True when the last {@link #launcherReady()} was only allowed by the 1 s fallback (speed not settled). */
+    public boolean launcherReadyByFallback() {
+        return launcherOn && launcherGate.usedFallback();
     }
 
     /** Non-null when the launcher has had time to spin up but its encoder reading makes no sense. */

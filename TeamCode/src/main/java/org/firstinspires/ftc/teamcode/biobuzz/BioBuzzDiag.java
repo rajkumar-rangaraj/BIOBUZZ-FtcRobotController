@@ -37,7 +37,7 @@ public class BioBuzzDiag {
                 "pw_lf", "pw_rf", "pw_lb", "pw_rb", "enc_lf", "enc_rf", "enc_lb", "enc_rb",
                 "fwd_in", "right_in", "intake_pw", "indexer_pw", "indexer_ticks",
                 "launcher_on", "launcher_target", "launcher_vel", "launcher_ready",
-                "arm_state", "arm_cmd", "aim_cell", "aim_tags", "aim_bearing", "aim_range_in", "note");
+                "arm_state", "arm_cmd", "aim_cell", "aim_tags", "aim_bearing", "aim_range_in", "aim_floor_in", "note");
         events = new CsvLog("events_" + opMode, "t", "event", "detail");
         event("START", opMode);
     }
@@ -79,6 +79,7 @@ public class BioBuzzDiag {
                 r.armState(), r.flowerArm.getPosition(),
                 target == null ? "" : target.cell, target == null ? 0 : target.tagCount,
                 target == null ? "" : target.bearingDeg, target == null ? "" : target.rangeIn,
+                target == null ? "" : target.horizontalIn(),
                 note == null ? "" : note);
         maxLoopMs = 0;
         String w = r.launcherWarning();

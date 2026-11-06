@@ -282,7 +282,7 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             double turn = target == null ? 0 : HiveVision.aimTurnCw(target.bearingDeg);
             double fwd = 0;
             if (target != null && spot.hasSpot() && !spot.hasShootPose()) {   // taught position: already there
-                fwd = MotionController.spotForward(target.rangeIn, spot.spotRangeIn);
+                fwd = MotionController.spotForward(target.horizontalIn(), spot.spotRangeIn);
                 double moved = forwardInches() - f0;
                 if ((fwd > 0 && moved >= AUTO_SPOT_MAX_IN) || (fwd < 0 && moved <= -AUTO_SPOT_MAX_IN)) {
                     fwd = 0;
@@ -296,8 +296,8 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
             } else {
                 settled = 0;
             }
-            telemetry.addData("Target", target == null ? "none" : String.format("%s bearing %.1f range %.0f",
-                    target.cell, target.bearingDeg, target.rangeIn));
+            telemetry.addData("Target", target == null ? "none" : String.format("%s bearing %.1f floor %.0f",
+                    target.cell, target.bearingDeg, target.horizontalIn()));
             loopTick();
         }
         robot.stopDrive();
@@ -315,32 +315,29 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         ShotFeeder feeder = ShotFeeder.fromSettings(spot);
         double end = Math.min(clock.seconds() + AUTO_FEED_TIMEOUT_SEC, matchDeadlineSec);
         robot.setIntake(FEED_INTAKE_BOOST);                     // as TeleOp: the intake pushes the balls through
-        int balls = 0;                                          // counted from flywheel slowdowns
-        boolean dipping = false;
+        BallCounter counter = BallCounter.forAuto();            // balls from flywheel slowdowns after a fed pocket
         while (opModeIsActive() && clock.seconds() < end && feeder.shots() < AUTO_FEED_POCKETS
                 && feeder.state() != ShotFeeder.State.JAMMED
-                && !(balls >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
+                && !(counter.balls() >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
             int ticks = robot.indexerTicks();
+            double now = clock.seconds();
             robot.drive(0, 0, MotionController.holdTurnCw(aimedHeading, headingDeg()), 1.0);
-            robot.setIndexerPower(feeder.update(clock.seconds(), ticks, robot.launcherReady(), true));
+            robot.setIndexerPower(feeder.update(now, ticks, robot.updateLauncherReady(), true));
             double velocity = robot.launcherVelocity();
-            if (!dipping && velocity < launchTps() - AUTO_SHOT_DIP_TPS) {
-                dipping = true;
-                balls++;
-                log.row(clock.seconds() - matchStart, "EVENT", "BALL " + balls, "launcher", velocity);
-            } else if (dipping && velocity > launchTps() - AUTO_SHOT_DIP_TPS / 2) {
-                dipping = false;
+            if (counter.update(now, feeder.state() == ShotFeeder.State.FEEDING, launchTps(), velocity)) {
+                log.row(now - matchStart, "EVENT", "BALL " + counter.balls(), "launcher", velocity);
             }
             if (feeder.event() != null) {
-                log.row(clock.seconds() - matchStart, "EVENT", feeder.event(), "ticks", ticks);
+                log.row(now - matchStart, "EVENT", feeder.event(), "ticks", ticks);
             }
-            step = String.format("FIRE %d balls, pocket %d/%d %s", balls, feeder.shots(), AUTO_FEED_POCKETS, feeder.state());
+            step = String.format("FIRE %d balls, pocket %d/%d %s", counter.balls(), feeder.shots(), AUTO_FEED_POCKETS,
+                    feeder.state());
             loopTick();
         }
         robot.setIndexerPower(0);
         robot.setIntake(0);
-        log.row(clock.seconds() - matchStart, "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %s",
-                balls, feeder.shots(), feeder.jams(),
+        log.row(clock.seconds() - matchStart, "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %d dips ignored, %s",
+                counter.balls(), feeder.shots(), feeder.jams(), counter.ignoredDips(),
                 feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED" : (clock.seconds() >= end ? "timeout" : "ok")));
     }
 

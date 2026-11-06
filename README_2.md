@@ -258,11 +258,31 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 
 **SHOT SPOT (TeleOp):**
 1. Pick the alliance whose HIVE tags you can see. At home that's the practice goal's tags; tags 42–45 are BLUE.
-2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera distance and the current shot speed.
+2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera's floor distance to the CELL and the current shot speed.
 3. Later, **hold X**: the robot turns to the HIVE, drives to the saved distance and sets the saved speed. The controller rumbles and the screen shows **ON SPOT - FIRE**.
 4. Push the left stick forward or back to take over the driving.
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
+
+**Shooting with the printed hood (5 Nov 2026):**
+- **Speeds:** NEAR **1150 t/s** scores from about 28 to 42 in (ball exit to the CELL opening, horizontal), FAR **1240 t/s** from about 46 to 54 in.
+  - They come from `tools/shot_model.py`: upward CELL lips 53.5 / 65.1 in from the field CAD, 74° exit 9 in above the tiles, drag and topspin included.
+  - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press).
+- **FIRE waits** until the flywheel has held within ±30 t/s of the target for 0.1 s.
+  - The old rule (at least target − 100) was much looser.
+  - The ball would score within about ±4.7 % of the right speed.
+  - If the speed can't settle for 1 s but stays between 60 t/s below and 30 t/s above the target, FIRE goes anyway. The screen then shows `READY (speed not settled)` and the log records `READY_FALLBACK`. Too fast never fires (e.g. just after FAR → NEAR).
+- **Aim gate:** while our CELL is in view, FIRE also waits until the aim is within 2.0° and the robot has stopped turning. While X drives to a saved SHOT SPOT, it also waits for the right distance (not when the arm is out or you push the left stick).
+  - The screen shows `FIRE HELD` and the reason (which way to turn, "turning", or "driving to the SHOT SPOT"). Holding X aims for you.
+  - If the CELL drops out of view, the hold lasts 0.75 s more. After that (no CELL), it's the driver's call.
+  - It never holds forever: 1.5 s after it first holds back a ready ball, that ball goes anyway (log `AIM_GIVEWAY`). Every ball gets its own 1.5 s; a READY flicker doesn't restart the clock. The flywheel speed rule still applies. If the SHOT SPOT can't be reached, the distance gives way first (until FIRE is let go), and the aim and turning checks still get their own 1.5 s, so a ball never leaves while the robot is turning.
+  - Turn it off in INIT with **X / Square** (e.g. camera knocked). The INIT screen shows `Aim gate ON/OFF` and the `CONFIG` log shows `aim_gate=on/off`.
+- **Flywheel P is 100 (was 40),** so it recovers from a shot in about 0.2 s instead of about 0.6 s. If READY flickers with no balls, step P back toward 40 in `BioBuzzConstants`.
+- **Ball counting** (AUTO, Tune) now counts a dip of 35 t/s (was 60), because the faster flywheel dips less. The dip is measured from the speed the flywheel really holds, must last 60 ms (one odd reading is never a ball) and must start while a pocket turns or up to 0.6 s after it (AUTO: one ball per pocket). Spin-up, speed changes and reading noise are never balls. AUTO logs the real-looking dips it ignored in `FIRE done`; if that number is high, the window or the dip size needs tuning (Shot Log shows the dips).
+- **Old spots are dropped.** Spots saved before this change (SDK camera range, polycarbonate-hood speeds) are ignored, and so is AUTO's taught position. After fitting the printed hood:
+  1. Save the SHOT SPOT again (Share).
+  2. Teach AUTO again (LB + Share, below).
+  3. Check the aim trim again in `BioBuzz Tune`. The new hood can throw slightly left or right.
 
 **Teach AUTO its exact shooting position (LB + Share):**
 1. Put the robot at the AUTO start position.
