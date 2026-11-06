@@ -284,6 +284,13 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   2. Teach AUTO again (LB + Share, below).
   3. Check the aim trim again in `BioBuzz Tune`. The new hood can throw slightly left or right.
 
+**Windmill feed fixes (6 Nov 2026, from the 31 Oct – 1 Nov robot logs; reviewed by Opus 5.5 and GPT-6.1):**
+- **No more catch-up pushes.** After a jam or an unjam (B / Circle), the old code still aimed one pocket further each time. The next push was then 2–7 pockets long (157 of 832 logged pushes turned more than 1.5 pockets forward), and after a jam it could feed the stuck ball and the next one together. Now a pocket that was cut short is finished first (its own boundary, however close; even 1 tick short at the 1 s timeout is a jam, because its ball may not have left). After an unjam of up to about one pocket, the windmill goes back to the next pocket that hasn't fired. If that is more than 2 pockets away, it goes to the first boundary ahead and steps forward one pocket per push (a pocket turned back further can pass the intake and be reloaded).
+- **A stuck windmill gets a bit more power.** 8 % of pockets stalled near their end, where the power had ramped down to 0.15–0.2, and waited 1 s for the jam timeout (33 jams in two days, 6 times it gave up). If the windmill hasn't moved for 0.15 s, the power now goes up 0.1 at a time until it moves. The extra stays for that pocket but fades out over its last quarter, so the windmill still reaches the boundary slowly. Log event `STUCK`.
+- **The jam back-off is shorter.** It used to turn back 1.5–3.3 pockets in its 0.25 s; now it stops after a quarter pocket (about half a pocket with braking and the 60–76 ms loop).
+- **The hand-over to the flywheel is left as it is.** In `goBildaStarter/handover_sim.py` (ball path from the robot CAD, all four vanes in 3-D, windmill speeds fitted to the logs), the ramp gets the ball into the flywheel during the push at 98–100 % of windmill stop angles; 96 % for a 71 mm ball if the windmill is 30 % slower. That is a model: the first practice logs confirm it.
+- **Check it after practice:** `python tools/windmill_logs.py <folder with the diag_teleop_*.csv and events_teleop_*.csv files>` lists aimed push lengths (TeleOp now logs the target as `FEEDING <ticks>` in the diag note), measured forward strokes, stalls, late dips, pushes that may have fed two balls (two dips, or one dip deeper than 160 t/s; two balls 0.1–0.3 s apart make one dip) and STUCK / JAM events. Old logs: 40 late dips, 7 two-dip and 24 extra-deep pushes, 33 jams.
+
 **Teach AUTO its exact shooting position (LB + Share):**
 1. Put the robot at the AUTO start position.
 2. INIT `BioBuzz TeleOp` there. This zeroes the Pinpoint.

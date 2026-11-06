@@ -336,7 +336,7 @@ public class BioBuzzTeleOp extends OpMode {
             setStatus("20 s left - PARK in the LOADING ZONE");
             diag.event("ENDGAME_WARNING", "20 s left");
         }
-        diag.sample(robot, gamepad1, target, feeding ? "FEEDING" : (gamepad1.b ? "UNJAM" : ""));
+        diag.sample(robot, gamepad1, target, feeding ? "FEEDING " + Math.round(feeder.targetTicks()) : (gamepad1.b ? "UNJAM" : ""));
 
         // ---------------- Telemetry ----------------
         telemetry.addData("Alliance", alliance);

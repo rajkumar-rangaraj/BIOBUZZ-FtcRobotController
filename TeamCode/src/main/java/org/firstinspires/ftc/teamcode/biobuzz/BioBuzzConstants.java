@@ -99,12 +99,12 @@ public final class BioBuzzConstants {
     // late (one 13-54 ms loop = up to 80 ticks at that speed). Power now falls in proportion to the ticks left over the\r
     // whole pocket, so the boundary is reached slowly (simulated: 87..110 ticks per shot, error never adds up):
     public static final double INDEXER_RAMP_TICKS = INDEXER_TICKS_PER_REV / INDEXER_POCKETS;   // one pocket
-    public static final double INDEXER_MIN_POWER = 0.15;                         // CALIBRATE: must still turn with a ball
+    public static final double INDEXER_MIN_POWER = 0.15;                         // CALIBRATE: must still turn with a ball (stuck 0.15 s: ShotFeeder adds 0.1 steps)
     public static final double INDEXER_UNJAM_POWER = 0.35;
     // One ball per shot (ShotFeeder): one pocket, then wait for the flywheel before the next
     public static final double SHOT_MIN_INTERVAL_SEC = 0.35;                     // CALIBRATE with BioBuzz Shot Log
     public static final double SHOT_POCKET_TIMEOUT_SEC = 1.0;                    // a pocket taking longer = jam
-    public static final double SHOT_UNJAM_SEC = 0.25;                            // back-off time after a jam
+    public static final double SHOT_UNJAM_SEC = 0.25;                            // back-off time after a jam (stops after a quarter pocket)
     public static final int SHOT_MAX_JAMS = 3;
 
     // ---------------- Intake ----------------

@@ -3,7 +3,10 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 /**
  * Fires one ball at a time: turn the windmill exactly one pocket, then wait until the flywheel is back at speed (and a
  * minimum gap has passed) before the next pocket. A pocket that doesn't finish in time is a jam: back off briefly and
- * retry; after too many jams it stops and waits for the fire request to be released.
+ * retry the same pocket; after too many jams it stops and waits for the fire request to be released.
+ * A windmill that stops moving during a pocket (the ramp's low power near the end can't push a ball past a tight spot)
+ * gets more power, step by step, until it moves again. A pocket cut short (jam, unjam) is finished first; only a windmill
+ * more than MAX_PUSH_POCKETS behind its next pocket goes to the first boundary ahead (no catch-up over many pockets).
  * No FTC SDK dependency, so it is unit-tested on the laptop.
  */
 public class ShotFeeder {
@@ -12,6 +15,24 @@ public class ShotFeeder {
 
     /** A pocket is done once the encoder reaches its boundary (slow approach: overshoot is small and never adds up). */
     static final double STOP_TOLERANCE_TICKS = 0;
+    /** A new pocket boundary must be at least this far ahead (pockets), otherwise the one after it is used. */
+    static final double MIN_PUSH_POCKETS = 0.25;
+    /** One push never aims further ahead than this (pockets): further back (a long back-off or the driver's unjam), the
+     *  windmill goes to the first boundary ahead and steps forward one pocket per push. A pocket turned back more than
+     *  about one pocket can pass the intake and be reloaded (old logs: long pushes after an unjam made extra-deep, long
+     *  flywheel dips = several balls). The old code aimed one pocket further at every jam (2-7 pocket pushes). */
+    static final double MAX_PUSH_POCKETS = 2.0;
+    /** No forward movement for this long while feeding = stuck (logs: 8 % of pockets stalled at 0.15-0.2 power). */
+    static final double STUCK_SEC = 0.15;
+    static final double STUCK_MIN_TICKS = 2;
+    /** Stuck: the power goes up this much every STUCK_SEC until the windmill moves (at most the feed power) and keeps
+     *  that extra for the rest of the pocket, fading out over the last STUCK_FADE_POCKETS, so it breaks free with just
+     *  enough power and still reaches the boundary as slowly as the plain ramp. */
+    static final double STUCK_POWER_STEP = 0.10;
+    static final double STUCK_FADE_POCKETS = 0.25;
+    /** The automatic back-off after a jam also stops once the windmill has turned back this far (pockets). The check
+     *  runs once per loop, so with 60-76 ms loops and braking the real back-off is about twice this. */
+    static final double UNJAM_MAX_POCKETS = 0.25;
 
     private final double pocketTicks;
     private final double feedPower;
@@ -28,6 +49,13 @@ public class ShotFeeder {
     private int pocketStartTicks = 0;
     private double targetTicks = 0;
     private boolean haveTarget = false;
+    private boolean lastPocketDone = true;                      // false while a pocket is unfinished (fed, jam, unjam)
+    private int progressTicks = 0;                              // stuck check: last forward progress while feeding
+    private double progressTime = 0;
+    private double lastStepUp = 0;
+    private double extraPower = 0;                              // added to the ramp after the windmill got stuck
+    private boolean stuckReported = false;
+    private int unjamStartTicks = 0;
     private double lastShotTime = -1e9;
     private int shots = 0;
     private int jams = 0;
@@ -97,35 +125,55 @@ public class ShotFeeder {
                     if (!haveTarget) {                          // first shot: pockets are counted from here
                         targetTicks = indexerTicks;
                         haveTarget = true;
+                        lastPocketDone = true;
                     }
-                    targetTicks += pocketTicks;                 // next pocket boundary - errors never add up
-                    while (targetTicks - indexerTicks < pocketTicks / 2) {
-                        targetTicks += pocketTicks;             // already (nearly) past it: aim for the next one
-                    }
+                    targetTicks = nextTarget(indexerTicks);     // pocket boundaries stay on one grid: errors never add up
+                    lastPocketDone = false;
+                    progressTicks = indexerTicks;
+                    progressTime = t;
+                    lastStepUp = t;
+                    extraPower = 0;                             // a retry steps up again: kept extra power overshoots
+                    stuckReported = false;
                     go(State.FEEDING, t);
-                    power = feedPower;
+                    power = rampPower(targetTicks - indexerTicks);
                 }
                 break;
             case FEEDING:                                       // a pocket, once started, is always finished
                 double remaining = targetTicks - indexerTicks;
-                power = Math.max(minPower, Math.min(feedPower, feedPower * remaining / rampTicks));
+                if (indexerTicks - progressTicks >= STUCK_MIN_TICKS) {
+                    progressTicks = indexerTicks;
+                    progressTime = t;
+                } else if (t - Math.max(progressTime, lastStepUp) >= STUCK_SEC) {
+                    lastStepUp = t;
+                    extraPower = Math.min(extraPower + STUCK_POWER_STEP, feedPower);   // kept for the rest of this pocket
+                    if (!stuckReported) {
+                        event = "STUCK at " + Math.abs(indexerTicks - pocketStartTicks) + " of "
+                                + Math.round(targetTicks - pocketStartTicks) + " ticks - more power";
+                        stuckReported = true;
+                    }
+                }
+                double ramp = rampPower(remaining);
+                double fade = Math.max(0, Math.min(1, remaining / (STUCK_FADE_POCKETS * pocketTicks)));
+                power = Math.min(Math.max(ramp, feedPower), ramp + extraPower * fade);
                 if (remaining <= STOP_TOLERANCE_TICKS) {
                     shots++;
                     lastShotTime = t;
+                    lastPocketDone = true;
                     event = "SHOT " + shots;
                     power = 0;
                     go(wantFire ? State.WAIT_READY : State.IDLE, t);
-                } else if (t - stateStart > pocketTimeoutSec) {
+                } else if (t - stateStart > pocketTimeoutSec) {         // even 1 tick short: its ball may not have left
                     jams++;
                     event = "JAM " + jams + " (windmill moved " + Math.abs(indexerTicks - pocketStartTicks)
-                            + " of " + Math.round(pocketTicks) + " ticks)";
+                            + " of " + Math.round(targetTicks - pocketStartTicks) + " ticks)";
                     power = -unjamPower;
+                    unjamStartTicks = indexerTicks;
                     go(State.UNJAM, t);
                 }
                 break;
             case UNJAM:
                 power = -unjamPower;
-                if (t - stateStart >= unjamSec) {
+                if (t - stateStart >= unjamSec || unjamStartTicks - indexerTicks >= UNJAM_MAX_POCKETS * pocketTicks) {
                     power = 0;
                     if (jams >= maxJams) {
                         event = "JAMMED - gave up after " + jams + " tries";
@@ -146,16 +194,45 @@ public class ShotFeeder {
         return power;
     }
 
+    /**
+     * The pocket boundary to feed to: the same one again if the last pocket was cut short (jam, unjam) and its boundary
+     * is still ahead, however close; otherwise the next one, at least MIN_PUSH_POCKETS ahead. Never more than
+     * MAX_PUSH_POCKETS ahead: then the first boundary ahead of the windmill (no catch-up push over missed pockets).
+     */
+    private double nextTarget(int indexerTicks) {
+        double next = targetTicks;
+        if (lastPocketDone || next <= indexerTicks) {
+            next += pocketTicks;
+            while (next - indexerTicks < MIN_PUSH_POCKETS * pocketTicks) {
+                next += pocketTicks;                            // already (nearly) past it: aim for the next one
+            }
+        }
+        if (next - indexerTicks > MAX_PUSH_POCKETS * pocketTicks) {
+            next = targetTicks + Math.floor((indexerTicks - targetTicks) / pocketTicks + 1) * pocketTicks;
+        }
+        return next;
+    }
+
+    /** Power that falls in proportion to the ticks left, so the windmill reaches the boundary slowly. */
+    private double rampPower(double remaining) {
+        return Math.max(minPower, Math.min(feedPower, feedPower * remaining / rampTicks));
+    }
+
     private void go(State s, double t) {
         state = s;
         stateStart = t;
     }
 
-    /** Forget jams and go idle (e.g. the driver used the manual unjam). */
+    /** Forget jams and go idle (e.g. the driver used the manual unjam). A pocket cut short is finished next time. */
     public void reset() {
         state = State.IDLE;
         jams = 0;
         power = 0;
+    }
+
+    /** Pocket boundary the windmill is fed to (encoder ticks; only meaningful once a pocket has been fed). */
+    public double targetTicks() {
+        return targetTicks;
     }
 
     public State state() {
