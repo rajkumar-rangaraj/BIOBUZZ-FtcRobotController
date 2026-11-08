@@ -226,6 +226,17 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - Use short routes (shoot / collect / park), not the full 40 s tour.
 - Allow turning legs, which needs a rotated-footprint keep-out.
 
+## 8b. Branch `auto-work`: new Pedro AUTO (7 Nov, not on the robot yet)
+
+`field-tour` merged into `auto-work` (Pedro + FieldMap). New package `teamcode/auto/`; team card `AUTO.md`.
+- **User decisions (7 Nov):** shoot the pre-loads first, then collect our GARDEN, stretch = shoot again, PARK always (deadline 24 s, INIT LB/RB 18–27). The LOADING ZONE is split into slot **A (corner end)** / **B (middle end)**, agreed with the partner before each match. Two start spots picked in INIT. Don't hit the partner.
+- **Field CAD read with OCP** (`C:\repo\goBildaStarter\field_cad\x\field-cad-step.step`; script in the session folder `cad_probe.py`). CAD x = field X, CAD z = −field Y, CAD y = up (mm). RED: LOADING ZONE x −70.5…−59.1, y 24.9…45.6; GARDEN = 4 POLLEN against the audience wall, y −69.3, x −69.3…−60.6; **the up CELL at the start (RED AUDIENCE) is at x −23.3…−2.1, y −1.6…−20.1, and its opening faces the AUDIENCE wall**, so the straight-on spot is x −12.7 with the intake against the audience wall. BLUE = RED turned 180°.
+- **Rules applied:** G304 (start touching the wall, own side, not in the zone, not on a FLOWER), G407 (max 4 balls: GARDEN only after the windmill is empty), G417 (no shots into a DOWN CELL: camera `heightIn()` ≥ 45), G402 (own side only).
+- `AutoPlanner`: routes, time estimates, `parkStartSec` = min(user deadline, 30 − 1 − drive time to the slot), footprint check (walls, own side, HIVE frame + 2 in, FLOWERs + 1 in, partner slot + 1.5 in). The tests park from 100+ points along every route.
+- Op mode: Pedro drive (`linear` heading = the short way), aim by `follower.hold` + camera bearing, fire with ShotFeeder/BallCounter, BLOCKED 1 s → park (or wait and re-plan while parking). Without Pedro or Pinpoint READY: fallback LEAVE 8 in on the wheel encoders. Old AUTO renamed `OLD AUTO RED/BLUE`.
+- Planned times (S1 start): fire done ~9 s, GARDEN ~13.5 s, back at the spot ~16 s, park 4.2–4.9 s from 24 s.
+- **To check on the field:** robot half-length/half-width (9/9 assumed), intake reach in the GARDEN sweep (`GARDEN_SIDE_GAP_IN`), the CELL height threshold, parking next to a partner.
+
 ## 9. Driver Hub freezes (REV support case, 2026-11-02)
 
 - **Symptom:** the Driver Hub becomes unresponsive and needs a restart. This happened during the 1 Nov competition match.
