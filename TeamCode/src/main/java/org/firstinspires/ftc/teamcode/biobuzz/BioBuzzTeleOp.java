@@ -19,18 +19,22 @@ import com.qualcomm.robotcore.util.Range;
  *                         view) aimed, not turning and - while X drives to a SHOT SPOT - at its distance; a held ball
  *                         goes anyway 1.5 s after the hold starts (AimGate)
  *   X / Square   (hold)   HIVE auto-aim: camera turns the robot; with a saved SHOT SPOT it also drives to that
- *                         distance and sets the spot's shot speed (push the left stick to take over)
+ *                         distance (push the left stick to take over). Also switches the shot speed back to AUTO
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
  *   LB + Back / Share     same, AND teach AUTO this exact position (TeleOp must be INIT-ed at the AUTO start)
  *   Y / Triangle          launcher pre-spin ON/OFF
  *   A / Cross             flower arm DEPLOY / STOW (deploys only while the sticks are released)
  *   B / Circle   (hold)   unjam: windmill slowly backwards
- *   D-pad up / down       launcher FAR / NEAR preset
- *   D-pad right / left    launcher trim +/- LAUNCHER_TRIM_STEP ticks/s (15)
+ *   D-pad up / down       MANUAL shot speed FAR / NEAR (the camera distance is ignored until X is pressed)
+ *   D-pad right / left    shot speed trim +/- LAUNCHER_TRIM_STEP ticks/s (15); stays on top of AUTO for the match
+ *
+ * Shot speed AUTO (default): set from the camera's floor distance to our CELL (ShotSpeed, AUTO_SPEED_* table), kept
+ * 3 s after the CELL drops out of view, then the NEAR / FAR preset; it doesn't change while FIRE is held.
  *
  * During INIT: B / Circle = RED, A / Cross = BLUE (defaults to the alliance the last AUTO ran),
  *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2),
- *               X / Square = aim gate on/off (off = FIRE never waits for the camera).
+ *               X / Square = aim gate on/off (off = FIRE never waits for the camera),
+ *               Y / Triangle = auto shot speed on/off (off = NEAR / FAR presets only, as before 7 Nov).
  * While the arm is DEPLOYED, driving is limited to precision speed.
  */
 @TeleOp(name = "BioBuzz TeleOp", group = "BioBuzz")
@@ -53,6 +57,9 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean aimHoldBlipped = false;
     private boolean lastGiveWay = false;
     private final AimGate aimGate = AimGate.standard();
+    private final ShotSpeed shotSpeed = ShotSpeed.standard();
+    private double lastBaseSpeed = Double.NaN;
+    private boolean lastSpeedAuto = false;
     private boolean endgameWarned = false;
     private String status = "";
     private final ElapsedTime matchTimer = new ElapsedTime();
@@ -98,9 +105,15 @@ public class BioBuzzTeleOp extends OpMode {
         if (gamepad1.xWasPressed()) {
             aimGate.setEnabled(!aimGate.enabled());
         }
+        if (gamepad1.yWasPressed()) {
+            shotSpeed.setAutoEnabled(!shotSpeed.autoEnabled());
+        }
         telemetry.addData("Alliance", "%s   (B/Circle = RED, A/Cross = BLUE)  <-- CHECK", alliance);
         telemetry.addData("Aim gate", "%s   (X/Square toggles; OFF = fire without the camera check)",
                 aimGate.enabled() ? "ON" : "OFF");
+        telemetry.addData("Shot speed", "%s   (Y/Triangle toggles; OFF = NEAR/FAR presets only)",
+                !shotSpeed.autoEnabled() ? "presets only" : (vision == null ? "AUTO - camera missing, presets"
+                        : "AUTO from the camera distance"));
         telemetry.addData("Shot spot", settings.hasSpot()
                 ? String.format("%.0f in @ %.0f t/s (hold X to go there)", settings.spotRangeIn, settings.spotSpeed)
                 : "none saved (press Share at a spot that scores)");
@@ -117,12 +130,12 @@ public class BioBuzzTeleOp extends OpMode {
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
         diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
-                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f spot=%s aim_gate=%s",
+                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f spot=%s aim_gate=%s auto_speed=%s",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
                 settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
                 settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none",
-                aimGate.enabled() ? "on" : "off"));
+                aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off"));
         robot.stowArm();
     }
 
@@ -134,6 +147,8 @@ public class BioBuzzTeleOp extends OpMode {
         if (pinpoint != null) {
             pinpoint.update();
         }
+        HiveVision.Target target = vision == null ? null : vision.target(alliance, null);   // every loop: logged + shown
+        double floorIn = target == null ? Double.NaN : target.horizontalIn();
 
         // ---------------- Launcher ----------------
         if (gamepad1.yWasPressed()) {
@@ -144,12 +159,14 @@ public class BioBuzzTeleOp extends OpMode {
             launcherPreset = LAUNCHER_FAR_VELOCITY;
             presetName = "FAR";
             launcherTrim = 0;
-            diag.event("PRESET", "FAR " + LAUNCHER_FAR_VELOCITY);
+            shotSpeed.setManual(true);
+            diag.event("PRESET", "FAR " + LAUNCHER_FAR_VELOCITY + " (manual)");
         } else if (gamepad1.dpadDownWasPressed()) {
             launcherPreset = LAUNCHER_NEAR_VELOCITY;
             presetName = "NEAR";
             launcherTrim = 0;
-            diag.event("PRESET", "NEAR " + LAUNCHER_NEAR_VELOCITY);
+            shotSpeed.setManual(true);
+            diag.event("PRESET", "NEAR " + LAUNCHER_NEAR_VELOCITY + " (manual)");
         } else if (gamepad1.dpadRightWasPressed()) {
             launcherTrim += LAUNCHER_TRIM_STEP;
             diag.event("TRIM", String.format("%+.0f", launcherTrim));
@@ -158,7 +175,16 @@ public class BioBuzzTeleOp extends OpMode {
             diag.event("TRIM", String.format("%+.0f", launcherTrim));
         }
         boolean fire = gamepad1.right_bumper;
-        double launcherTarget = Range.clip(launcherPreset + launcherTrim, 0, LAUNCHER_MAX_VELOCITY);
+        double baseSpeed = shotSpeed.update(matchTimer.seconds(), target == null ? null : target.cell, floorIn, fire,
+                launcherPreset);
+        boolean speedAuto = shotSpeed.source() == ShotSpeed.Source.AUTO || shotSpeed.source() == ShotSpeed.Source.AUTO_KEPT;
+        if (baseSpeed != lastBaseSpeed || speedAuto != lastSpeedAuto) {
+            diag.event("SPEED", String.format("%s %.0f%s", shotSpeed.source(), baseSpeed,
+                    speedAuto ? String.format(" (%.1f in %s)", shotSpeed.lastDistanceIn(), shotSpeed.cell()) : ""));
+            lastBaseSpeed = baseSpeed;
+            lastSpeedAuto = speedAuto;
+        }
+        double launcherTarget = Range.clip(baseSpeed + launcherTrim, 0, LAUNCHER_MAX_VELOCITY);
         robot.setLauncherVelocity(launcherToggledOn || fire ? launcherTarget : 0);
         boolean ready = robot.updateLauncherReady();            // one fresh decision per loop; logs reuse it
         if (!robot.isLauncherOn()) {
@@ -209,17 +235,23 @@ public class BioBuzzTeleOp extends OpMode {
         double forward = -gamepad1.left_stick_y * scale;
         double strafe = gamepad1.left_stick_x * scale;
         double turn = gamepad1.right_stick_x * scale;
-        HiveVision.Target target = vision == null ? null : vision.target(alliance, null);   // every loop: logged + shown
         boolean aim = gamepad1.x;
-        if (aim && !lastAim && settings.hasSpot()) {
-            launcherPreset = settings.spotSpeed;
-            presetName = "SPOT";
-            launcherTrim = 0;
-            diag.event("PRESET", "SPOT " + settings.spotSpeed);
+        if (aim && !lastAim) {
+            if (shotSpeed.autoEnabled() && vision != null) {
+                if (shotSpeed.manual()) {                       // aiming with the camera = the camera's shot speed again
+                    shotSpeed.setManual(false);
+                    launcherTrim = 0;
+                    diag.event("PRESET", "AUTO (camera distance)");
+                }
+            } else if (settings.hasSpot()) {                    // presets only: the SHOT SPOT's saved speed
+                launcherPreset = settings.spotSpeed;
+                presetName = "SPOT";
+                launcherTrim = 0;
+                diag.event("PRESET", "SPOT " + settings.spotSpeed);
+            }
         }
         boolean onSpot = false;
         boolean spotHold = false;                               // X is still driving to the saved distance
-        double floorIn = target == null ? Double.NaN : target.horizontalIn();
         if (aim && target != null) {
             turn = HiveVision.aimTurnCw(target.bearingDeg);
             if (settings.hasSpot()) {
@@ -340,8 +372,23 @@ public class BioBuzzTeleOp extends OpMode {
 
         // ---------------- Telemetry ----------------
         telemetry.addData("Alliance", alliance);
-        telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +%.0f, LEFT -%.0f)",
-                presetName, launcherPreset, launcherTrim, launcherTarget, LAUNCHER_TRIM_STEP, LAUNCHER_TRIM_STEP);
+        String speedName;
+        switch (shotSpeed.source()) {
+            case AUTO:
+                speedName = String.format("AUTO %.0f in", shotSpeed.lastDistanceIn());
+                break;
+            case AUTO_KEPT:
+                speedName = String.format("AUTO %.0f in (CELL lost)", shotSpeed.lastDistanceIn());
+                break;
+            case MANUAL:
+                speedName = "MANUAL " + presetName;
+                break;
+            default:
+                speedName = presetName + (shotSpeed.autoEnabled() ? " (no CELL)" : "");
+        }
+        telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +%.0f, LEFT -%.0f%s)",
+                speedName, baseSpeed, launcherTrim, launcherTarget, LAUNCHER_TRIM_STEP, LAUNCHER_TRIM_STEP,
+                shotSpeed.manual() ? "; X = camera speed" : "");
         telemetry.addData("Launcher", "%s  actual %.0f t/s",
                 !robot.isLauncherOn() ? "OFF" : (ready ? (fallback ? "READY (speed not settled)" : "READY") : "settling"),
                 robot.launcherVelocity());

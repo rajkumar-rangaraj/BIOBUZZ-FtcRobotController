@@ -71,13 +71,25 @@ public final class BioBuzzConstants {
     public static final PIDFCoefficients LAUNCHER_PIDF = new PIDFCoefficients(100, 0, 0, 12.5);
     // Printed hood PPL1 (74 deg exit, 9 in high), upward CELL lips 53.5 / 65.1 in (field CAD), tools/shot_model.py:
     // 5.52 m/s scores from about 28 to 42 in (exit to the CELL opening, horizontal; +/-4.7 % at 30-36 in), 5.94 m/s
-    // from about 46 to 54 in (+/-3.6-3.8 %). Ball speed ~0.89 x half the tread speed -> 1150 / 1240 t/s. The 0.89 is
-    // the uncertain part (0.85-0.93; the old hood's 1250 t/s spot implies 0.86-0.89): CALIBRATE with one-ball test
-    // shots (BioBuzz Shot Log) and the D-pad trim. Old polycarbonate hood (66 deg): 1250 / 1450.
-    public static final double LAUNCHER_NEAR_VELOCITY = 1150;                    // CALIBRATE by test shots
-    public static final double LAUNCHER_FAR_VELOCITY = 1240;                     // CALIBRATE by test shots
+    // from about 46 to 54 in (+/-3.6-3.8 %). Two flywheel wheels (to 7 Nov): 1150 / 1240 t/s (ball speed ~0.89 x half
+    // the tread speed). ONE wheel since 7 Nov: the drivers trimmed to 1435-1495 t/s (median 1450) at 32-44 in and
+    // 1585 at 57 in (robot logs 7 Nov 12:51-13:12, good battery; 75 % scored) -> ball speed ~0.70 x half the tread speed.
+    // TeleOp normally sets the speed from the camera distance (AUTO_SPEED_* below); NEAR / FAR are the presets for no
+    // camera distance or a driver's manual choice, and AUTO's speed when no SHOT SPOT is saved.
+    public static final double LAUNCHER_NEAR_VELOCITY = 1450;                    // one wheel (was 1150 with two)
+    public static final double LAUNCHER_FAR_VELOCITY = 1570;                     // one wheel (was 1240); few FAR shots yet
     public static final double LAUNCHER_TRIM_STEP = 15;                          // D-pad RIGHT/LEFT; encoder reads in ~20 t/s steps
     public static final double LAUNCHER_MAX_VELOCITY = 2600;
+    // Auto shot speed (ShotSpeed): camera floor distance to our CELL (in) -> flywheel t/s. 30-57 in from the drivers'
+    // one-wheel shots of 7 Nov (above), in between and beyond shaped by tools/shot_model.py (flat to ~36 in, then
+    // ~0.6 %/in). Past ~57 in there are only 2 logged shots: CHECK 5 shots at ~50 and ~60 in, then adjust.
+    public static final double[] AUTO_SPEED_DIST_IN = {30, 36, 40, 44, 48, 52, 56, 60, 64};
+    public static final double[] AUTO_SPEED_TPS = {1440, 1450, 1465, 1490, 1525, 1555, 1585, 1610, 1640};
+    public static final double AUTO_SPEED_KEEP_SEC = 3.0;                        // keep the auto speed after the CELL is lost
+    public static final double AUTO_SPEED_HYSTERESIS = 10;                       // t/s: camera jitter can't move the target
+    // Two of our CELLs in view (6 Nov logs: REAR at 31 in and AUDIENCE at 66 in, both ~1 deg) made the "best" CELL flip
+    // every few frames. The auto speed stays on one CELL and moves to another only after it is gone this long.
+    public static final double AUTO_SPEED_SWITCH_SEC = 0.5;
     // Ready to fire (LauncherGate): within +/-30 t/s (2.6 %; the scoring window is about +/-4 %) for 0.1 s. If it can't
     // settle there for 1 s, the fallback fires anyway when the speed is between target - 60 and target + 30, so a weak
     // battery or a hunting speed can't block shooting. (P 100 keeps the steady error under ~16 t/s, so normally the

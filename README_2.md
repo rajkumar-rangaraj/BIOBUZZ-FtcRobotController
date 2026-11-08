@@ -259,13 +259,33 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 **SHOT SPOT (TeleOp):**
 1. Pick the alliance whose HIVE tags you can see. At home that's the practice goal's tags; tags 42–45 are BLUE.
 2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera's floor distance to the CELL and the current shot speed.
-3. Later, **hold X**: the robot turns to the HIVE, drives to the saved distance and sets the saved speed. The controller rumbles and the screen shows **ON SPOT - FIRE**.
+3. Later, **hold X**: the robot turns to the HIVE and drives to the saved distance. The controller rumbles and the screen shows **ON SPOT - FIRE**.
+   - The speed comes from the camera (auto shot speed, below).
+   - The saved speed is used by AUTO, and by TeleOp only when the auto shot speed is OFF.
 4. Push the left stick forward or back to take over the driving.
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
 
+**One flywheel wheel + auto shot speed (7 Nov 2026):**
+- **One wheel.** Since 7 Nov noon the flywheel has one wheel (the other was removed) and the windmill is the printed PPW1.
+  - One wheel throws the ball slower at the same motor speed.
+  - In the 7 Nov diag logs (78 shots, good battery), the drivers trimmed to about 1440 t/s at 30–36 in, 1480 at 36–44 in and 1585–1600 at 52–60 in. With two wheels it was 1150–1240.
+- **Presets:** NEAR **1450 t/s** (was 1150), FAR **1570 t/s** (was 1240). AUTO uses NEAR when no SHOT SPOT is saved.
+- **Auto shot speed (TeleOp, ON by default).** The camera's floor distance to our CELL picks the speed from `AUTO_SPEED_DIST_IN` / `AUTO_SPEED_TPS` in `BioBuzzConstants`: 1440 t/s at 30 in, 1525 at 48 in, 1640 at 64 in (`ShotSpeed.java`).
+  - The speed moves only when the table speed is more than 10 t/s away, so camera jitter can't make the flywheel hunt.
+  - It doesn't change while RB (FIRE) is held. A new target would make the flywheel settle again in the middle of a burst.
+  - It follows one CELL. With two of our CELLs in view, it switches to the other one only after the first has been out of view for 0.5 s. In the 6 Nov logs the camera's best CELL flipped between 31 in and 66 in every few frames, which would have changed the speed 75–140 times a minute.
+  - When the CELL drops out of view, the speed stays for 3 s, then falls back to the NEAR / FAR preset (NEAR unless FAR was picked last).
+  - The D-pad trim (→ / ←, 15 t/s) stays on top of the auto speed for the whole match.
+- **D-pad ↑ / ↓ = MANUAL FAR / NEAR.** The camera is ignored until **X** is pressed (aiming with the camera = the camera's speed again; it also clears the trim).
+- **Screen:** the `Shot speed` line shows `AUTO 41 in 1465 +0 = 1465 t/s`, `AUTO 41 in (CELL lost)`, `MANUAL NEAR` or `NEAR (no CELL)`. The log has a `SPEED` event at every change.
+- **Switch:** in INIT, **Y / Triangle** turns it off (NEAR / FAR presets only, and X sets the SHOT SPOT speed as before). `CONFIG` shows `auto_speed=on/off`.
+- **To check:** above about 57 in the table has only 2 logged shots.
+  - Fire 5 balls at about 50 in and 5 at about 60 in, trim until they score, and put those speeds in the table.
+  - Use a battery at 12.5 V or more. With the weak battery (down to about 6 V under load), 24 of 56 balls left more than 30 t/s slow.
+
 **Shooting with the printed hood (5 Nov 2026):**
-- **Speeds:** NEAR **1150 t/s** scores from about 28 to 42 in (ball exit to the CELL opening, horizontal), FAR **1240 t/s** from about 46 to 54 in.
+- **Speeds (two flywheel wheels, until 7 Nov; see above for one wheel):** NEAR **1150 t/s** scores from about 28 to 42 in (ball exit to the CELL opening, horizontal), FAR **1240 t/s** from about 46 to 54 in.
   - They come from `tools/shot_model.py`: upward CELL lips 53.5 / 65.1 in from the field CAD, 74° exit 9 in above the tiles, drag and topspin included.
   - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press).
 - **FIRE waits** until the flywheel has held within ±30 t/s of the target for 0.1 s.
