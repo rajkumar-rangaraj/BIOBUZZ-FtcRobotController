@@ -226,7 +226,9 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - Use short routes (shoot / collect / park), not the full 40 s tour.
 - Allow turning legs, which needs a rotated-footprint keep-out.
 
-## 8b. Branch `auto-work`: new Pedro AUTO (7 Nov, not on the robot yet)
+## 8b. Branch `auto-work`: new Pedro AUTO (7 Nov; installed on the robot 9 Nov 11:17)
+
+**Installed 9 Nov 11:17:** `auto-work` `40c5ad0`. Hub `base.apk` MD5 = local APK. `BioBuzz AUTO RED/BLUE`, `OLD AUTO RED/BLUE` and `BioBuzz Field Tour` are registered, `Robot Status: running`, crash buffer empty. Not merged into `master` yet: test on the robot first, and commit the `field-tour` worktree's uncommitted `MEMORY.md` before merging.
 
 `field-tour` merged into `auto-work` (Pedro + FieldMap). New package `teamcode/auto/`; team card `AUTO.md`.
 - **User decisions (7 Nov):** shoot the pre-loads first, then collect our GARDEN, stretch = shoot again, PARK always (deadline 24 s, INIT LB/RB 18–27). The LOADING ZONE is split into slot **A (corner end)** / **B (middle end)**, agreed with the partner before each match. Two start spots picked in INIT. Don't hit the partner.
