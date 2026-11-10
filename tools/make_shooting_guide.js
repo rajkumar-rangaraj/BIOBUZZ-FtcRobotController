@@ -106,6 +106,19 @@ const c = [
     { text: 'ON SPOT - FIRE', bold: true }, '. The spot is a distance from the HIVE, so it works on both alliances and survives restarts. AUTO shoots at the saved speed.'], GREEN, '2E7D32'),
   warn('Share only saves when the camera sees your alliance\u2019s CELL tags (otherwise: \u201cCan\u2019t save the spot\u201d). Pushing the left stick forward/back while holding X takes over the driving.'),
 
+  h1('3c.  Teach the AUTO speeds in practice (LB + D-pad)'),
+  p('In BioBuzz TeleOp the robot logs every ball it launches: the camera distance, the speed, where the robot was. Tell it what each ball did, and the laptop works out the right speed for every distance (no more trimming by hand).'),
+  num(['In INIT, check the ', { text: 'Diagnostics log says ON', bold: true }, ' (it is on by default; Back / Share toggles it).'], 's5'),
+  num(['Shoot from different distances; the camera sets the speed (AUTO). After each ball press ', { text: 'LB + D-pad', bold: true },
+    ': UP = IN, DOWN = SHORT (too slow), RIGHT = LONG (too fast), LEFT = SIDE (left / right / bounced out: aim, not speed).'], 's5'),
+  num(['A buzz = saved. Two blips = no ball waiting (all labelled, or more than 10 s ago). A scout can call the results out; for a volley, label the balls in the order they flew. The \u201cBalls\u201d line shows the counts.'], 's5'),
+  num(['After practice, on the laptop: pull the logs (', { text: 'tools\\pull_robot_logs.ps1', font: 'Consolas' }, '), then run ',
+    { text: 'python tools/shot_results.py robot_logs <date>', font: 'Consolas' },
+    '. It shows every table distance with its IN / SHORT / LONG balls and proposes new speeds (a distance moves only with 3 or more labelled balls near it). ',
+    { text: '--write', font: 'Consolas' }, ' puts them into BioBuzzConstants.java; then rebuild and install.'], 's5'),
+  warn('Many SIDE balls = aim, not speed: check the aim trim in BioBuzz Tune. Use a good battery (12.5 V or more): a weak battery makes balls short and teaches the wrong speeds.'),
+  ok('At every distance you shoot from, most labels are IN and the tool proposes no more changes.'),
+
   new Paragraph({ children: [new PageBreak()] }),
   h1('4.  Camera and AIM check: BioBuzz Vision Test'),
   num('Robot on the tape. Select BioBuzz Vision Test, INIT, PLAY. B / Circle switches alliance \u2013 pick the HIVE you face.', 's4'),
@@ -165,7 +178,7 @@ const doc = new Document({
   styles: { default: { document: { run: { font: 'Arial', size: 22 } } } },
   numbering: { config: [{ reference: 'b', levels: [{ level: 0, format: LevelFormat.BULLET, text: '\u2022', alignment: AlignmentType.LEFT,
       style: { paragraph: { indent: { left: 400, hanging: 260 } } } }] },
-    ...['s1', 's2', 's3', 's4'].map(ref => ({ reference: ref, levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.LEFT,
+    ...['s1', 's2', 's3', 's4', 's5'].map(ref => ({ reference: ref, levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.LEFT,
       style: { paragraph: { indent: { left: 460, hanging: 300 } } } }] }))] },
   sections: [{
     properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1000, right: 1080, bottom: 1000, left: 1080 } } },

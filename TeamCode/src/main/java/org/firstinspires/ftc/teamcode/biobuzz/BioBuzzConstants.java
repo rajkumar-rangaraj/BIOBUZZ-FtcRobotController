@@ -104,6 +104,9 @@ public final class BioBuzzConstants {
     // goes to the oldest unlabelled ball of the last SHOT_LABEL_WINDOW_SEC; tools/shot_results.py turns labelled balls
     // into AUTO_SPEED_TPS corrections.
     public static final double SHOT_LABEL_WINDOW_SEC = 10.0;
+    // GRAB events (GrabTracker): the launcher current is read while a pocket turns, for this long after it and while a
+    // dip is measured (each read ~2-3 ms of loop time, so only while firing).
+    public static final double GRAB_WATCH_SEC = 0.8;
     // Ready to fire (LauncherGate): within +/-30 t/s (2.6 %; the scoring window is about +/-4 %) for 0.1 s. If it can't
     // settle there for 1 s, the fallback fires anyway when the speed is between target - 60 and target + 30, so a weak
     // battery or a hunting speed can't block shooting. (P 100 keeps the steady error under ~16 t/s, so normally the

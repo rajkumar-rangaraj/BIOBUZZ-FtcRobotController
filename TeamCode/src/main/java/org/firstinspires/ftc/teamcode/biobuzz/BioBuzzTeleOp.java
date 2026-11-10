@@ -71,6 +71,8 @@ public class BioBuzzTeleOp extends OpMode {
     private BioBuzzDiag diag = new BioBuzzDiag("teleop", false);
     private ShotFeeder feeder = ShotFeeder.standard();
     private final BallCounter ballCounter = BallCounter.forTuning();      // launched balls (flywheel dips), diagnostics
+    private final GrabTracker grabs = GrabTracker.standard();             // how the flywheel took each ball (GRAB event)
+    private double lastFeedingT = -1e9;
     private final ShotResults shotResults = new ShotResults(SHOT_LABEL_WINDOW_SEC);
     private final double[] velT = new double[24], velV = new double[24];   // recent flywheel readings: speed at launch
     private int velN = 0;
@@ -353,11 +355,12 @@ public class BioBuzzTeleOp extends OpMode {
         }
         lastGiveWay = giveWay;
         double intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
+        int indexerTicks = robot.indexerTicks();                // once per loop: the feeder and the grab log share it
         if (gamepad1.b) {
             feeder.reset();
             robot.setIndexerPower(-INDEXER_UNJAM_POWER);
         } else {
-            robot.setIndexerPower(feeder.update(matchTimer.seconds(), robot.indexerTicks(), ready, aimOk, fire));
+            robot.setIndexerPower(feeder.update(matchTimer.seconds(), indexerTicks, ready, aimOk, fire));
             String feedEvent = feeder.event();
             if (feedEvent != null) {
                 diag.event("FEED", feedEvent + String.format(" | launcher %.0f t/s", robot.launcherVelocity()));
@@ -390,7 +393,17 @@ public class BioBuzzTeleOp extends OpMode {
             lastSeenTarget = target;
             lastSeenTargetT = now;
         }
-        if (ballCounter.update(now, feeding, robot.isLauncherOn() ? robot.launcherTarget() : 0, flywheel)) {
+        // The grab (GrabTracker): the launcher current is read only around a pocket and while a dip is measured, so the
+        // extra ~2-3 ms per loop is spent only while firing.
+        if (feeding) {
+            lastFeedingT = now;
+        }
+        boolean watchGrab = robot.isLauncherOn() && (feeding || grabs.active() || now - lastFeedingT <= GRAB_WATCH_SEC);
+        double launcherAmps = watchGrab ? robot.launcherCurrentAmps() : Double.NaN;
+        robot.lastLauncherAmps = launcherAmps;
+        double flywheelTarget = robot.isLauncherOn() ? robot.launcherTarget() : 0;
+        grabs.sample(now, flywheel, flywheelTarget, indexerTicks, feeder.targetTicks(), feeding, launcherAmps);
+        if (ballCounter.update(now, feeding, flywheelTarget, flywheel)) {
             HiveVision.Target seen = now - lastSeenTargetT <= 1.0 ? lastSeenTarget : null;
             double ballFloorIn = seen == null ? Double.NaN : seen.horizontalIn();
             double table = Double.isNaN(ballFloorIn) ? Double.NaN : shotSpeed.tableSpeed(ballFloorIn);
@@ -402,17 +415,31 @@ public class BioBuzzTeleOp extends OpMode {
                 }
             }
             ShotResults.Ball ball = shotResults.launched(now, ballFloorIn, launcherTarget, launcherTrim, table);
+            grabs.ballCounted(now, ball.number);
+            double move = 0;
+            for (double p : robot.lastDrivePower) {
+                move = Math.max(move, Math.abs(p));
+            }
             diag.event("BALL", String.format("ball=%d cell=%s tags=%d floor_in=%.1f range_in=%.1f bearing=%.1f seen_ago_s=%.1f"
                             + " source=%s base=%.0f trim=%+.0f target=%.0f table=%.0f vel=%.0f dip=%.0f ready=%s fallback=%s"
-                            + " aim_gate=%s battery=%.2f imu_hdg=%.1f%s",
+                            + " aim_gate=%s battery=%.2f imu_hdg=%.1f move=%.2f turn_cmd=%+.2f aim_x=%s%s",
                     ball.number, seen == null ? "none" : seen.cell, seen == null ? 0 : seen.tagCount,
                     ballFloorIn, seen == null ? Double.NaN : seen.rangeIn, seen == null ? Double.NaN : seen.bearingDeg,
                     seen == null ? Double.NaN : now - lastSeenTargetT, shotSpeed.source(), baseSpeed, launcherTrim,
                     launcherTarget, table, launchVel, launchVel - lowVel, ready, fallback,
                     !aimGate.enabled() ? "off" : (aimGate.gaveWay() ? "gave_way" : "ok"), robot.battery.getVoltage(),
-                    MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit),
+                    MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit), move, turn, gamepad1.x,
                     pinpoint != null && pinpoint.ok() ? String.format(" pinpoint_fwd_in=%.1f pinpoint_left_in=%.1f pinpoint_hdg=%.1f",
                             pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg()) : ""));
+        }
+        for (GrabTracker.Grab g = grabs.poll(); g != null; g = grabs.poll()) {
+            diag.event("GRAB", String.format("ball=%d t_grab=%.3f gap_s=%.3f pre=%.0f target=%.0f launch_err=%+.0f min=%.0f"
+                            + " depth=%.0f energy=%.3f t_min_s=%.3f below_s=%.3f recovery_s=%.3f drops=%d overlapped=%s"
+                            + " target_changed=%s windmill_ticks_left=%.0f feeding=%s since_pocket_end_s=%.3f"
+                            + " amps_base=%.2f amps_peak=%.2f",
+                    g.ball, g.tStart, g.startGapSec, g.preTps, g.targetTps, g.launchErrorTps(), g.minTps, g.depthTps(),
+                    g.energyFraction(), g.tMin - g.tStart, g.belowSec, g.recoverySec, g.drops, g.overlapped,
+                    g.targetChanged, g.ticksToBoundary, g.feedingAtStart, g.sincePocketEndSec, g.baseAmps, g.peakAmps));
         }
 
         // ---------------- Match reminders ----------------
