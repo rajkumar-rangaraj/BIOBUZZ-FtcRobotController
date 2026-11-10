@@ -208,8 +208,9 @@ public class BioBuzzTeleOp extends OpMode {
             pinpoint.update();
         }
         // Field-centric: the IMU is read right after the Pinpoint, so the two headings agree while turning (FieldHeading
-        // compares them); the value is reused by the drive and telemetry below.
-        double imuNow = BioBuzzMatchState.fieldCentric || pinpoint != null ? robot.headingDeg() : Double.NaN;
+        // compares them); the value is reused by the drive and telemetry below. Read even while robot-centric: holding
+        // Options can turn field-centric on at any time (review 10 Nov).
+        double imuNow = robot.headingDeg();
         HiveVision.Target target = vision == null ? null : vision.target(alliance, null);   // every loop: logged + shown
         double floorIn = target == null ? Double.NaN : target.horizontalIn();
 

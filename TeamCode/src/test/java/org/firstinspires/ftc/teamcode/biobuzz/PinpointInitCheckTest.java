@@ -33,8 +33,30 @@ public class PinpointInitCheckTest {
         for (int k = 1; k <= 40; k++) {                                // turned 40 deg by hand, both gyros agree
             assertFalse(c.update(true, k, k));
         }
-        assertFalse("an IMU yaw flip is not a Pinpoint drift", c.update(true, 40, 40 - 180));
-        assertFalse(c.update(true, 40, -140));
+        for (int k = 41; k <= 180; k++) {                              // on to 180: the IMU flips at 90 meanwhile
+            double imu = k > 90 ? k - 180 : k;
+            assertFalse("k=" + k, c.update(true, MecanumMath.normalizeDegrees(k), imu));
+        }
+    }
+
+    @Test
+    public void anImuFlippingEveryLoopAtPlusMinus90DoesNotHideADrift() {
+        // final review 10 Nov: each flip restarted the comparison, so the drift was never seen
+        PinpointInitCheck c = new PinpointInitCheck(1, 3);
+        c.update(true, 0, 89.9);
+        boolean found = false;
+        for (int k = 1; k <= 20 && !found; k++) {                      // the Pinpoint drifts 0.1 deg a loop
+            found = c.update(true, 0.1 * k, k % 2 == 0 ? 89.9 : -89.9);
+        }
+        assertTrue(found);
+    }
+
+    @Test
+    public void anImuFlippingEveryLoopWithAStillPinpointIsFine() {
+        PinpointInitCheck c = new PinpointInitCheck(1, 3);
+        for (int k = 0; k < 200; k++) {
+            assertFalse(c.update(true, 0.01 * Math.sin(k), k % 2 == 0 ? 89.95 : -89.95));
+        }
     }
 
     @Test
