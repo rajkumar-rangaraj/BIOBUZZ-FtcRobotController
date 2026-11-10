@@ -359,6 +359,21 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
         - Screws: M4 × 16 + washer (the shroud gets washers too). Plate corners, shroud walls, nut-pocket and counterbore floors (2.4 mm) are fine if not over-tightened.
         - **Fusion:** `doc.save()` returned True and the doc shows no changes, but after 10+ minutes the cloud still lists v26 as the latest and `dataFile.isComplete` is False. The upload may be slow or retrying on the bad Wi-Fi. Check Fusion's Job Status and keep Fusion open; the repo scripts can rebuild the component anyway.
         - Renders: a Fusion viewport capture needs `cam.isFitView = False` and `cam.viewExtents` (cm), or it fits the whole robot. Hide `Camera_FOV_preview` (normally ON) for the capture and restore it afterwards.
+      - **v2.2 after the Opus 5.5 review (9 Nov evening; user: "review by opus 5.5 before the print, open Bambu Studio with proper settings, make it sturdy"):**
+        - **Review findings:** no blocking issues.
+          - The foot: under 1 MPa in a 10 g hit.
+          - Hole play: ±0.5 mm in y, the direction that matters.
+          - The 2.4 mm floors are only ever squeezed, the counterbores suit ISO 7380-1 heads, and warping risk is low.
+          - Recommended: layer bonding (260 °C, fan 20–35 %), `counterbore_hole_bridging = partiallybridge`, and solid infill (100 % zig-zag, no slower than 30 % gyroid; the slicer rejects 100 % gyroid).
+          - Check blind spots under the channel and in the towers, torque limits (M3 ≤ 0.4, M4 ≤ 1–1.5 N·m), press-fit back nuts (a 5.8 pocket prints ~5.65, the 5.5 nut falls out), and the optional R5 corners, 5 mm chamfer and round shroud holes. Also a 1 mm test-fit slice, and `filament_shrink` 99.7 % if the 128 mm hole spacing measures under 127.7.
+        - **Applied:** all of the above. `CORNER_R`, `FOOT_CHAMFER` 5, `M3_NUT_AF_PRESS` 5.6 (back two), `M4_HOLE_FOOT` 4.8 (plates and shroud). The check now has 42 regions, all clear.
+          - The x 116 foot nut sits beside goBILDA block `1205-0001-0005` inside the rear channel at x 120.0 (held by the existing x 124 screw). With a flat toward the block it ends at x 119.5; the block then stops it turning. Fallback: x 108 alone.
+          - Rear channel `1121-0010-0264:2` = x ±132, y 180–192, z ±24 (web at the back, open toward the front).
+        - **Jobs** (`make_electronics_v2_jobs.py`; the `J` helper now supports `FILAMENT_CHANGES`, listed for the filament in `different_settings_to_system`, and `check()` verifies them):
+          - Plates: 5.3 h, 252 g. Shroud: 1.2 h, 23.5 g. Test fit `Electronics_v2_Test_Fit_PPE4_1mm`: 0.7 h, 25 g.
+          - Settings: 5 walls, 5/5 shells, 100 % zig-zag, 3 mm brim (plates), 5 mm (shroud), nozzle 260 °C (first layer 245), fan 20–35 %.
+        - **Opened in Bambu Studio** (three windows; `single_instance` is false): it shows Bambu Lab P2S, 0.4 nozzle, Textured PEI, `* Bambu PETG Basic` and `* 0.20mm Standard @BBL P2S` (`*` = our changes kept).
+        - Fusion: saved again (v28 intended), but the cloud still lists v26 and `isComplete` is False. Check Job Status.
       - **Robot code `master` `ca1cbcf` (local, 107 tests):** `BioBuzzConstants.HUBS_ON_EDGE = false` → BACKWARD/LEFT; true → LEFT/FORWARD. Flip it ONLY after the rebuild, then check the heading in BioBuzz Calibration (CCW turn → heading increases). No install is needed until then.
 
 ## 8. Branch `field-tour`: Pedro Pathing "Field Tour" (test, later AUTO base)
@@ -478,7 +493,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - After the session: pull the logs and run `python tools/windmill_logs.py <logs> <date>`: late dips, two-ball pushes (two dips or one > 160 t/s), STUCK → SHOT, few JAMs. Turn a few pockets with an empty windmill: if STUCK appears without balls, raise `INDEXER_MIN_POWER`.
 - [ ] **Check the auto shot speed on the robot** (`b1cee74`, installed 7 Nov ~21:05): 5 shots at ~50 in and 5 at ~60 in, trim until they score, put the speeds into `AUTO_SPEED_TPS`; check the `SPEED` events in the logs. No SHOT SPOT is saved on the robot (`spot=none`), so AUTO shoots at NEAR 1450 until one is saved.
 - [ ] Retire the weak battery (sagged to ~6 V on 7 Nov). Optional: flywheel I term (steady error +30 / −40 t/s with the battery).
-- [ ] **Electronics v2.1:** print `bambu_p2s/Electronics_v2_*` (the hub plate job has the v2.1 feet since `5c62fcd`) and fit per `stl_electronics/README.md` (M4 × 16 + washer on the feet). Then set `HUBS_ON_EDGE = true` (`ca1cbcf`), install, check the IMU in BioBuzz Calibration, and check the Wi-Fi ping (§7).
+- [ ] **Electronics v2.2:** print (Bambu Studio windows were opened 9 Nov evening): first the 0.7 h test fit `Electronics_v2_Test_Fit_PPE4_1mm` against the left tower, then `Electronics_v2_Hub_Plates` (5.3 h, 252 g, solid) and `Electronics_v2_Switch_Shroud` (1.2 h). Fit per `stl_electronics/README.md` (M4 × 16 + washer on the feet, torque limits, press-fit back nuts). Then set `HUBS_ON_EDGE = true` (`ca1cbcf`), install, check the IMU in BioBuzz Calibration, and check the Wi-Fi ping (§7).
 - [ ] **Front-left gap (lone ball, §5.12):** the user is testing a duct-tape filler between the lower roller and PPR1's front edge. If it works, design the printed strip.
 - [ ] Fusion trial: the window title said "Trial ends in 6 days" on 9 Nov. Make sure the team keeps a working Fusion licence (CAD is in Fusion v26; the v2.1 save on 9 Nov ~16:55 hadn't shown up as v27 in the cloud by 17:10: check Fusion's Job Status, or re-run `electronics_v2_build.py` and save).
 - [ ] Straight-on check for the SHOT SPOT (cluster yaw), if aiming from the side keeps missing.
