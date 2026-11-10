@@ -90,9 +90,13 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean lastAimHadTarget = false;
     private boolean lastUnjam = false;
     private Pinpoint pinpoint;                                  // zeroed at INIT: SHARE teaches AUTO where to shoot
+    private final PinpointInitCheck pinpointCheck = PinpointInitCheck.standard();
+    private int pinpointRecalibrations = 0;
     private double imuAtInit;
     private FieldHeading fieldHeading;                          // field-centric driving: heading relative to the drivers
     private String headingFrom;
+    private double optionsDownSince = Double.NaN;               // Options held 1 s: field-centric on/off
+    private boolean optionsHoldDone = false;
 
     @Override
     public void init() {
@@ -141,11 +145,25 @@ public class BioBuzzTeleOp extends OpMode {
             BioBuzzMatchState.clearAutoHeading();                // the drivers' choice wins, even after a re-INIT
             headingFrom = "set in INIT: the intake points away from you";
         }
+        if (pinpoint != null) {                                  // a gyro calibrated while moved drifts all match
+            pinpoint.update();
+            if (pinpointCheck.update(pinpoint.ok(), pinpoint.headingDeg(), robot.headingDeg())) {
+                pinpoint.reset();
+                pinpointRecalibrations++;
+                imuAtInit = robot.headingDeg();
+            }
+        }
         telemetry.addData("Alliance", "%s   (B/Circle = RED, A/Cross = BLUE)  <-- CHECK", alliance);
         telemetry.addData("Drive", BioBuzzMatchState.fieldCentric
-                ? "FIELD-CENTRIC: stick up = away from you   (L1 toggles)" : "robot-centric: stick up = intake side   (L1 toggles)");
+                ? "FIELD-CENTRIC: stick up = away from you   (L1 toggles; in the match: hold Options 1 s)"
+                : "robot-centric: stick up = intake side   (L1 toggles; in the match: hold Options 1 s)");
         if (BioBuzzMatchState.fieldCentric) {
             telemetry.addData("Start heading", "%s   (Options = the intake points away from you now)", headingFrom);
+        }
+        if (pinpoint != null) {
+            telemetry.addData("Pinpoint gyro", !pinpoint.ok() ? "calibrating: keep the robot still"
+                    : pinpointRecalibrations == 0 ? "ok"
+                    : String.format("was drifting: recalibrated %d x - keep the robot STILL in INIT", pinpointRecalibrations));
         }
         telemetry.addData("Aim gate", "%s   (X/Square toggles; OFF = fire without the camera check)",
                 aimGate.enabled() ? "ON" : "OFF");
@@ -170,14 +188,14 @@ public class BioBuzzTeleOp extends OpMode {
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
         diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
                         + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f feed_empty_wait=%s spot=%s aim_gate=%s auto_speed=%s"
-                        + " field_centric=%s start_heading=\"%s\"",
+                        + " field_centric=%s start_heading=\"%s\" pinpoint_recal=%d",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
                 settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
                 SHOT_SKIP_EMPTY_PAUSE ? String.format("%.2f", settings.feedEmptyWaitSec) : "off",
                 settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none",
                 aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off",
-                BioBuzzMatchState.fieldCentric ? "on" : "off", headingFrom));
+                BioBuzzMatchState.fieldCentric ? "on" : "off", headingFrom, pinpointRecalibrations));
         robot.stowArm();
     }
 
@@ -303,6 +321,22 @@ public class BioBuzzTeleOp extends OpMode {
             gamepad1.rumble(200);
             setStatus("Field-centric reset: the way the intake points now = away from you");
             diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
+        }
+        if (gamepad1.options) {                                 // held: field-centric on/off (if "up" ever goes wrong)
+            if (Double.isNaN(optionsDownSince)) {
+                optionsDownSince = matchTimer.seconds();
+            } else if (!optionsHoldDone && matchTimer.seconds() - optionsDownSince >= FIELD_CENTRIC_HOLD_SEC) {
+                optionsHoldDone = true;
+                BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
+                gamepad1.rumbleBlips(BioBuzzMatchState.fieldCentric ? 1 : 2);
+                setStatus(BioBuzzMatchState.fieldCentric ? "FIELD-CENTRIC on: stick up = away from you"
+                        : "robot-centric: stick up = intake side (hold Options 1 s for field-centric)");
+                diag.event("DRIVE_MODE", BioBuzzMatchState.fieldCentric ? "field-centric (Options held)"
+                        : "robot-centric (Options held)");
+            }
+        } else {
+            optionsDownSince = Double.NaN;
+            optionsHoldDone = false;
         }
         boolean fieldDrive = BioBuzzMatchState.fieldCentric && !Double.isNaN(driverHeading) && !(aim && target != null);
         if (fieldDrive) {                                       // stick up = away from the drivers
@@ -553,9 +587,10 @@ public class BioBuzzTeleOp extends OpMode {
                 waiting > 0 ? String.format("   %d waiting: LB + D-pad UP in, DOWN short, RIGHT long, LEFT side", waiting) : "");
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? robot.armState().toString() : "NOT CALIBRATED");
         telemetry.addData("Drive", "%s, %s", armDeployed ? "ARM OUT - precision" : (gamepad1.left_bumper ? "precision" : "normal"),
-                !BioBuzzMatchState.fieldCentric ? "robot-centric"
+                !BioBuzzMatchState.fieldCentric ? "robot-centric   (hold Options 1 s: field-centric)"
                         : Double.isNaN(driverHeading) ? "robot-centric: NO HEADING (Pinpoint + IMU)"
-                        : String.format("FIELD-CENTRIC, intake %+.0f deg from away (%s)%s   Options = intake away now",
+                        : String.format("FIELD-CENTRIC, intake %+.0f deg from away (%s)%s   Options = intake away now,"
+                                        + " hold 1 s = off",
                                 driverHeading, fieldHeading.source(), fieldDrive ? "" : ", robot-centric while aiming"));
         if (vision == null) {
             telemetry.addData("HIVE aim", "camera not found");

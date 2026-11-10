@@ -29,7 +29,10 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * </ul>
  * Limits (FieldHeadingSimTest: 400 runs per fault): a Pinpoint restart small enough to pass as a turn can stay until
  * Options (up to ~10 deg). With the IMU alone, a bad reading that looks like a possible move can leave up to ~20 deg
- * (the heading waits 0.3 s meanwhile). No FTC SDK dependency: unit-tested (FieldHeadingTest, FieldHeadingSimTest).
+ * (the heading waits 0.3 s meanwhile). A Pinpoint that freezes with a good status, or whose gyro drifts, leads anyway
+ * (two gyros can't tell a drift from a frozen IMU while turning slowly; the wheel-encoder referee tried 10 Nov wasn't
+ * reliable yet): TeleOp INIT recalibrates a drifting Pinpoint (PinpointInitCheck), and holding Options 1 s turns
+ * field-centric off. No FTC SDK dependency: unit-tested (FieldHeadingTest, FieldHeadingSimTest).
  */
 public class FieldHeading {
 
