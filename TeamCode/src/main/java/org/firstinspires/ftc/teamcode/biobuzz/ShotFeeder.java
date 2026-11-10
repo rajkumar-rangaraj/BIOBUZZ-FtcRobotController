@@ -7,6 +7,13 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * A windmill that stops moving during a pocket (the ramp's low power near the end can't push a ball past a tight spot)
  * gets more power, step by step, until it moves again. A pocket cut short (jam, unjam) is finished first; only a windmill
  * more than MAX_PUSH_POCKETS behind its next pocket goes to the first boundary ahead (no catch-up over many pockets).
+ * Optional (TeleOp, Tune: skipEmptyPockets): a pocket that launched nothing (the flywheel stayed ready while it turned
+ * and for emptyWaitSec after) needs no pause, so the next pocket starts at once. If the flywheel dips during a pocket
+ * started that early (a late ball from the pocket before, or this pocket's own ball), the windmill stops at once and
+ * waits for the flywheel and the pause before it finishes the pocket, so a second ball never follows a late one into a
+ * slowed flywheel. If nothing dips after it starts again, the pause after that dip has already run: the next pocket
+ * goes as soon as this one ends (and is watched the same way, in case this pocket's ball is late). FIRE let go during
+ * such a hold stops the windmill there (the flywheel may stop too); the next FIRE finishes that pocket first.
  * No FTC SDK dependency, so it is unit-tested on the laptop.
  */
 public class ShotFeeder {
@@ -56,11 +63,21 @@ public class ShotFeeder {
     private double extraPower = 0;                              // added to the ramp after the windmill got stuck
     private boolean stuckReported = false;
     private int unjamStartTicks = 0;
-    private double lastShotTime = -1e9;
+    private double lastShotTime = -1e9;                         // the pause runs from here (normally the pocket end)
+    private double lastDoneTime = -1e9;                         // end of the last finished pocket
     private int shots = 0;
     private int jams = 0;
     private double power = 0;
     private String event = null;
+    private boolean skipEmptyPause = false;                     // see skipEmptyPockets()
+    private double emptyWaitSec = 0.10;
+    private boolean dipSeen = true;                             // flywheel not ready since the current pocket started
+    private boolean noPausePocket = false;                       // the current pocket started without the pause
+    private boolean holding = false;                            // stopped mid-pocket: the flywheel dipped
+    private double holdStart = 0;
+    private boolean resumed = false;                            // this pocket was held and has started again
+    private boolean dipAfterResume = false;
+    private int noPausePockets = 0;
 
     public ShotFeeder(double pocketTicks, double feedPower, double unjamPower, double minIntervalSec,
                       double pocketTimeoutSec, double unjamSec, int maxJams) {
@@ -101,6 +118,18 @@ public class ShotFeeder {
     }
 
     /**
+     * No pause after a pocket that launched nothing (TeleOp, Tune; AUTO keeps the plain pause). The 7 Nov logs: about 2
+     * pockets per ball, and the pause after every pocket, empty or not, was 42 % of the time FIRE was held.
+     * @param waitSec how long the flywheel must stay ready after a pocket before it counts as empty (most balls dip it
+     *                while the pocket turns; a later dip during the next pocket stops the windmill, see the class doc)
+     */
+    public ShotFeeder skipEmptyPockets(boolean on, double waitSec) {
+        skipEmptyPause = on;
+        emptyWaitSec = waitSec;
+        return this;
+    }
+
+    /**
      * @param t              time in seconds (any monotonic clock)
      * @param indexerTicks   windmill encoder
      * @param launcherReady  flywheel at speed
@@ -108,6 +137,19 @@ public class ShotFeeder {
      * @return windmill power to apply this loop
      */
     public double update(double t, int indexerTicks, boolean launcherReady, boolean wantFire) {
+        return update(t, indexerTicks, launcherReady, true, wantFire);
+    }
+
+    /**
+     * @param flywheelReady  flywheel at speed; a ball's dip makes it false (the empty-pocket check uses only this)
+     * @param gateOk         anything else the next pocket must wait for (TeleOp: the aim gate); not a sign of a ball
+     */
+    public double update(double t, int indexerTicks, boolean flywheelReady, boolean gateOk, boolean wantFire) {
+        boolean launcherReady = flywheelReady && gateOk;
+        if (!flywheelReady) {
+            dipSeen = true;
+            dipAfterResume = resumed;
+        }
         event = null;
         switch (state) {
             case IDLE:
@@ -120,7 +162,12 @@ public class ShotFeeder {
                 power = 0;
                 if (!wantFire) {
                     go(State.IDLE, t);
-                } else if (launcherReady && t - lastShotTime >= minIntervalSec) {
+                    break;
+                }
+                boolean afterPause = launcherReady && t - lastShotTime >= minIntervalSec;
+                boolean afterEmpty = skipEmptyPause && haveTarget && lastPocketDone && !dipSeen && launcherReady
+                        && t - lastDoneTime >= emptyWaitSec;
+                if (afterPause || afterEmpty) {
                     pocketStartTicks = indexerTicks;
                     if (!haveTarget) {                          // first shot: pockets are counted from here
                         targetTicks = indexerTicks;
@@ -134,12 +181,51 @@ public class ShotFeeder {
                     lastStepUp = t;
                     extraPower = 0;                             // a retry steps up again: kept extra power overshoots
                     stuckReported = false;
+                    noPausePocket = skipEmptyPause && t - lastDoneTime < minIntervalSec;   // a late ball may still come
+                    holding = false;
+                    resumed = false;
+                    dipAfterResume = false;
+                    dipSeen = !flywheelReady;
+                    if (noPausePocket) {
+                        noPausePockets++;
+                        event = afterPause ? "NO PAUSE (pocket " + shots + "'s pause ran during its hold)"
+                                : "NO PAUSE (pocket " + shots + " launched nothing)";
+                    }
                     go(State.FEEDING, t);
                     power = rampPower(targetTicks - indexerTicks);
                 }
                 break;
-            case FEEDING:                                       // a pocket, once started, is always finished
+            case FEEDING:                                       // a pocket, once started, is finished (held: see below)
+                if (holding) {
+                    power = 0;
+                    if (!wantFire) {                            // FIRE let go while held: stop here, like a jam; the
+                        holding = false;                        // next FIRE finishes this pocket after the pause and
+                        noPausePocket = false;                  // the flywheel (which may be off now)
+                        lastShotTime = Math.max(lastShotTime, holdStart);
+                        event = "RELEASED during a hold - the next FIRE finishes the pocket";
+                        go(State.IDLE, t);
+                        break;
+                    }
+                    if (!launcherReady || t - holdStart < minIntervalSec) {
+                        break;
+                    }
+                    holding = false;                            // finish the pocket as a normal one, from this loop on
+                    noPausePocket = false;
+                    resumed = true;
+                    dipAfterResume = false;
+                    stateStart += t - holdStart;                // the jam timeout doesn't count the hold
+                    progressTicks = indexerTicks;
+                    progressTime = t;
+                    lastStepUp = t;
+                }
                 double remaining = targetTicks - indexerTicks;
+                if (noPausePocket && !flywheelReady && remaining > STOP_TOLERANCE_TICKS) {
+                    holding = true;                             // a ball reached the flywheel: stop, as after a shot
+                    holdStart = t;
+                    power = 0;
+                    event = "HOLD (flywheel dipped during a no-pause pocket)";
+                    break;
+                }
                 if (indexerTicks - progressTicks >= STUCK_MIN_TICKS) {
                     progressTicks = indexerTicks;
                     progressTime = t;
@@ -157,7 +243,8 @@ public class ShotFeeder {
                 power = Math.min(Math.max(ramp, feedPower), ramp + extraPower * fade);
                 if (remaining <= STOP_TOLERANCE_TICKS) {
                     shots++;
-                    lastShotTime = t;
+                    lastShotTime = resumed && !dipAfterResume ? holdStart : t;   // a held pocket's ball dipped at holdStart:
+                    lastDoneTime = t;                                            // its pause already ran during the hold
                     lastPocketDone = true;
                     event = "SHOT " + shots;
                     power = 0;
@@ -225,9 +312,24 @@ public class ShotFeeder {
 
     /** Forget jams and go idle (e.g. the driver used the manual unjam). A pocket cut short is finished next time. */
     public void reset() {
+        if (holding) {
+            lastShotTime = Math.max(lastShotTime, holdStart);   // the pause still runs from the dip
+        }
         state = State.IDLE;
         jams = 0;
         power = 0;
+        holding = false;
+        noPausePocket = false;
+    }
+
+    /** Pockets started before the full pause after the last one (launched nothing, or its pause ran during a hold). */
+    public int noPausePockets() {
+        return noPausePockets;
+    }
+
+    /** Stopped mid-pocket, waiting for the flywheel (a dip during a no-pause pocket). */
+    public boolean holding() {
+        return holding;
     }
 
     /** Pocket boundary the windmill is fed to (encoder ticks; only meaningful once a pocket has been fed). */

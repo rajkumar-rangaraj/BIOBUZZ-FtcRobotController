@@ -49,11 +49,18 @@ public final class BioBuzzConstants {
     public static final double PINPOINT_MAX_HEADING_ERROR_DEG = 15;             // AUTO drops the Pinpoint if its heading drifts from the IMU
 
     // ---------------- Control Hub IMU mounting ----------------
-    // Hub stands upright at the back: its logo faces the launcher side, its USB ports face outward (robot left).
-    public static final RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO =
-            RevHubOrientationOnRobot.LogoFacingDirection.BACKWARD;
-    public static final RevHubOrientationOnRobot.UsbFacingDirection HUB_USB =
-            RevHubOrientationOnRobot.UsbFacingDirection.LEFT;
+    // Old mounting (until the hubs are moved): hub upright on the back; logo faces the launcher side (BACKWARD), its USB
+    // ports face outward (LEFT). Electronics v2 (goBildaStarter stl_electronics/README.md, Nov 2026): hub on edge behind
+    // the left launcher tower; logo faces outward (LEFT), USB ports face the intake (FORWARD). Set HUBS_ON_EDGE = true
+    // when the hubs have been moved, then check in BioBuzz Calibration: turn the robot counter-clockwise by hand, the
+    // heading must INCREASE.
+    public static final boolean HUBS_ON_EDGE = false;
+    public static final RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO = HUBS_ON_EDGE
+            ? RevHubOrientationOnRobot.LogoFacingDirection.LEFT
+            : RevHubOrientationOnRobot.LogoFacingDirection.BACKWARD;
+    public static final RevHubOrientationOnRobot.UsbFacingDirection HUB_USB = HUBS_ON_EDGE
+            ? RevHubOrientationOnRobot.UsbFacingDirection.FORWARD
+            : RevHubOrientationOnRobot.UsbFacingDirection.LEFT;
 
     // ---------------- Drivetrain: 4 x goBILDA 5203-2402-0019 (312 RPM) ----------------
     public static final double DRIVE_TICKS_PER_REV = 537.7;
@@ -118,6 +125,15 @@ public final class BioBuzzConstants {
     public static final double SHOT_POCKET_TIMEOUT_SEC = 1.0;                    // a pocket taking longer = jam
     public static final double SHOT_UNJAM_SEC = 0.25;                            // back-off time after a jam (stops after a quarter pocket)
     public static final int SHOT_MAX_JAMS = 3;
+    // TeleOp and Tune: no pause after a pocket that launched nothing (the flywheel stayed ready while it turned and for
+    // the empty wait after); a dip during a pocket started that early stops the windmill until the flywheel is back.
+    // 7 Nov logs (one wheel, printed windmill): 2.7 pockets per ball, and the pause after every pocket was 42 % of FIRE
+    // time, the windmill turning only 27 %. AUTO keeps the plain pause. SHOT_EMPTY_WAIT_SEC is the default; BioBuzz Tune
+    // changes it on the robot (LB + D-pad LEFT / RIGHT). Simulated with the 7 Nov dip timing (60-76 ms loops, 2900 balls):
+    // 0.10 s = 11 % less time per ball, 0.45 % of balls into a slowed flywheel; 0.07 s = 14 %, 1.1 %; 0.05 s = 19 %,
+    // 1.6 %; 0.15 s = 3 %, none.
+    public static final boolean SHOT_SKIP_EMPTY_PAUSE = true;
+    public static final double SHOT_EMPTY_WAIT_SEC = 0.10;
 
     // ---------------- Intake ----------------
     public static final double FEED_INTAKE_BOOST = 0.5;

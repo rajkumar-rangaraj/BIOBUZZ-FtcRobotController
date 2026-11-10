@@ -30,6 +30,12 @@ public final class TeleOpSettings {
     /** Feed pause after each pocket before the next one may turn. */
     public double feedPauseSec = BioBuzzConstants.SHOT_MIN_INTERVAL_SEC;
     /**
+     * TeleOp: after a pocket that launched nothing, the next one turns after this instead of the pause (ShotFeeder
+     * skipEmptyPockets). Shorter = faster, but a late ball is more often followed by the next one. At or above the pause
+     * it is off.
+     */
+    public double feedEmptyWaitSec = BioBuzzConstants.SHOT_EMPTY_WAIT_SEC;
+    /**
      * Where AUTO shoots from, taught in TeleOp (SHARE) when TeleOp was INIT-ed at the AUTO start position:
      * Pinpoint inches forward / left of the start and heading (CCW +). NaN = not taught.
      */
@@ -68,6 +74,9 @@ public final class TeleOpSettings {
                     s.feedPower = clipOr(Double.parseDouble(v), FEED_POWER_MIN, FEED_POWER_MAX, s.feedPower);
                 } else if (k.equals("feed_pause_sec")) {
                     s.feedPauseSec = clipOr(Double.parseDouble(v), FEED_PAUSE_MIN, FEED_PAUSE_MAX, s.feedPauseSec);
+                } else if (k.equals("feed_empty_wait_sec")) {
+                    s.feedEmptyWaitSec = clipOr(Double.parseDouble(v), FEED_EMPTY_WAIT_MIN, FEED_EMPTY_WAIT_MAX,
+                            s.feedEmptyWaitSec);
                 } else if (k.equals("shoot_fwd_in")) {
                     s.shootFwdIn = clipOr(Double.parseDouble(v), -SHOOT_MAX_IN, SHOOT_MAX_IN, Double.NaN);
                 } else if (k.equals("shoot_left_in")) {
@@ -96,6 +105,7 @@ public final class TeleOpSettings {
     static final double AIM_TRIM_MAX_DEG = 10;
     static final double FEED_POWER_MIN = 0.25, FEED_POWER_MAX = 0.8;
     static final double FEED_PAUSE_MIN = 0.1, FEED_PAUSE_MAX = 2.0;
+    static final double FEED_EMPTY_WAIT_MIN = 0.05, FEED_EMPTY_WAIT_MAX = 0.5;
     /** AUTO never drives further than this from its start to a taught shooting position. */
     static final double SHOOT_MAX_IN = 72;
 
@@ -110,8 +120,8 @@ public final class TeleOpSettings {
         if (hasSpot()) {
             sb.append(String.format(Locale.US, "spot_range_in=%.1f\nspot_speed=%.0f\n", spotRangeIn, spotSpeed));
         }
-        sb.append(String.format(Locale.US, "aim_trim_deg=%.1f\nfeed_power=%.2f\nfeed_pause_sec=%.2f\n",
-                aimTrimDeg, feedPower, feedPauseSec));
+        sb.append(String.format(Locale.US, "aim_trim_deg=%.1f\nfeed_power=%.2f\nfeed_pause_sec=%.2f\nfeed_empty_wait_sec=%.2f\n",
+                aimTrimDeg, feedPower, feedPauseSec, feedEmptyWaitSec));
         if (hasShootPose()) {
             sb.append(String.format(Locale.US, "shoot_fwd_in=%.1f\nshoot_left_in=%.1f\nshoot_heading_deg=%.1f\n",
                     shootFwdIn, shootLeftIn, shootHeadingDeg));

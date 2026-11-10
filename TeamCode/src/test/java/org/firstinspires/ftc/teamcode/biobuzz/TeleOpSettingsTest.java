@@ -49,14 +49,19 @@ public class TeleOpSettingsTest {
         s.aimTrimDeg = -2.5;
         s.feedPower = 0.45;
         s.feedPauseSec = 0.7;
+        s.feedEmptyWaitSec = 0.05;
         TeleOpSettings back = TeleOpSettings.parse(s.format());
         assertEquals(-2.5, back.aimTrimDeg, 1e-9);
         assertEquals(0.45, back.feedPower, 1e-9);
         assertEquals(0.7, back.feedPauseSec, 1e-9);
-        TeleOpSettings bad = TeleOpSettings.parse("aim_trim_deg=45\nfeed_power=2\nfeed_pause_sec=-1\n");
+        assertEquals(0.05, back.feedEmptyWaitSec, 1e-9);
+        TeleOpSettings bad = TeleOpSettings.parse("aim_trim_deg=45\nfeed_power=2\nfeed_pause_sec=-1\nfeed_empty_wait_sec=0\n");
         assertEquals(0, bad.aimTrimDeg, 0);
         assertEquals(BioBuzzConstants.INDEXER_FEED_POWER, bad.feedPower, 0);
         assertEquals(BioBuzzConstants.SHOT_MIN_INTERVAL_SEC, bad.feedPauseSec, 0);
+        assertEquals(BioBuzzConstants.SHOT_EMPTY_WAIT_SEC, bad.feedEmptyWaitSec, 0);
+        assertEquals("a file saved before the empty wait existed gets the default", BioBuzzConstants.SHOT_EMPTY_WAIT_SEC,
+                TeleOpSettings.parse("feed_power=0.40\nfeed_pause_sec=0.25\n").feedEmptyWaitSec, 0);
     }
 
     @Test

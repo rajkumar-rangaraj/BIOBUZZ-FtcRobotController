@@ -329,8 +329,15 @@ Plain Share saves only the spot. The "From INIT" telemetry line shows the positi
 - **D-pad ← / →:** aim trim, so the shots go more left or more right, seen from behind the launcher.
 - **D-pad ↑ / ↓:** pause between pockets.
 - **LB + D-pad ↑ / ↓:** windmill power.
+- **LB + D-pad ← / →:** empty wait (below).
 - The screen counts balls launched per pocket.
 - **SHARE** saves everything to the same file. TeleOp and AUTO use it.
+
+**No pause after an empty pocket (TeleOp + Tune, 9 Nov 2026, from the 7 Nov one-wheel logs):**
+- About 2.7 pockets turn per ball, and the 0.25 s pause after every pocket, empty or not, was 42 % of the time FIRE was held. Now, if the flywheel stayed at speed while a pocket turned and for the **empty wait** after it (default 0.10 s), that pocket launched nothing. The next pocket turns at once, with no pause. Log event `FEED NO PAUSE`.
+- **If the flywheel dips during a pocket that started early**, the windmill stops at once (`FEED HOLD`). The dip may come from a late ball of the pocket before, or from this pocket's own ball. The windmill finishes the pocket once the flywheel is back and the pause has passed. If the dip came from this pocket's own ball, its pause has already run during the hold, so the next pocket goes right after. If FIRE is let go during a hold, the windmill stays where it is (`FEED RELEASED`); the next FIRE finishes that pocket first.
+- **Simulated with the logged dip timing:** about 11 % less time per ball at 0.10 s. 0.45 % of balls still go in right behind a late ball (about 1 in 220): a weak shot. At 0.05 s it is 19 % less time but 1.6 % weak shots (about 1 in 60). At 0.15 s the gain is only 3 %. The best value comes from practice logs: count weak shots and `HOLD` events.
+- AUTO keeps the plain pause. To switch the skip off, set the empty wait to the pause or above (Tune shows OFF).
 
 Aiming uses the SDK 12 BIOBUZZ tag clusters, so the robot aims at the centre of the CELL opening even when only some of the 4 tags are visible. A SHOT SPOT saved before this change (measured to the tag average) is ignored and must be saved again.
 
@@ -347,7 +354,7 @@ Aiming uses the SDK 12 BIOBUZZ tag clusters, so the robot aims at the centre of 
 | `BioBuzz Wiring Check` | Robot on a box: spins each motor alone and reads every encoder and the motor current. Finds missing motor cables, missing or swapped encoder cables and reversed directions; also checks both hubs, IMU and camera. Run it first after any wiring change. |
 | `BioBuzz Vision Test` | Measures camera detection rate, bearing and distance against tape-measured truth; logs to CSV |
 | `BioBuzz Shot Log` | Fires one ball at a time and logs speed, battery, camera distance and IN/MISS; logs to CSV |
-| `BioBuzz Tune` | Live tuning of aim trim, windmill power and pause between pockets with the D-pad; counts balls per pocket; SHARE saves for TeleOp + AUTO |
+| `BioBuzz Tune` | Live tuning of aim trim, windmill power, pause between pockets and the empty wait with the D-pad; counts balls per pocket; SHARE saves for TeleOp + AUTO |
 | `TEST Indexer + Flywheel` | Tunes flywheel speed and windmill feed power |
 | `HelloWorld` | Telemetry only — proves the toolchain and the DS link |
 | `MotorTest` | Single motor on the left stick, with encoder position |

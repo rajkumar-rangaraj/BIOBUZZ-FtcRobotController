@@ -77,7 +77,7 @@ public class BioBuzzTeleOp extends OpMode {
     public void init() {
         robot = new BioBuzzRobot(hardwareMap);
         settings = TeleOpSettings.load();
-        feeder = ShotFeeder.fromSettings(settings);
+        feeder = ShotFeeder.fromSettings(settings).skipEmptyPockets(SHOT_SKIP_EMPTY_PAUSE, settings.feedEmptyWaitSec);
         pinpoint = Pinpoint.tryCreate(hardwareMap);
         if (pinpoint != null) {
             pinpoint.reset();                                   // robot still at INIT (AUTO start position to teach AUTO)
@@ -130,10 +130,11 @@ public class BioBuzzTeleOp extends OpMode {
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
         diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
-                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f spot=%s aim_gate=%s auto_speed=%s",
+                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f feed_empty_wait=%s spot=%s aim_gate=%s auto_speed=%s",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
                 settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
+                SHOT_SKIP_EMPTY_PAUSE ? String.format("%.2f", settings.feedEmptyWaitSec) : "off",
                 settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none",
                 aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off"));
         robot.stowArm();
@@ -338,7 +339,7 @@ public class BioBuzzTeleOp extends OpMode {
             feeder.reset();
             robot.setIndexerPower(-INDEXER_UNJAM_POWER);
         } else {
-            robot.setIndexerPower(feeder.update(matchTimer.seconds(), robot.indexerTicks(), ready && aimOk, fire));
+            robot.setIndexerPower(feeder.update(matchTimer.seconds(), robot.indexerTicks(), ready, aimOk, fire));
             String feedEvent = feeder.event();
             if (feedEvent != null) {
                 diag.event("FEED", feedEvent + String.format(" | launcher %.0f t/s", robot.launcherVelocity()));
