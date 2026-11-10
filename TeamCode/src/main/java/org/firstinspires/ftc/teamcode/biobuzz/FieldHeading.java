@@ -2,40 +2,73 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 /**
  * Field-centric driving (TeleOp): the robot's heading relative to the DRIVERS, 0 = the intake points away from them,
- * counter-clockwise positive. The Pinpoint's heading leads; the Control Hub IMU carries the heading whenever the Pinpoint
- * has no reading or a reading off its track, and is kept lined up with it otherwise, so switching never jumps.
+ * counter-clockwise positive. Two sensors, each with its own offset to that heading: the Pinpoint (leads) and the
+ * Control Hub IMU (read right after the Pinpoint, so the two agree while turning).
  * <ul>
- *   <li>A reading that jumps faster than the robot can turn is a sensor glitch (9 Nov logs: the IMU read -58, +89, -68
- *       deg within 0.5 s) and is ignored. If both sensors jump alike it is a real (hard) turn and is followed.</li>
- *   <li>A jump that stays REBASE_SEC is a sensor that restarted from zero: it carries on from the current heading.</li>
- *   <li>A sensor that comes back after a gap (no reading in the last update) rejoins at the current heading; a rate
- *       check over the gap would let a restart through (review, 10 Nov).</li>
+ *   <li>Both agree (within AGREE_DEG): that is the heading, however fast it moved (a hard hit, or a turn during a loop
+ *       stall). The IMU is kept lined up with the Pinpoint.</li>
+ *   <li>The IMU yaw flips by 180 deg, mostly where it crosses +-90 (diag logs 30 Oct - 9 Nov: ~1290 flips, each one
+ *       the wheels' turn +-180). A jump of 180 deg plus a move the robot can make is such a flip: corrected.</li>
+ *   <li>Otherwise a sensor's reading must be a move the robot can make since that sensor's last good reading, looking
+ *       back at most GATE_DT_CAP_SEC (after a long loop stall the rate check would pass anything). A bigger jump is a
+ *       glitch. If both moved plausibly but disagree, the one closer to the predicted heading (from the last turn
+ *       rate) leads and the other is off its track.</li>
+ *   <li>A sensor off its track is back when it agrees with the other one again or, with no other sensor to vouch,
+ *       when it jumps back near the predicted heading. If it moves on smoothly from its jump for rebaseSec instead, it
+ *       restarted: it carries on from the current heading.</li>
+ *   <li>A sensor that comes back after a gap (no reading in the last update) rejoins at the current heading.</li>
+ *   <li>Reset turns the whole frame: a glitch in progress is sorted out the same way afterwards.</li>
  * </ul>
- * No FTC SDK dependency: unit-tested.
+ * Limit: a sensor on its own can't tell a restart from a turn made during a loop stall longer than ~0.4 s at full
+ * speed; that turn is lost (Options fixes it). No FTC SDK dependency: unit-tested.
  */
 public class FieldHeading {
 
     public enum Source { PINPOINT, IMU, NONE }
 
+    static final double AGREE_DEG = 10;              // the two sensors agree (read back to back)
+    static final double GATE_DT_CAP_SEC = 0.25;      // the rate check looks back at most this long
+    static final double MAX_ACCEL_DPS2 = 2000;       // a sensor back from a glitch on its own: near the prediction
+
+    private enum Verdict { NONE, ON_TRACK, OFF_TRACK, RESTARTED }
+
+    /** One heading sensor. */
+    private static final class Track {
+        final String name;
+        double off = Double.NaN;                     // driver heading = reading + off (NaN: joins at the next reading)
+        double good, goodT;                          // its last reading on its track, and when
+        double prev, prevT;                          // its last reading, on its track or not, and when
+        double offSince = Double.NaN;                // off its track since (NaN: on it) ...
+        double levelSince;                           // ... and moving on smoothly from its last jump since
+        boolean had = false;                         // had a reading in the last update
+
+        Track(String name) {
+            this.name = name;
+        }
+
+        boolean onTrack() {
+            return Double.isNaN(offSince);
+        }
+
+        double driver(double raw) {
+            return MecanumMath.normalizeDegrees(raw + off);
+        }
+    }
+
     private final double maxRateDps;
     private final double marginDeg;
     private final double rebaseSec;
+    private final Track pin = new Track("Pinpoint");
+    private final Track imu = new Track("IMU");
 
-    private double startDeg;                     // heading relative to the drivers when the first reading comes
+    private double startDeg;                         // heading relative to the drivers when the first reading comes
     private boolean started = false;
     private double heading = Double.NaN;
+    private double headingT;                         // when a sensor last vouched for the heading
+    private double rateDps = 0;                      // the heading's last turn rate (predictions)
     private Source source = Source.NONE;
-    private double offPin = Double.NaN, offImu = Double.NaN;   // driver heading = sensor + offset
-    private double lastPin = Double.NaN, lastImu = Double.NaN;  // last accepted sensor readings ...
-    private double lastPinT = Double.NaN, lastImuT = Double.NaN;  // ... and when
-    private double badSincePin = Double.NaN, badSinceImu = Double.NaN;   // a glitch began (NaN = none) ...
-    private double glitchRawPin, glitchRawImu, glitchTPin, glitchTImu;     // ... and its latest reading
-    private boolean pinBefore = false, imuBefore = false;                 // had a reading in the last update
-    private double rawPin = Double.NaN, rawImu = Double.NaN, rawPinT, rawImuT;   // the latest readings, even rejected
     private int glitches = 0;
     private String event = null;
-    static final double REJOIN_SEC = 0.5;            // a sensor silent this long rejoins from the current heading
-    static final double AGREE_DEG = 20;              // both sensors jumped alike: a real (hard, fast) turn
 
     /**
      * @param startDeg   the robot's heading relative to the drivers at the first reading (0 = intake away from them)
@@ -59,23 +92,20 @@ public class FieldHeading {
      * Once per loop.
      *
      * @param pinpointDeg the Pinpoint heading (CCW +), NaN when it has no good reading
-     * @param imuDeg      the IMU heading (CCW +), NaN when not read (read it when the Pinpoint has none)
+     * @param imuDeg      the IMU heading (CCW +), NaN when not read
      * @return the heading relative to the drivers, degrees in (-180, 180]; NaN while there is no reading (drive
      *         robot-centric then)
      */
     public double update(double t, double pinpointDeg, double imuDeg) {
         event = null;
         boolean pinIn = !Double.isNaN(pinpointDeg), imuIn = !Double.isNaN(imuDeg);
-        boolean pinJoins = pinIn && !pinBefore, imuJoins = imuIn && !imuBefore;   // back after a gap: rejoin
-        pinBefore = pinIn;
-        imuBefore = imuIn;
-        rawPin = pinpointDeg;                                // the latest readings (for reset), accepted or not
-        rawImu = imuDeg;
-        rawPinT = t;
-        rawImuT = t;
+        boolean pinJoins = pinIn && (!pin.had || Double.isNaN(pin.off));    // the first reading, or back after a gap
+        boolean imuJoins = imuIn && (!imu.had || Double.isNaN(imu.off));    // (it may have restarted meanwhile)
+        pin.had = pinIn;
+        imu.had = imuIn;
         if (!pinIn && !imuIn) {
             if (source != Source.NONE) {
-                event = "no heading reading (Pinpoint and IMU): robot-centric until one comes back";
+                addEvent("no heading reading (Pinpoint and IMU): robot-centric until one comes back");
             }
             source = Source.NONE;
             return Double.NaN;                               // heading() keeps the last one for when a sensor returns
@@ -83,57 +113,99 @@ public class FieldHeading {
         if (!started) {                                      // the very first reading: the start heading
             started = true;
             heading = MecanumMath.normalizeDegrees(startDeg);
+            headingT = t;
         }
-        double pinJump = pinIn && !Double.isNaN(lastPin) ? MecanumMath.normalizeDegrees(pinpointDeg - lastPin) : Double.NaN;
-        double imuJump = imuIn && !Double.isNaN(lastImu) ? MecanumMath.normalizeDegrees(imuDeg - lastImu) : Double.NaN;
-        double before = heading;
-        Double hi = imuIn ? accept(t, imuDeg, false, imuJoins) : null;
-        if (hi != null) {
-            heading = hi;                                    // this loop's IMU heading: a Pinpoint that (re)joins or
-        }                                                    // restarted lines up with it, not with the last loop's
-        Double hp = pinIn ? accept(t, pinpointDeg, true, pinJoins) : null;
-        if (hp != null) {
-            use(Source.PINPOINT, hp);
-            if (hi != null) {
-                store(false, imuDeg, heading - imuDeg, t);   // keep the IMU lined up while the Pinpoint leads
+        boolean pinTracked = pinIn && !pinJoins, imuTracked = imuIn && !imuJoins;
+        boolean pinOk = false, imuOk = false;                // lined up with the heading after this update
+        if (pinTracked && imuTracked
+                && Math.abs(MecanumMath.normalizeDegrees(pin.driver(pinpointDeg) - imu.driver(imuDeg))) <= AGREE_DEG) {
+            double h = pin.driver(pinpointDeg);              // both agree: that's the heading, however fast it moved
+            if (pin.onTrack() && Math.abs(MecanumMath.normalizeDegrees(pinpointDeg - pin.good)) > gate(t - pin.goodT)) {
+                addEvent(String.format("fast turn seen by both sensors (%.0f deg): followed",
+                        MecanumMath.normalizeDegrees(h - heading)));
             }
-            return heading;
+            setHeading(h, t);
+            keep(pin, pinpointDeg, t);
+            imu.off = h - imuDeg;                            // keep the IMU lined up with the Pinpoint
+            keep(imu, imuDeg, t);
+            pinOk = true;
+            imuOk = true;
+        } else {
+            Verdict vp = pinTracked ? judge(pin, pinpointDeg, t, imuTracked && imu.onTrack()) : Verdict.NONE;
+            Verdict vi = imuTracked ? judge(imu, imuDeg, t, pinTracked && pin.onTrack()) : Verdict.NONE;
+            if (vp == Verdict.ON_TRACK && vi == Verdict.ON_TRACK
+                    && Math.abs(MecanumMath.normalizeDegrees(pin.driver(pinpointDeg) - imu.driver(imuDeg))) > AGREE_DEG) {
+                double pred = predicted(t);                  // both moved plausibly but disagree
+                boolean pinCloser = Math.abs(MecanumMath.normalizeDegrees(pin.driver(pinpointDeg) - pred))
+                        <= Math.abs(MecanumMath.normalizeDegrees(imu.driver(imuDeg) - pred));
+                Track loser = pinCloser ? imu : pin;
+                glitches++;
+                addEvent(String.format("%s heading %.0f deg off the %s: ignored", loser.name,
+                        Math.abs(MecanumMath.normalizeDegrees(pin.driver(pinpointDeg) - imu.driver(imuDeg))),
+                        pinCloser ? pin.name : imu.name));
+                offTrack(loser, t);
+                if (pinCloser) {
+                    vi = Verdict.OFF_TRACK;
+                } else {
+                    vp = Verdict.OFF_TRACK;
+                }
+            }
+            if (vp == Verdict.ON_TRACK) {
+                setHeading(pin.driver(pinpointDeg), t);
+                keep(pin, pinpointDeg, t);
+                pinOk = true;
+                if (vi == Verdict.ON_TRACK) {                // they agree after an IMU flip correction
+                    imu.off = heading - imuDeg;
+                    keep(imu, imuDeg, t);
+                    imuOk = true;
+                }
+            } else if (vi == Verdict.ON_TRACK) {             // the Pinpoint is missing or off its track: the IMU leads
+                setHeading(imu.driver(imuDeg), t);
+                keep(imu, imuDeg, t);
+                imuOk = true;
+            }
+            if (vp == Verdict.RESTARTED) {
+                lineUp(pin, pinpointDeg, t);
+                addEvent("Pinpoint heading restarted: carries on from the current heading");
+                pinOk = true;
+            }
+            if (vi == Verdict.RESTARTED) {
+                lineUp(imu, imuDeg, t);
+                addEvent("IMU heading restarted: carries on from the current heading");
+                imuOk = true;
+            }
         }
-        heading = before;
-        if (hi != null) {                                    // the Pinpoint is missing or off its track: the IMU leads
-            use(Source.IMU, hi);
-            return heading;
+        if (pinJoins) {                                      // after this update's heading, so it lines up with it
+            lineUp(pin, pinpointDeg, t);
+            pinOk = true;
         }
-        if (pinIn && imuIn && Math.abs(MecanumMath.normalizeDegrees(pinJump - imuJump)) <= AGREE_DEG) {
-            store(true, pinpointDeg, offPin, t);             // both jumped alike: a real (hard, fast) turn
-            store(false, imuDeg, offImu, t);
-            endGlitch(true);
-            endGlitch(false);
-            use(Source.PINPOINT, MecanumMath.normalizeDegrees(pinpointDeg + offPin));
-            event = String.format("fast turn seen by both sensors (%.0f deg): followed", pinJump);
-            return heading;
+        if (imuJoins) {
+            lineUp(imu, imuDeg, t);
+            imuOk = true;
         }
-        return heading;                                      // both off their tracks: keep the last good heading
+        if (pinOk || imuOk) {
+            headingT = t;
+            use(pinOk ? Source.PINPOINT : Source.IMU);
+        }                                                    // else both off their tracks: keep the last good heading
+        if (pinIn) {
+            pin.prev = pinpointDeg;
+            pin.prevT = t;
+        }
+        if (imuIn) {
+            imu.prev = imuDeg;
+            imu.prevT = t;
+        }
+        return heading;
     }
 
     /** The driver pointed the intake away from them and pressed reset: that is heading 0 from now on. */
     public void reset() {
         if (!started) {
             startDeg = 0;
-        } else {
-            heading = 0;                                     // based on each sensor's LATEST reading, accepted or not:
-            if (Double.isNaN(rawPin)) {                      // the last accepted one may be stale inside a glitch
-                offPin = Double.NaN;
-            } else {
-                store(true, rawPin, -rawPin, rawPinT);
-            }
-            if (Double.isNaN(rawImu)) {
-                offImu = Double.NaN;
-            } else {
-                store(false, rawImu, -rawImu, rawImuT);
-            }
-            endGlitch(true);
-            endGlitch(false);
+        } else {                                             // turn the whole frame; glitch tracking carries on
+            pin.off = MecanumMath.normalizeDegrees(pin.off - heading);
+            imu.off = MecanumMath.normalizeDegrees(imu.off - heading);
+            heading = 0;
         }
         event = "reset: intake away from the drivers";
     }
@@ -155,92 +227,83 @@ public class FieldHeading {
         return event;
     }
 
-    private void use(Source s, double h) {
-        if (source != s && source != Source.NONE && s != Source.NONE) {
-            String msg = "heading from " + s + " (was " + source + ")";
-            event = event == null ? msg : event + "; " + msg;
+    /**
+     * This reading against the sensor's track (both sensors did NOT agree).
+     *
+     * @param vouched the other sensor is on its track: then this one, if off its track, is only back by agreeing with
+     *                it, which was checked before
+     */
+    private Verdict judge(Track s, double raw, double t, boolean vouched) {
+        if (s.onTrack()) {
+            double jump = Math.abs(MecanumMath.normalizeDegrees(raw - s.good));
+            if (jump <= gate(t - s.goodT)) {
+                return Verdict.ON_TRACK;
+            }
+            if (s == imu && Math.abs(MecanumMath.normalizeDegrees(raw + 180 - s.good)) <= gate(t - s.goodT)) {
+                s.off = MecanumMath.normalizeDegrees(s.off + 180);     // the IMU yaw flipped (see the class notes)
+                addEvent("IMU heading flipped 180 deg: corrected");
+                return Verdict.ON_TRACK;
+            }
+            glitches++;                                      // a jump the robot can't make: ignore it for now
+            addEvent(String.format("%s heading jumped %.0f deg in %.0f ms: ignored", s.name, jump, (t - s.goodT) * 1000));
+            offTrack(s, t);
+            return Verdict.OFF_TRACK;
+        }
+        if (Math.abs(MecanumMath.normalizeDegrees(raw - s.prev)) <= gate(t - s.prevT)) {
+            return t - s.levelSince >= rebaseSec ? Verdict.RESTARTED : Verdict.OFF_TRACK;   // moving on from its jump
+        }
+        if (!vouched) {                                      // jumped back near where the heading was going: a one-off
+            double dt = Math.min(t - headingT, GATE_DT_CAP_SEC);
+            double tolerance = Math.min(0.5 * MAX_ACCEL_DPS2 * dt * dt, maxRateDps * dt) + marginDeg;
+            if (Math.abs(MecanumMath.normalizeDegrees(s.driver(raw) - predicted(t))) <= tolerance) {
+                return Verdict.ON_TRACK;
+            }
+        }
+        s.levelSince = t;                                    // jumped again
+        return Verdict.OFF_TRACK;
+    }
+
+    private double gate(double dt) {
+        return maxRateDps * Math.min(dt, GATE_DT_CAP_SEC) + marginDeg;
+    }
+
+    private double predicted(double t) {
+        return MecanumMath.normalizeDegrees(heading + rateDps * Math.min(t - headingT, GATE_DT_CAP_SEC));
+    }
+
+    private void setHeading(double h, double t) {
+        if (t - headingT > 1e-3) {
+            double rate = MecanumMath.normalizeDegrees(h - heading) / (t - headingT);
+            rateDps = Math.max(-maxRateDps, Math.min(maxRateDps, rate));
+        }
+        heading = h;
+        headingT = t;
+    }
+
+    private static void keep(Track s, double raw, double t) {
+        s.good = raw;
+        s.goodT = t;
+        s.offSince = Double.NaN;
+    }
+
+    private void lineUp(Track s, double raw, double t) {
+        s.off = heading - raw;
+        keep(s, raw, t);
+    }
+
+    private static void offTrack(Track s, double t) {
+        s.offSince = t;
+        s.levelSince = t;
+    }
+
+    private void use(Source s) {
+        if (source != s && source != Source.NONE) {
+            addEvent("heading from " + s + " (was " + source + ")");
         }
         source = s;
-        heading = h;
     }
 
-    /**
-     * The driver heading from this sensor reading, or null to keep the last one (glitch).
-     *
-     * @param joins the sensor had no reading in the last update: it rejoins at the current heading (it may have restarted
-     *              meanwhile, and a rate check over the gap would pass almost any jump)
-     */
-    private Double accept(double t, double raw, boolean pin, boolean joins) {
-        double last = pin ? lastPin : lastImu;
-        double lastSrcT = pin ? lastPinT : lastImuT;
-        double off = pin ? offPin : offImu;
-        if (joins || Double.isNaN(off) || t - lastSrcT > REJOIN_SEC) {   // (re)joins: carry on from the heading
-            off = heading - raw;
-            store(pin, raw, off, t);
-            endGlitch(pin);
-            return MecanumMath.normalizeDegrees(raw + off);
-        }
-        double fromGood = Math.abs(MecanumMath.normalizeDegrees(raw - last));
-        double badSince = pin ? badSincePin : badSinceImu;
-        if (!Double.isNaN(badSince)) {                       // inside a glitch: is this the new level or the old track?
-            double glitchRaw = pin ? glitchRawPin : glitchRawImu;
-            double glitchT = pin ? glitchTPin : glitchTImu;
-            boolean newLevel = Math.abs(MecanumMath.normalizeDegrees(raw - glitchRaw)) <= maxRateDps * (t - glitchT) + marginDeg;
-            if (newLevel && t - badSince >= rebaseSec) {     // it stayed: the sensor restarted; carry on from here
-                off = heading - raw;
-                store(pin, raw, off, t);
-                endGlitch(pin);
-                event = (pin ? "Pinpoint" : "IMU") + " heading restarted: carried on from the last good heading";
-                return heading;
-            }
-            if (!newLevel && fromGood <= maxRateDps * (t - lastSrcT) + marginDeg) {
-                store(pin, raw, off, t);                     // back on the old track: it was a one-off
-                endGlitch(pin);
-                return MecanumMath.normalizeDegrees(raw + off);
-            }
-            setGlitch(pin, raw, t, badSince);                // still off the track
-            return null;
-        }
-        if (fromGood <= maxRateDps * (t - lastSrcT) + marginDeg) {
-            store(pin, raw, off, t);
-            return MecanumMath.normalizeDegrees(raw + off);
-        }
-        glitches++;                                          // a jump the robot can't make: ignore it for now
-        event = String.format("%s heading jumped %.0f deg in %.0f ms: ignored", pin ? "Pinpoint" : "IMU", fromGood,
-                (t - lastSrcT) * 1000);
-        setGlitch(pin, raw, t, t);
-        return null;
-    }
-
-    private void setGlitch(boolean pin, double raw, double t, double since) {
-        if (pin) {
-            badSincePin = since;
-            glitchRawPin = raw;
-            glitchTPin = t;
-        } else {
-            badSinceImu = since;
-            glitchRawImu = raw;
-            glitchTImu = t;
-        }
-    }
-
-    private void endGlitch(boolean pin) {
-        if (pin) {
-            badSincePin = Double.NaN;
-        } else {
-            badSinceImu = Double.NaN;
-        }
-    }
-
-    private void store(boolean pin, double raw, double off, double t) {
-        if (pin) {
-            lastPin = raw;
-            offPin = off;
-            lastPinT = t;
-        } else {
-            lastImu = raw;
-            offImu = off;
-            lastImuT = t;
-        }
+    private void addEvent(String msg) {
+        event = event == null ? msg : event + "; " + msg;
     }
 }
