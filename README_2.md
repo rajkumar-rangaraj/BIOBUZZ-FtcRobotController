@@ -289,6 +289,14 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   - The camera's floor distance, bearing, CELL and tag count. If the CELL dropped out of view in the last second, the last sighting is used.
   - The speed: source (AUTO / MANUAL / ...), table value at that distance, trim, target, the actual speed when the ball hit the wheel, and the dip.
   - READY / fallback, the aim gate, the battery, the IMU heading, and the Pinpoint position from INIT.
+  - How hard the robot was driving (`move`, the largest wheel power) and turning (`turn_cmd`), and whether X (aim) was held.
+- **How the flywheel took it: event `GRAB`**, written when that ball's dip is over (`GrabTracker`):
+  - `pre`: the real speed just before the wheel grabbed the ball, and `launch_err` = pre − target. On a good battery it runs about +15 above the target, on a weak one 20–50 below (7 Nov logs). That is about the ±10 the drivers trim by hand.
+  - `depth`, `min`, `energy` (the share of the flywheel's energy the ball took, 1 − (min / pre)², usually about 0.40–0.45), `recovery_s` (back within ±30 of the target), `below_s`.
+  - `drops`: 2 or more = two balls went in close together (one long dip). `overlapped`: the next ball came before this dip was over.
+  - Where the windmill was: `windmill_ticks_left` to its pocket boundary, `feeding`, `since_pocket_end_s` (a ball that reached the wheel after the pocket stopped).
+  - `amps_base` / `amps_peak`: the launcher current just before and in the dip. It is read only around a pocket (about 2–3 ms of loop time each read, so only while firing); the 20-per-second diag rows have it as `launcher_amps`.
+  - The grab time is accurate to about one loop (25–70 ms); `gap_s` shows the gap to the reading before.
 - **Say what each ball did: LB + D-pad.**
 
   | Press | Label | Meaning |
@@ -301,6 +309,8 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   - A label goes to the **oldest ball of the last 10 s without one**, so a volley is labelled in the order the balls flew. A scout can do it.
   - The controller buzzes when a label is saved and blips twice when no ball is waiting. The screen's `Balls` line shows the counts and how many are waiting. Log event `SHOT_RESULT`.
 - **Then on the laptop:** `python tools/shot_results.py robot_logs [since]`. IN shots from BioBuzz Shot Log count too.
+  - It fits on the **real speed at the grab** (`pre` minus the median launch error of the logs), not the target, so a flywheel running high or low doesn't skew the table.
+  - It leaves out balls whose result says nothing about the speed, and lists them: two balls in one dip, the speed changed mid-shot, the robot driving or turning hard, the flywheel not at speed (|launch error| > 60, fallback), and weak grabs (energy below 75 % of the IN balls' median: the windmill handed the ball over badly, so a SHORT there is not the RPM).
   - It lists each table distance with its labelled balls, and proposes a new `AUTO_SPEED_TPS`. The IN balls set the centre; SHORT balls push it up, LONG balls down.
   - A point moves only with 3+ labelled balls within 3 in of it, and the table keeps rising with distance.
   - `--write` puts the proposal into `BioBuzzConstants.java`; then rebuild and install.

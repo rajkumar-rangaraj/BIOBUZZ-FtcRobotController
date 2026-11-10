@@ -18,6 +18,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 /**
  * All BIOBUZZ hardware and the low-level commands shared by TeleOp, Autonomous and Calibration.
@@ -42,6 +43,8 @@ public class BioBuzzRobot {
     public final double[] lastDrivePower = new double[4];
     public double lastIntakePower = 0;
     public double lastIndexerPower = 0;
+    /** Launcher current from the last launcherCurrentAmps() this loop (NaN = not read; TeleOp reads it only while firing). */
+    public double lastLauncherAmps = Double.NaN;
     private double launcherTarget = 0;
     private final ElapsedTime launcherTimer = new ElapsedTime();
     private final LauncherGate launcherGate = LauncherGate.standard();
@@ -196,6 +199,12 @@ public class BioBuzzRobot {
 
     public double launcherVelocity() {
         return launcher.getVelocity();
+    }
+
+    /** Launcher motor current (A). Not in the hub's bulk read: each call costs a hub transaction (~2-3 ms). */
+    public double launcherCurrentAmps() {
+        lastLauncherAmps = launcher.getCurrent(CurrentUnit.AMPS);
+        return lastLauncherAmps;
     }
 
     /**

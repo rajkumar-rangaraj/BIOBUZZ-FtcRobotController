@@ -3,13 +3,24 @@
   python tools/shot_results.py robot_logs [since]            report (since = file stamp, e.g. 20261110_0900)
   python tools/shot_results.py robot_logs [since] --write    also write the proposed AUTO_SPEED_TPS into BioBuzzConstants
 
-In TeleOp every ball the flywheel launches is logged (events_teleop_*.csv, event BALL: camera floor distance to the
-CELL, the speed table's value there, the driver's trim, the target, ...). The driver or a scout adds what it did with
-LB + D-pad (event SHOT_RESULT): IN, SHORT (too slow), LONG (too fast) or SIDE (left / right / bounced out: aim, not
-speed). IN shots from BioBuzz Shot Log (shots_*.csv) count too (its misses say nothing about short or long).
+In TeleOp every ball the flywheel launches is logged (events_teleop_*.csv):
+  BALL  when it is counted: camera floor distance to the CELL, the speed table's value there, the driver's trim, the
+        target, ready / fallback, how hard the robot was driving / turning, ...
+  GRAB  when its flywheel dip is over (GrabTracker): the real speed just before the wheel took it ("pre"), launch error
+        (pre - target), depth, the share of the flywheel's energy it took, recovery, drops (2+ = two balls in one dip),
+        where the windmill was.
+The driver or a scout adds what it did with LB + D-pad (event SHOT_RESULT): IN, SHORT (too slow), LONG (too fast) or SIDE
+(left / right / bounced out: aim, not speed). IN shots from BioBuzz Shot Log (shots_*.csv) count too.
+
+The fit uses the REAL speed at the grab, not the target: on a good battery the flywheel runs ~+15 t/s above its target,
+on a weak one 20-50 below (7 Nov logs), so targets alone carry that error. Each ball's speed = pre - bias, where bias =
+the median launch error of these logs (what the table must ask for to get that real speed). Balls whose result says
+nothing about the speed are left out of the fit and listed: two balls in one dip, the target changed mid-dip, the robot
+driving or turning hard, the flywheel not at speed (|launch error| > 60, fallback), and weak grabs (energy taken below
+WEAK x the IN balls' median: the windmill pushed the ball in badly; a SHORT there is the hand-over, not the speed).
 
 For every point of the AUTO speed table (AUTO_SPEED_DIST_IN / AUTO_SPEED_TPS, read from BioBuzzConstants.java):
-  offset = the ball's target speed - the table's speed at the ball's distance (the trim it needed, in effect)
+  offset = the ball's speed - the table's speed at the ball's distance
   - IN balls: the right offset is around their median;
   - SHORT balls: it is above their offsets; LONG balls: below.
 A point changes only with at least MIN_SHOTS labelled IN / SHORT / LONG balls within NEAR_IN of it, and the new table
@@ -20,6 +31,9 @@ import csv, datetime, glob, os, re, statistics, sys
 MIN_SHOTS = 3            # labelled IN / SHORT / LONG balls near a table point before it moves
 NEAR_IN = 3.0            # a ball counts for the table point(s) within this many inches
 STEP = 5                 # proposals are rounded to the D-pad trim step (t/s)
+MOVING = 0.15            # BALL move / turn_cmd above this: the robot was driving or turning hard
+NOT_AT_SPEED = 60        # |pre - target| above this: the flywheel was not at speed
+WEAK = 0.75              # energy taken below WEAK x the IN balls' median: a weak grab
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONSTANTS = os.path.join(HERE, '..', 'TeamCode', 'src', 'main', 'java', 'org', 'firstinspires', 'ftc', 'teamcode',
                          'biobuzz', 'BioBuzzConstants.java')
@@ -64,39 +78,77 @@ def newest_copies(root, pattern, stamp_at, since):
 
 
 def load_shots(root, since):
-    shots, launched, ignored = [], 0, 0
+    shots, launched, ignored, grabs_all = [], 0, 0, []
     for name, path in sorted(newest_copies(root, 'events_teleop_*.csv', 14, since).items()):
-        balls, results = {}, {}
+        balls, results, grabs = {}, {}, {}
         for r in csv.DictReader(open(path, newline='')):
             if r.get('event') == 'BALL':
                 b = fields(r['detail'])
                 balls[b.get('ball')] = b
+            elif r.get('event') == 'GRAB':
+                g = fields(r['detail'])
+                grabs[g.get('ball')] = g
             elif r.get('event') == 'SHOT_RESULT':
                 s = fields(r['detail'])
                 results[s.get('ball')] = s.get('result')
             elif r.get('event') == 'SHOT_RESULT_IGNORED':
                 ignored += 1
         launched += len(balls)
+        grabs_all += list(grabs.values())
         for k, res in results.items():
-            b = balls.get(k, {})
+            b, g = balls.get(k, {}), grabs.get(k)
             shots.append(dict(src=name[14:29], ball=k, result=res, floor=num(b.get('floor_in')), target=num(b.get('target')),
                               trim=num(b.get('trim')), bearing=num(b.get('bearing')), source=b.get('source'),
-                              battery=num(b.get('battery')), ready=b.get('ready')))
+                              battery=num(b.get('battery')), ready=b.get('ready'), fallback=b.get('fallback'),
+                              move=num(b.get('move')), turn=num(b.get('turn_cmd')),
+                              pre=num(g.get('pre')) if g else None,
+                              err=num(g.get('launch_err')) if g else None,
+                              energy=num(g.get('energy')) if g else None,
+                              drops=int(num(g.get('drops')) or 1) if g else 1,
+                              overlapped=g.get('overlapped') == 'true' if g else False,
+                              target_changed=g.get('target_changed') == 'true' if g else False))
     for name, path in sorted(newest_copies(root, 'shots_*.csv', 6, since).items()):
         for r in csv.DictReader(open(path, newline='')):
             if r.get('result') in ('IN', 'MISS'):
+                pre, tgt = num(r.get('vel_at_feed')), num(r.get('target_tps'))
                 shots.append(dict(src='shotlog ' + name[6:21], ball=r.get('shot'), result=r['result'],
-                                  floor=num(r.get('floor_dist_in')), target=num(r.get('target_tps')), trim=None,
+                                  floor=num(r.get('floor_dist_in')), target=tgt, trim=None,
                                   bearing=num(r.get('bearing_deg')), source='SHOT_LOG', battery=num(r.get('battery_v')),
-                                  ready='true'))
-    return shots, launched, ignored
+                                  ready='true', fallback='false', move=None, turn=None, pre=pre,
+                                  err=pre - tgt if pre is not None and tgt is not None else None, energy=None, drops=1,
+                                  overlapped=False, target_changed=False))
+    return shots, launched, ignored, grabs_all
+
+
+def prepare(shots):
+    """Each shot's speed for the fit (real speed at the grab minus the typical launch error) and why it is left out."""
+    errs = [s['err'] for s in shots if s['err'] is not None and abs(s['err']) <= NOT_AT_SPEED and s['drops'] == 1]
+    bias = statistics.median(errs) if errs else 0.0
+    in_energy = [s['energy'] for s in shots if s['result'] == 'IN' and s['energy'] is not None]
+    weak = WEAK * statistics.median(in_energy) if len(in_energy) >= 5 else None
+    for s in shots:
+        s['speed'] = s['pre'] - bias if s['pre'] is not None else s['target']
+        why = None
+        if s['drops'] >= 2 or s['overlapped']:
+            why = 'two balls in one dip'
+        elif s['target_changed']:
+            why = 'speed changed mid-shot'
+        elif (s['move'] or 0) > MOVING or abs(s['turn'] or 0) > MOVING:
+            why = 'robot driving / turning'
+        elif s['fallback'] == 'true' or (s['err'] is not None and abs(s['err']) > NOT_AT_SPEED):
+            why = 'flywheel not at speed'
+        elif weak is not None and s['energy'] is not None and s['energy'] < weak:
+            why = 'weak grab (hand-over)'
+        s['excluded'] = why
+    return bias, weak
 
 
 def propose(dist, speed, shots):
     rows = []
     for k, (d, v) in enumerate(zip(dist, speed)):
-        near = [s for s in shots if s['floor'] is not None and s['target'] is not None and abs(s['floor'] - d) <= NEAR_IN]
-        off = {lab: [s['target'] - table_speed(dist, speed, s['floor']) for s in near if s['result'] == lab]
+        near = [s for s in shots if s['floor'] is not None and s['speed'] is not None and not s['excluded']
+                and abs(s['floor'] - d) <= NEAR_IN]
+        off = {lab: [s['speed'] - table_speed(dist, speed, s['floor']) for s in near if s['result'] == lab]
                for lab in ('IN', 'SHORT', 'LONG')}
         side = sum(1 for s in near if s['result'] == 'SIDE')
         miss = sum(1 for s in near if s['result'] == 'MISS')
@@ -138,21 +190,54 @@ def write_table(path, new, note):
     open(path, 'w', encoding='utf-8', newline='').write(src[:line.start()] + repl + src[line.end():])
 
 
+def grab_summary(grabs):
+    """How the flywheel took the balls (all GRAB records, labelled or not)."""
+    if not grabs:
+        return
+    val = lambda k: [x for x in (num(g.get(k)) for g in grabs) if x is not None]
+    q = lambda v, p: sorted(v)[min(len(v) - 1, int(p * len(v)))]
+    err, en, rec, late = val('launch_err'), val('energy'), val('recovery_s'), val('since_pocket_end_s')
+    two = sum(1 for g in grabs if (num(g.get('drops')) or 1) >= 2 or g.get('overlapped') == 'true')
+    during = sum(1 for g in grabs if g.get('feeding') == 'true')
+    if err:
+        print('grabs: launch error (real - target) median %+.0f t/s (p10 %+.0f, p90 %+.0f) | energy taken median %.2f '
+              '(p10 %.2f) | recovery median %.2f s (p90 %.2f)' % (statistics.median(err), q(err, .1), q(err, .9),
+                                                             statistics.median(en) if en else float('nan'),
+                                                             q(en, .1) if en else float('nan'),
+                                                             statistics.median(rec) if rec else float('nan'),
+                                                             q(rec, .9) if rec else float('nan')))
+    print('       taken while the windmill turned %d, after it stopped %d (median %.2f s later) | two balls in one dip %d' % (
+        during, len(grabs) - during, statistics.median(late) if late else float('nan'), two))
+
+
 def main(argv):
     args = [a for a in argv if not a.startswith('--')]
     root = args[0] if args else 'robot_logs'
     since = args[1] if len(args) > 1 else ''
     constants = next((a.split('=', 1)[1] for a in argv if a.startswith('--constants=')), CONSTANTS)
     dist, speed = read_table(constants)
-    shots, launched, ignored = load_shots(root, since)
-    print('%d balls launched in TeleOp logs, %d with a result (+ Shot Log), %d results without a ball' % (
-        launched, len(shots), ignored))
+    shots, launched, ignored, grabs = load_shots(root, since)
+    print('%d balls launched in TeleOp logs (%d with a GRAB record), %d with a result (+ Shot Log), %d results without a ball' % (
+        launched, len(grabs), len(shots), ignored))
+    grab_summary(grabs)
     if not shots:
         print('No labelled balls yet: in TeleOp press LB + D-pad after a ball (UP in, DOWN short, RIGHT long, LEFT side).')
         return 0
     count = lambda lab: sum(1 for s in shots if s['result'] == lab)
     print('results: IN %d, SHORT %d, LONG %d, SIDE %d, MISS (Shot Log) %d; without a camera distance: %d' % (
         count('IN'), count('SHORT'), count('LONG'), count('SIDE'), count('MISS'), sum(1 for s in shots if s['floor'] is None)))
+    bias, weak = prepare(shots)
+    with_pre = sum(1 for s in shots if s['pre'] is not None)
+    print('fit speed = real speed at the grab - %+.0f t/s (the median launch error) for %d balls; the target for %d without '
+          'a GRAB record' % (bias, with_pre, len(shots) - with_pre))
+    left_out = {}
+    for s in shots:
+        if s['excluded']:
+            left_out.setdefault(s['excluded'], []).append(s['result'])
+    for why, res in sorted(left_out.items()):
+        print('  left out, %s: %d (%s)' % (why, len(res), ', '.join('%s %d' % (k, res.count(k)) for k in sorted(set(res)))))
+    if weak is not None:
+        print('  weak grab = energy taken below %.2f (%.0f %% of the IN balls\' median)' % (weak, 100 * WEAK))
     sides = [abs(s['bearing']) for s in shots if s['result'] == 'SIDE' and s['bearing'] is not None]
     ins = [abs(s['bearing']) for s in shots if s['result'] == 'IN' and s['bearing'] is not None]
     if sides:
