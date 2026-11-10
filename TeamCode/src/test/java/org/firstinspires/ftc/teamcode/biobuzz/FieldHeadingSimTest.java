@@ -164,4 +164,74 @@ public class FieldHeadingSimTest {
         String failures = check(true, Fault.NONE, Fault.IMU_GARBAGE, Fault.IMU_BURST);
         assertTrue(failures, failures.isEmpty());
     }
+
+    /**
+     * A short burst of bad Pinpoint readings (1-5 loops: random, or a ramp away from the truth), the robot still or
+     * turning steadily, the IMU flipping or not and, while still, repeating its reading exactly never, half the time or
+     * always (ours repeats ~15 % at rest). Review 10 Nov (Opus 5.5): a few such bursts in 10,000 left a lasting error
+     * of up to 180 deg.
+     *
+     * @return the worst error from 1 s after the burst on
+     */
+    static double burstRun(long seed, StringBuilder trace) {
+        Random r = new Random(seed);
+        FieldHeading h = FieldHeading.standard(0);
+        double truth = r.nextDouble() * 360 - 180, truth0 = truth;
+        double imuZero = truth + r.nextDouble() * 60 - 30;
+        boolean flips = r.nextBoolean();
+        double rate = r.nextBoolean() ? 0 : r.nextDouble() * 600 - 300;
+        double repeat = rate != 0 ? 0 : r.nextInt(3) * 0.5;
+        boolean steady = r.nextBoolean();                              // 23 ms loops, else 20-80 ms
+        int k = 1 + r.nextInt(5);
+        boolean ramp = r.nextBoolean();
+        double rampStep = (3 + r.nextDouble() * 12) * (r.nextBoolean() ? 1 : -1);
+        double tf = 1 + r.nextDouble(), t = 0, imuRaw = Double.NaN, worst = 0;
+        int bad = 0;
+        while (t < tf + 2.5) {
+            double dt = steady ? 0.023 : 0.02 + r.nextDouble() * 0.06;
+            t += dt;
+            truth += Math.signum(rate) * Math.min(Math.abs(rate), Math.max(0, t - 0.3) * 2500) * dt;   // still at START
+            double pin = MecanumMath.normalizeDegrees(truth - truth0 + r.nextGaussian() * 0.05);
+            if (Double.isNaN(imuRaw) || r.nextDouble() >= repeat) {
+                imuRaw = MecanumMath.normalizeDegrees(truth - imuZero + r.nextGaussian() * (rate == 0 ? 0.02 : 0.2));
+            }
+            double imu = flips && Math.abs(imuRaw) > 90 ? MecanumMath.normalizeDegrees(imuRaw + 180) : imuRaw;
+            if (t >= tf && bad < k) {
+                bad++;
+                pin = ramp ? MecanumMath.normalizeDegrees(pin + rampStep * bad) : r.nextDouble() * 360 - 180;
+            }
+            double out = h.update(t, pin, imu);
+            double err = Math.abs(MecanumMath.normalizeDegrees(out - (truth - truth0)));
+            if (trace != null) {
+                trace.append(String.format("t=%6.3f truth=%7.1f pin=%7.1f imu=%7.1f out=%7.1f err=%5.1f %s%n", t,
+                        MecanumMath.normalizeDegrees(truth - truth0), pin, imu, out, err,
+                        h.event() == null ? "" : h.event()));
+            }
+            if (t >= tf + 1) {
+                worst = Math.max(worst, err);
+            }
+        }
+        return worst;
+    }
+
+    @Test
+    public void shortBadPinpointBurstsLeaveNoLastingError() {
+        int runs = 20000, off = 0;
+        double worst = 0;
+        long worstSeed = 0;
+        for (long seed = 1; seed <= runs; seed++) {
+            double e = burstRun(seed, null);
+            if (e > 2) {
+                off++;
+            }
+            if (e > worst) {
+                worst = e;
+                worstSeed = seed;
+            }
+        }
+        String line = String.format("PIN bursts: %d of %d runs off by more than 2 deg 1 s later, worst %.1f deg (seed %d)%n",
+                off, runs, worst, worstSeed);
+        System.out.print(line);
+        assertTrue(line, off == 0);
+    }
 }
