@@ -540,6 +540,67 @@ public class FieldHeadingTest {
     }
 
     @Test
+    public void aTurnDuringALoopStallWhileApartIsFollowedThroughAnImuFlip() {
+        // verification 10 Nov (GPT-6.1): apart by 14 deg, then a real 120 deg turn during a 500 ms stall with the IMU
+        // flipping: the IMU taken as is (-60, within the stall's rate check) took over: 166 deg off for good
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 0, 0);
+        h.update(0.023, 0, 0);
+        h.update(0.046, 0, 14);
+        h.update(0.069, 0, 14);
+        assertEquals(120, h.update(0.569, 120, -46), 1e-9);
+        for (int k = 1; k <= 20; k++) {
+            assertEquals("loop " + k, 120, h.update(0.569 + 0.023 * k, 120, k % 2 == 0 ? -46.01 : -45.99), 1e-9);
+        }
+    }
+
+    @Test
+    public void aFrozenApartImuDoesNotTakeOverWithItsStaleHeading() {
+        // verification 10 Nov (GPT-6.1, Opus 5.5): the IMU freezes while the Pinpoint turns (apart), then one Pinpoint
+        // loop is missing or bad: the IMU's own heading (100 deg behind) took over and stayed
+        for (double drop : new double[] {Double.NaN, -100}) {
+            FieldHeading h = FieldHeading.standard(0);
+            h.update(0, 0, 0);
+            h.update(0.05, 10, 10);
+            double t = 0.05;
+            for (int pin = 20; pin <= 100; pin += 10) {
+                t += 0.05;
+                h.update(t, pin, 10);                                  // the IMU frozen at 10
+            }
+            assertEquals(100, h.heading(), 1e-9);
+            t += 0.05;
+            h.update(t, drop, 10);
+            assertEquals("drop " + drop + ": held", 100, h.heading(), 1e-9);
+            t += 0.05;
+            h.update(t, 100, 10);                                      // the Pinpoint back (the robot stopped)
+            assertEquals("drop " + drop, 100, h.heading(), 1e-9);
+        }
+    }
+
+    @Test
+    public void aResetWhileApartZerosBothSensors() {
+        // verification 10 Nov (Opus 5.5): still, the Pinpoint wanders to +30 (apart); the driver presses reset; when
+        // the Pinpoint came back in line with the IMU, the reset was undone by those 30 deg, for good
+        FieldHeading h = FieldHeading.standard(0);
+        double t = 0;
+        int k = 0;
+        for (; k < 44; k++, t += 0.023) {
+            h.update(t, 0, k % 2 == 0 ? 10.01 : 9.99);
+        }
+        for (double pin = 7.5; pin <= 30; pin += 7.5, k++, t += 0.023) {
+            h.update(t, pin, k % 2 == 0 ? 10.01 : 9.99);
+        }
+        for (int j = 0; j < 30; j++, k++, t += 0.023) {
+            h.update(t, 30, k % 2 == 0 ? 10.01 : 9.99);
+        }
+        h.reset();                                                     // the intake points away: this is 0
+        for (int j = 0; j < 30; j++, k++, t += 0.023) {                // the Pinpoint back on the truth
+            h.update(t, 0, k % 2 == 0 ? 10.01 : 9.99);
+        }
+        assertEquals(0, h.heading(), 0.5);
+    }
+
+    @Test
     public void aPinpointThatWandersThenDropsOutHandsOverToTheImusOwnHeading() {
         FieldHeading h = FieldHeading.standard(0);
         double[] pin = {0, 0, 0, 0, 8, 30, 60};

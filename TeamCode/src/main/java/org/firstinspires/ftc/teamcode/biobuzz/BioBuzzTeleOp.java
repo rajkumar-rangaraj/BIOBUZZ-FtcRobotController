@@ -96,8 +96,7 @@ public class BioBuzzTeleOp extends OpMode {
     private double imuAtInit;
     private FieldHeading fieldHeading;                          // field-centric driving: heading relative to the drivers
     private String headingFrom;
-    private double optionsDownSince = Double.NaN;               // Options down since: a tap = reset (on release),
-    private boolean optionsHoldDone = false;                    // held 1 s = field-centric on/off
+    private final TapHold optionsButton = new TapHold(FIELD_CENTRIC_HOLD_SEC);   // tap = reset, hold = on/off
 
     @Override
     public void init() {
@@ -316,34 +315,23 @@ public class BioBuzzTeleOp extends OpMode {
         if (fieldHeading.event() != null) {
             diag.event("DRIVE_HEADING", fieldHeading.event());
         }
-        // Options: a tap (released within FIELD_CENTRIC_HOLD_SEC) = the intake points away now; held that long =
+        // Options: a tap (let go within FIELD_CENTRIC_HOLD_SEC) = the intake points away now; held that long =
         // field-centric on/off, leaving "away" alone (review 10 Nov: resetting on the press moved the frame first)
-        if (gamepad1.optionsWasPressed()) {
-            optionsDownSince = matchTimer.seconds();
-            optionsHoldDone = false;
-        }
-        if (!Double.isNaN(optionsDownSince)) {
-            if (gamepad1.options) {
-                if (!optionsHoldDone && matchTimer.seconds() - optionsDownSince >= FIELD_CENTRIC_HOLD_SEC) {
-                    optionsHoldDone = true;
-                    BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
-                    gamepad1.rumbleBlips(BioBuzzMatchState.fieldCentric ? 1 : 2);
-                    setStatus(BioBuzzMatchState.fieldCentric ? "FIELD-CENTRIC on: stick up = away from you"
-                            : "robot-centric: stick up = intake side (hold Options 1 s for field-centric)");
-                    diag.event("DRIVE_MODE", BioBuzzMatchState.fieldCentric ? "field-centric (Options held)"
-                            : "robot-centric (Options held)");
-                }
-            } else {                                            // released
-                if (!optionsHoldDone) {                         // a tap
-                    double before = driverHeading;
-                    fieldHeading.reset();
-                    driverHeading = fieldHeading.heading();
-                    gamepad1.rumble(200);
-                    setStatus("Field-centric reset: the way the intake points now = away from you");
-                    diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
-                }
-                optionsDownSince = Double.NaN;
-            }
+        TapHold.Event options = optionsButton.update(matchTimer.seconds(), gamepad1.optionsWasPressed(), gamepad1.options);
+        if (options == TapHold.Event.HOLD) {
+            BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
+            gamepad1.rumbleBlips(BioBuzzMatchState.fieldCentric ? 1 : 2);
+            setStatus(BioBuzzMatchState.fieldCentric ? "FIELD-CENTRIC on: stick up = away from you"
+                    : "robot-centric: stick up = intake side (hold Options 1 s for field-centric)");
+            diag.event("DRIVE_MODE", BioBuzzMatchState.fieldCentric ? "field-centric (Options held)"
+                    : "robot-centric (Options held)");
+        } else if (options == TapHold.Event.TAP) {
+            double before = driverHeading;
+            fieldHeading.reset();
+            driverHeading = fieldHeading.heading();
+            gamepad1.rumble(200);
+            setStatus("Field-centric reset: the way the intake points now = away from you");
+            diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
         }
         // While X aims at our CELL the stick is robot-centric (sideways = sideways to the CELL), and stays so for a
         // moment when the CELL drops out of view (review 10 Nov: the frame flipped back and forth with the camera)
