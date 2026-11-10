@@ -86,6 +86,12 @@ Key files are in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/
   - The IN median sets the centre, kept above the SHORTs and below the LONGs. A point needs ≥ 3 labelled balls; the table is kept rising; values are rounded to 5.
   - `--write` puts the result into `AUTO_SPEED_TPS` (then rebuild and install). Tested on synthetic logs.
 - Note: `AUTO_SPEED_HYSTERESIS` 10 can by itself leave the auto speed up to 10 off the table; the BALL log shows both values.
+- **GRAB event** (`GrabTracker`, `master` `64152dd`, merged into `auto-work` `2c9b56e`; the user asked to log the moment the flywheel takes the ball):
+  - Written when a counted ball's dip is over, linked to BALL by ball number: `pre` (real speed just before the grab: median of 0.2 s, or the last reading while still climbing), `launch_err`, `min`, `depth`, `energy` = 1 − (min/pre)², `recovery_s` (back within ±30), `below_s`, `drops` (2+ = two balls in one long dip), `overlapped`, `target_changed`, `windmill_ticks_left`, `feeding`, `since_pocket_end_s`, `amps_base` / `amps_peak`.
+  - The launcher current (`BioBuzzRobot.launcherCurrentAmps()`, not in the bulk read, ~2–3 ms) is read only while feeding, for `GRAB_WATCH_SEC` 0.8 s after, and during a dip. Diag column `launcher_amps`.
+  - BALL now also has `move` (max |wheel power|), `turn_cmd` and `aim_x`.
+  - **Replay of the 7 Nov + 9 Nov logs** (`files/grab_replay.py`): 108 grabs, no false second drops. Energy median 0.40–0.45 (p10 0.23–0.39), recovery 0.16–0.28 s. **Launch error at the grab: about +15 on a good battery (p90 +30), −22 median on the weak battery (p10 −50).** The ±10 the drivers trim is largely the flywheel's own speed error (no I term, F not voltage-compensated). A real fix later: an I term or battery-compensated F in the launcher PIDF.
+  - `tools/shot_results.py` fits on pre − median launch error (Shot Log: `vel_at_feed`), and leaves out (listing them) two balls in one dip, a target change, move or turn > 0.15, |err| > 60 or fallback, and weak grabs (energy < 0.75 × the IN median).
 
 ### `/sdcard/biobuzz_teleop.txt` (read by TeleOp, AUTO and Tune; survives reinstalls)
 
