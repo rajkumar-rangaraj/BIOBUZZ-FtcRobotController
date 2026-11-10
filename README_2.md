@@ -276,18 +276,40 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   - It doesn't change while RB (FIRE) is held. A new target would make the flywheel settle again in the middle of a burst.
   - It follows one CELL. With two of our CELLs in view, it switches to the other one only after the first has been out of view for 0.5 s. In the 6 Nov logs the camera's best CELL flipped between 31 in and 66 in every few frames, which would have changed the speed 75–140 times a minute.
   - When the CELL drops out of view, the speed stays for 3 s, then falls back to the NEAR / FAR preset (NEAR unless FAR was picked last).
-  - The D-pad trim (→ / ←, 15 t/s) stays on top of the auto speed for the whole match.
+  - The D-pad trim (→ / ←) stays on top of the auto speed for the whole match. It is **5 t/s per press since 9 Nov** (was 15); the auto speed was off by about ±10.
 - **D-pad ↑ / ↓ = MANUAL FAR / NEAR.** The camera is ignored until **X** is pressed (aiming with the camera = the camera's speed again; it also clears the trim).
 - **Screen:** the `Shot speed` line shows `AUTO 41 in 1465 +0 = 1465 t/s`, `AUTO 41 in (CELL lost)`, `MANUAL NEAR` or `NEAR (no CELL)`. The log has a `SPEED` event at every change.
 - **Switch:** in INIT, **Y / Triangle** turns it off (NEAR / FAR presets only, and X sets the SHOT SPOT speed as before). `CONFIG` shows `auto_speed=on/off`.
 - **To check:** above about 57 in the table has only 2 logged shots.
-  - Fire 5 balls at about 50 in and 5 at about 60 in, trim until they score, and put those speeds in the table.
+  - Fire 5 balls at about 50 in and 5 at about 60 in, trim until they score, and put those speeds in the table, or let `tools/shot_results.py` do it (below).
   - Use a battery at 12.5 V or more. With the weak battery (down to about 6 V under load), 24 of 56 balls left more than 30 t/s slow.
+
+**Shot results → speed table (9 Nov 2026):**
+- **Every launched ball is logged** (diagnostics log on), as event `BALL`. TeleOp sees each ball as a flywheel dip.
+  - The camera's floor distance, bearing, CELL and tag count. If the CELL dropped out of view in the last second, the last sighting is used.
+  - The speed: source (AUTO / MANUAL / ...), table value at that distance, trim, target, the actual speed when the ball hit the wheel, and the dip.
+  - READY / fallback, the aim gate, the battery, the IMU heading, and the Pinpoint position from INIT.
+- **Say what each ball did: LB + D-pad.**
+
+  | Press | Label | Meaning |
+  |---|---|---|
+  | LB + ↑ | IN | scored |
+  | LB + ↓ | SHORT | too slow |
+  | LB + → | LONG | too fast |
+  | LB + ← | SIDE | left / right / bounced out: aim, not speed |
+
+  - A label goes to the **oldest ball of the last 10 s without one**, so a volley is labelled in the order the balls flew. A scout can do it.
+  - The controller buzzes when a label is saved and blips twice when no ball is waiting. The screen's `Balls` line shows the counts and how many are waiting. Log event `SHOT_RESULT`.
+- **Then on the laptop:** `python tools/shot_results.py robot_logs [since]`. IN shots from BioBuzz Shot Log count too.
+  - It lists each table distance with its labelled balls, and proposes a new `AUTO_SPEED_TPS`. The IN balls set the centre; SHORT balls push it up, LONG balls down.
+  - A point moves only with 3+ labelled balls within 3 in of it, and the table keeps rising with distance.
+  - `--write` puts the proposal into `BioBuzzConstants.java`; then rebuild and install.
+  - Many SIDE results with a large bearing mean the aim trim needs work, not the speed.
 
 **Shooting with the printed hood (5 Nov 2026):**
 - **Speeds (two flywheel wheels, until 7 Nov; see above for one wheel):** NEAR **1150 t/s** scores from about 28 to 42 in (ball exit to the CELL opening, horizontal), FAR **1240 t/s** from about 46 to 54 in.
   - They come from `tools/shot_model.py`: upward CELL lips 53.5 / 65.1 in from the field CAD, 74° exit 9 in above the tiles, drag and topspin included.
-  - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press).
+  - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press then; 5 since 9 Nov).
 - **FIRE waits** until the flywheel has held within ±30 t/s of the target for 0.1 s.
   - The old rule (at least target − 100) was much looser.
   - The ball would score within about ±4.7 % of the right speed.
