@@ -160,6 +160,49 @@ public class FieldHeadingTest {
     }
 
     @Test
+    public void aResetDuringAGlitchDoesNotJump() {
+        // review 10 Nov: reset based on a stale accepted reading undid itself on the next loop
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 40, Double.NaN);
+        h.update(0.02, 0, Double.NaN);                                 // 40 -> 0 in 20 ms: rejected
+        h.reset();
+        assertEquals(0, h.heading(), 1e-9);
+        assertEquals("not -40", 0, h.update(0.06, 0, Double.NaN), 1e-9);
+        assertEquals(5, h.update(0.10, 5, Double.NaN), 1e-9);
+    }
+
+    @Test
+    public void aPlausiblePinpointJumpWhileTheImuStaysStillIsAGlitch() {
+        // review 10 Nov: with the old 720 deg/s + 15 gate a 20 deg Pinpoint error in 20 ms passed and overrode the IMU
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 20, 50);
+        h.update(0.02, 20, 50);
+        assertEquals("the IMU leads", 0, h.update(0.04, 0, 50), 1e-9);
+        assertEquals(FieldHeading.Source.IMU, h.source());
+        assertEquals(1, h.glitches());
+    }
+
+    @Test
+    public void aHardTurnAcrossPlusMinus180SeenByBothIsFollowed() {
+        FieldHeading h = new FieldHeading(0, 720, 15, 0.3);
+        h.update(0, 0, 0);
+        h.update(0.05, 0, 0);
+        assertEquals("+179 and -179 jumps agree", 179, h.update(0.10, 179, -179), 1e-9);
+        assertTrue(h.event().contains("both"));
+    }
+
+    @Test
+    public void theStandardGateLetsTheRobotsFastestTurnThrough() {
+        FieldHeading h = FieldHeading.standard(0);
+        double t = 0, raw = 0;
+        for (int i = 0; i < 20; i++, t += 0.06, raw += 18) {          // 300 deg/s at 60 ms loops
+            h.update(t, MecanumMath.normalizeDegrees(raw), MecanumMath.normalizeDegrees(raw + 7));
+        }
+        assertEquals(0, h.glitches());
+        assertEquals(MecanumMath.normalizeDegrees(raw - 18), h.heading(), 1e-9);
+    }
+
+    @Test
     public void headingsWrapAround() {
         FieldHeading h = new FieldHeading(170, 720, 15, 0.3);
         h.update(0, 0, Double.NaN);

@@ -138,6 +138,7 @@ public class BioBuzzTeleOp extends OpMode {
         }
         if (gamepad1.optionsWasPressed()) {                      // (SDK 12: options and start are one button with
             fieldHeading.reset();                                // two latches: reading both would reset twice)
+            BioBuzzMatchState.clearAutoHeading();                // the drivers' choice wins, even after a re-INIT
             headingFrom = "set in INIT: the intake points away from you";
         }
         telemetry.addData("Alliance", "%s   (B/Circle = RED, A/Cross = BLUE)  <-- CHECK", alliance);

@@ -31,6 +31,7 @@ public class FieldHeading {
     private double badSincePin = Double.NaN, badSinceImu = Double.NaN;   // a glitch began (NaN = none) ...
     private double glitchRawPin, glitchRawImu, glitchTPin, glitchTImu;     // ... and its latest reading
     private boolean pinBefore = false, imuBefore = false;                 // had a reading in the last update
+    private double rawPin = Double.NaN, rawImu = Double.NaN, rawPinT, rawImuT;   // the latest readings, even rejected
     private int glitches = 0;
     private String event = null;
     static final double REJOIN_SEC = 0.5;            // a sensor silent this long rejoins from the current heading
@@ -68,6 +69,10 @@ public class FieldHeading {
         boolean pinJoins = pinIn && !pinBefore, imuJoins = imuIn && !imuBefore;   // back after a gap: rejoin
         pinBefore = pinIn;
         imuBefore = imuIn;
+        rawPin = pinpointDeg;                                // the latest readings (for reset), accepted or not
+        rawImu = imuDeg;
+        rawPinT = t;
+        rawImuT = t;
         if (!pinIn && !imuIn) {
             if (source != Source.NONE) {
                 event = "no heading reading (Pinpoint and IMU): robot-centric until one comes back";
@@ -99,7 +104,7 @@ public class FieldHeading {
             use(Source.IMU, hi);
             return heading;
         }
-        if (pinIn && imuIn && Math.abs(pinJump - imuJump) <= AGREE_DEG) {
+        if (pinIn && imuIn && Math.abs(MecanumMath.normalizeDegrees(pinJump - imuJump)) <= AGREE_DEG) {
             store(true, pinpointDeg, offPin, t);             // both jumped alike: a real (hard, fast) turn
             store(false, imuDeg, offImu, t);
             endGlitch(true);
@@ -116,9 +121,17 @@ public class FieldHeading {
         if (!started) {
             startDeg = 0;
         } else {
-            heading = 0;
-            offPin = Double.isNaN(lastPin) ? Double.NaN : -lastPin;
-            offImu = Double.isNaN(lastImu) ? Double.NaN : -lastImu;
+            heading = 0;                                     // based on each sensor's LATEST reading, accepted or not:
+            if (Double.isNaN(rawPin)) {                      // the last accepted one may be stale inside a glitch
+                offPin = Double.NaN;
+            } else {
+                store(true, rawPin, -rawPin, rawPinT);
+            }
+            if (Double.isNaN(rawImu)) {
+                offImu = Double.NaN;
+            } else {
+                store(false, rawImu, -rawImu, rawImuT);
+            }
             endGlitch(true);
             endGlitch(false);
         }
