@@ -84,6 +84,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private HiveVision.Target lastTarget;
     private double launchTps = AUTO_LAUNCH_VELOCITY;
     private boolean preloadsGone = false;
+    private boolean poseSet = false;                            // Pedro runs from the known start pose
 
     @Override
     public void runOpMode() {
@@ -133,6 +134,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 "delay=" + delaySec, "park_by=" + parkBySec, "camera=" + (vision != null),
                 String.format("aim_trim=%.1f", settings.aimTrimDeg));
         matchStart = clock.seconds();
+        // TeleOp field-centric start: the robot's heading relative to its drivers. The RED frame's heading is exactly
+        // that (RED drivers look along +X; BLUE poses are mirrored into it). The start pose holds for the no-Pedro
+        // fallback too (it only backs straight off the wall); loopTick() updates it while Pedro drives.
+        BioBuzzMatchState.recordAutoHeading(AutoField.start(start).headingDeg);
         try {
             String why = pedroProblem();
             if (why != null) {
@@ -140,6 +145,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 fallbackLeave();
             } else {
                 follower.setPose(pedro(AutoField.start(start).forAlliance(alliance())));
+                poseSet = true;
                 runPlan();
             }
             log.row("RESULT", "t=" + now(), "step=" + step, "pose=" + (follower == null ? "?" : here()));
@@ -481,6 +487,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void loopTick() {
         double t = now();
         Pose p = follower == null ? null : here();
+        if (poseSet && !poseLost()) {
+            BioBuzzMatchState.recordAutoHeading(redHere().headingDeg);   // for TeleOp's field-centric start
+        }
         HiveVision.Target target = lastTarget;
         if (log != null) {
             log.row(t, step, p == null ? "" : p.x, p == null ? "" : p.y, p == null ? "" : p.headingDeg,
