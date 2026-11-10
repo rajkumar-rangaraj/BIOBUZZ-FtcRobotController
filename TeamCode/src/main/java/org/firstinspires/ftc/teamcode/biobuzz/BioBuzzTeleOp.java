@@ -26,7 +26,11 @@ import com.qualcomm.robotcore.util.Range;
  *   A / Cross             flower arm DEPLOY / STOW (deploys only while the sticks are released)
  *   B / Circle   (hold)   unjam: windmill slowly backwards
  *   D-pad up / down       MANUAL shot speed FAR / NEAR (the camera distance is ignored until X is pressed)
- *   D-pad right / left    shot speed trim +/- LAUNCHER_TRIM_STEP ticks/s (15); stays on top of AUTO for the match
+ *   D-pad right / left    shot speed trim +/- LAUNCHER_TRIM_STEP ticks/s (5); stays on top of AUTO for the match
+ *   LB + D-pad            what the ball did, for the diagnostics log (ShotResults): UP = IN, DOWN = SHORT (too slow),
+ *                         RIGHT = LONG (too fast), LEFT = SIDE (left / right / bounced out). Goes to the oldest ball of
+ *                         the last 10 s without a result, so a volley is labelled in the order the balls flew.
+ *                         tools/shot_results.py turns the labels into speed-table corrections.
  *
  * Shot speed AUTO (default): set from the camera's floor distance to our CELL (ShotSpeed, AUTO_SPEED_* table), kept
  * 3 s after the CELL drops out of view, then the NEAR / FAR preset; it doesn't change while FIRE is held.
@@ -66,6 +70,12 @@ public class BioBuzzTeleOp extends OpMode {
     private final ElapsedTime statusTimer = new ElapsedTime();
     private BioBuzzDiag diag = new BioBuzzDiag("teleop", false);
     private ShotFeeder feeder = ShotFeeder.standard();
+    private final BallCounter ballCounter = BallCounter.forTuning();      // launched balls (flywheel dips), diagnostics
+    private final ShotResults shotResults = new ShotResults(SHOT_LABEL_WINDOW_SEC);
+    private final double[] velT = new double[24], velV = new double[24];   // recent flywheel readings: speed at launch
+    private int velN = 0;
+    private HiveVision.Target lastSeenTarget = null;                       // the CELL as last seen (a ball can leave
+    private double lastSeenTargetT = -1e9;                                 // just after it drops out of view)
     private boolean lastFire = false;
     private boolean lastAim = false;
     private boolean lastAimHadTarget = false;
@@ -156,7 +166,15 @@ public class BioBuzzTeleOp extends OpMode {
             launcherToggledOn = !launcherToggledOn;
             diag.event("LAUNCHER", launcherToggledOn ? "pre-spin ON" : "pre-spin OFF");
         }
-        if (gamepad1.dpadUpWasPressed()) {
+        if (gamepad1.left_bumper) {                             // LB + D-pad: what the ball did (diagnostics log)
+            ShotResults.Result r = gamepad1.dpadUpWasPressed() ? ShotResults.Result.IN
+                    : gamepad1.dpadDownWasPressed() ? ShotResults.Result.SHORT
+                    : gamepad1.dpadRightWasPressed() ? ShotResults.Result.LONG
+                    : gamepad1.dpadLeftWasPressed() ? ShotResults.Result.SIDE : null;
+            if (r != null) {
+                labelShot(r);
+            }
+        } else if (gamepad1.dpadUpWasPressed()) {
             launcherPreset = LAUNCHER_FAR_VELOCITY;
             presetName = "FAR";
             launcherTrim = 0;
@@ -362,6 +380,41 @@ public class BioBuzzTeleOp extends OpMode {
             lastUnjam = gamepad1.b;
         }
 
+        // ---------------- Launched balls (diagnostics: what each shot had; LB + D-pad adds the result) ----------------
+        double now = matchTimer.seconds();
+        double flywheel = robot.launcherVelocity();
+        velT[velN % velT.length] = now;
+        velV[velN % velV.length] = flywheel;
+        velN++;
+        if (target != null) {
+            lastSeenTarget = target;
+            lastSeenTargetT = now;
+        }
+        if (ballCounter.update(now, feeding, robot.isLauncherOn() ? robot.launcherTarget() : 0, flywheel)) {
+            HiveVision.Target seen = now - lastSeenTargetT <= 1.0 ? lastSeenTarget : null;
+            double ballFloorIn = seen == null ? Double.NaN : seen.horizontalIn();
+            double table = Double.isNaN(ballFloorIn) ? Double.NaN : shotSpeed.tableSpeed(ballFloorIn);
+            double launchVel = Double.NEGATIVE_INFINITY, lowVel = Double.POSITIVE_INFINITY;
+            for (int i = 0; i < Math.min(velN, velT.length); i++) {          // the dip started up to ~0.3 s ago
+                if (now - velT[i] <= 0.35) {
+                    launchVel = Math.max(launchVel, velV[i]);
+                    lowVel = Math.min(lowVel, velV[i]);
+                }
+            }
+            ShotResults.Ball ball = shotResults.launched(now, ballFloorIn, launcherTarget, launcherTrim, table);
+            diag.event("BALL", String.format("ball=%d cell=%s tags=%d floor_in=%.1f range_in=%.1f bearing=%.1f seen_ago_s=%.1f"
+                            + " source=%s base=%.0f trim=%+.0f target=%.0f table=%.0f vel=%.0f dip=%.0f ready=%s fallback=%s"
+                            + " aim_gate=%s battery=%.2f imu_hdg=%.1f%s",
+                    ball.number, seen == null ? "none" : seen.cell, seen == null ? 0 : seen.tagCount,
+                    ballFloorIn, seen == null ? Double.NaN : seen.rangeIn, seen == null ? Double.NaN : seen.bearingDeg,
+                    seen == null ? Double.NaN : now - lastSeenTargetT, shotSpeed.source(), baseSpeed, launcherTrim,
+                    launcherTarget, table, launchVel, launchVel - lowVel, ready, fallback,
+                    !aimGate.enabled() ? "off" : (aimGate.gaveWay() ? "gave_way" : "ok"), robot.battery.getVoltage(),
+                    MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit),
+                    pinpoint != null && pinpoint.ok() ? String.format(" pinpoint_fwd_in=%.1f pinpoint_left_in=%.1f pinpoint_hdg=%.1f",
+                            pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg()) : ""));
+        }
+
         // ---------------- Match reminders ----------------
         if (!endgameWarned && matchTimer.seconds() >= 100) {
             endgameWarned = true;
@@ -411,6 +464,11 @@ public class BioBuzzTeleOp extends OpMode {
         }
         telemetry.addData("Windmill", gamepad1.b ? "UNJAM" : String.format("%s  shots %d%s", feeder.state(), feeder.shots(),
                 feeder.jams() > 0 ? "  jams " + feeder.jams() : ""));
+        int waiting = shotResults.waiting(matchTimer.seconds());
+        telemetry.addData("Balls", "%d out, results %d (IN %d, short %d, long %d, side %d)%s", shotResults.balls(),
+                shotResults.labelled(), shotResults.count(ShotResults.Result.IN), shotResults.count(ShotResults.Result.SHORT),
+                shotResults.count(ShotResults.Result.LONG), shotResults.count(ShotResults.Result.SIDE),
+                waiting > 0 ? String.format("   %d waiting: LB + D-pad UP in, DOWN short, RIGHT long, LEFT side", waiting) : "");
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? robot.armState().toString() : "NOT CALIBRATED");
         telemetry.addData("Drive", "%s", armDeployed ? "ARM OUT - precision" : (gamepad1.left_bumper ? "precision" : "normal"));
         if (vision == null) {
@@ -460,5 +518,22 @@ public class BioBuzzTeleOp extends OpMode {
     private void setStatus(String s) {
         status = s;
         statusTimer.reset();
+    }
+
+    /** LB + D-pad: the result of the oldest launched ball of the last SHOT_LABEL_WINDOW_SEC that has none yet. */
+    private void labelShot(ShotResults.Result r) {
+        double now = matchTimer.seconds();
+        ShotResults.Ball b = shotResults.label(now, r);
+        if (b == null) {
+            setStatus(String.format("%s not saved: no ball from the last %.0f s waits for a result", r, SHOT_LABEL_WINDOW_SEC));
+            gamepad1.rumbleBlips(2);
+            diag.event("SHOT_RESULT_IGNORED", r + " (no unlabelled ball in the window)");
+            return;
+        }
+        gamepad1.rumble(150);
+        setStatus(String.format("Ball %d: %s  (%.0f in, %.0f t/s)", b.number, r, b.floorIn, b.targetTps));
+        diag.event("SHOT_RESULT", String.format("ball=%d result=%s floor_in=%.1f target=%.0f trim=%+.0f table=%.0f"
+                        + " offset=%+.0f age_s=%.1f", b.number, r, b.floorIn, b.targetTps, b.trimTps, b.tableTps,
+                b.targetTps - b.tableTps, now - b.t));
     }
 }

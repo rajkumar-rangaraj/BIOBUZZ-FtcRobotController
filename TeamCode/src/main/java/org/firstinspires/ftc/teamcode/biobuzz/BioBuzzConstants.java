@@ -85,7 +85,10 @@ public final class BioBuzzConstants {
     // camera distance or a driver's manual choice, and AUTO's speed when no SHOT SPOT is saved.
     public static final double LAUNCHER_NEAR_VELOCITY = 1450;                    // one wheel (was 1150 with two)
     public static final double LAUNCHER_FAR_VELOCITY = 1570;                     // one wheel (was 1240); few FAR shots yet
-    public static final double LAUNCHER_TRIM_STEP = 15;                          // D-pad RIGHT/LEFT; encoder reads in ~20 t/s steps
+    public static final double LAUNCHER_TRIM_STEP = 5;                           // D-pad RIGHT/LEFT (was 15: the auto speed
+                                                                                 // was off by ~10). Below one encoder reading step
+                                                                                 // (~20 t/s), but the hub's PIDF still moves the
+                                                                                 // average speed
     public static final double LAUNCHER_MAX_VELOCITY = 2600;
     // Auto shot speed (ShotSpeed): camera floor distance to our CELL (in) -> flywheel t/s. 30-57 in from the drivers'
     // one-wheel shots of 7 Nov (above), in between and beyond shaped by tools/shot_model.py (flat to ~36 in, then
@@ -97,6 +100,10 @@ public final class BioBuzzConstants {
     // Two of our CELLs in view (6 Nov logs: REAR at 31 in and AUDIENCE at 66 in, both ~1 deg) made the "best" CELL flip
     // every few frames. The auto speed stays on one CELL and moves to another only after it is gone this long.
     public static final double AUTO_SPEED_SWITCH_SEC = 0.5;
+    // Shot results (TeleOp diagnostics, ShotResults): LB + D-pad labels a launched ball IN / SHORT / LONG / SIDE. A label
+    // goes to the oldest unlabelled ball of the last SHOT_LABEL_WINDOW_SEC; tools/shot_results.py turns labelled balls
+    // into AUTO_SPEED_TPS corrections.
+    public static final double SHOT_LABEL_WINDOW_SEC = 10.0;
     // Ready to fire (LauncherGate): within +/-30 t/s (2.6 %; the scoring window is about +/-4 %) for 0.1 s. If it can't
     // settle there for 1 s, the fallback fires anyway when the speed is between target - 60 and target + 30, so a weak
     // battery or a hunting speed can't block shooting. (P 100 keeps the steady error under ~16 t/s, so normally the

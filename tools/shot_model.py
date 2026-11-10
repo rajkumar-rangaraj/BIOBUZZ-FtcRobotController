@@ -14,7 +14,7 @@ clear of both lips (same rule as the launcher plan).
 Flywheel speed -> ball speed: the ball rolls between the moving tread and the still hood, so with no slip it leaves at
 half the tread speed: v_ball = eta * (tps / 28) * pi * 0.096 / 2. eta (slip + squeeze + the dip as the ball passes)
 is about 0.85-0.93; 0.89 is the value used in the hood review. Only test shots can pin it down, so the code presets
-are starting points and the drivers trim from there (15 t/s per press).
+are starting points and the drivers trim from there (5 t/s per press since 9 Nov; it was 15).
 """
 import math
 
