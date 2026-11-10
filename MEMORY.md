@@ -121,7 +121,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 
 | Button | Action |
 |---|---|
-| Left stick | drive |
+| Left stick | drive. **Field-centric by default since 10 Nov** (`master` `b2c4020` + review fixes `b01f98f`; `FieldHeading`): stick up = away from the drivers; robot-centric while X aims at a CELL in view; L1 in INIT = off (static `BioBuzzMatchState.fieldCentric`, until app restart); Options = "intake points away now" |
 | Right stick | turn |
 | L1 | slow |
 | R2 / L2 | intake in / out |
@@ -529,7 +529,14 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - [ ] Set `feed_pause_sec` to about 0.6 (BioBuzz Tune or adb sed).
 - [ ] **The last ball:** PPR1 v2 was rejected (§7). The `ShotFeeder` no-pause change is done (§5.14); it also helps the vane-throw lone-ball problem (§5.12 model: no pause → never fed 6 % vs 37 %).
 - [x] **Installed `auto-work` `331978d`** (9 Nov 22:29, see the install record).
-- [ ] **Install `auto-work` `2c9b56e` or later** (adds the GRAB diagnostics; 146 tests). The robot wasn't available on 9 Nov ~22:50. Then practice with LB + D-pad labels after each ball, pull the logs, run `python tools/shot_results.py robot_logs <since>` and `--write` when the proposals look right. Install from one session at a time, always the newest `auto-work`, never an older build over the AUTO session's commits.
+- [ ] **Install the latest `auto-work`** (`4827222` or later: GRAB diagnostics + field-centric TeleOp + the Pedro AUTO heading handoff `b680235`; 157 tests). The robot wasn't available on 9 Nov ~22:50 or 10 Nov morning. After installing: first drive in field-centric mode with the intake pointing away at INIT; check that stick up = away when turned 90/180°, that Options re-zeros, that AUTO → TeleOp starts right (INIT screen "from AUTO"), and the `DRIVE_HEADING` events. Then practice with LB + D-pad labels after each ball, pull the logs, run `python tools/shot_results.py robot_logs <since>` and `--write` when the proposals look right. Install from one session at a time, always the newest `auto-work`, never an older build over the AUTO session's commits.
+- **Field-centric details (10 Nov):**
+  - `FieldHeading`: the heading relative to the drivers (0 = intake away, CCW +). The IMU is read first each loop; the Pinpoint leads when accepted, and the IMU is realigned to it. When the Pinpoint is missing or off its track the IMU leads.
+  - Glitch handling: a jump > 720°/s·dt + 15° is a glitch; 0.3 s at the new level = a sensor restart (re-based). A sensor with no reading in the previous update rejoins at the current heading. Both sensors jumping alike (≤ 20° apart) = a real hard turn.
+  - With no reading at all, `update` returns NaN, so the drive goes robot-centric and the screen says NO HEADING.
+  - AUTO handoff: `BioBuzzMatchState.recordAutoHeading` (OLD AUTO: 180 + IMU since START, every loopTick; Pedro AUTO: the start pose heading at START, then `redHere().headingDeg` every loopTick once the pose is set). TeleOp INIT reads `autoHeading()` if < 60 s old; START clears it.
+  - Diag: `CONFIG` field_centric / start_heading, `DRIVE_HEADING` events, columns `drive_hdg` / `field_drive`. The IMU is read once per loop and reused by telemetry.
+  - Rubber-duck review found 4 issues (restart after a short gap passing as a turn, a Pinpoint glitch freezing the heading, a second INIT losing the AUTO heading, Options resetting twice via the options/start latches); all fixed with tests.
 - [ ] **Shooting guide PDF:** Word opens the `.docx` but hangs on every PDF save on 9 Nov (ExportAsFixedFormat and SaveAs2; maybe a hidden Office sign-in or label prompt). The user saves it by hand: open `BioBuzz_Shooting_Guide.docx` → File → Save As → PDF, and commit it.
 - [ ] (Same as the shooting guide PDF item above; at 21:20 the screen was also locked.)
 - [ ] **Empty-pocket feeder change: installed 9 Nov ~16:22** (in `auto-work` `b06abaf`). Practice with the default 0.10 s and pull the logs: count weak shots, `FEED HOLD`, `NO PAUSE` and `RELEASED` (`tools/windmill_logs.py`). If weak shots are rare, try 0.05 in Tune (LB + D-pad ←) for ~19 % less time per ball.
