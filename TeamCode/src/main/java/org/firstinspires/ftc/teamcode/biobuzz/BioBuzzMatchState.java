@@ -36,12 +36,17 @@ public final class BioBuzzMatchState {
         autoHeadingNanos = System.nanoTime();
     }
 
-    /** The heading AUTO left the robot at (NaN when AUTO didn't run recently); it is handed over only once. */
-    public static double takeAutoHeading() {
+    /**
+     * The heading AUTO left the robot at (NaN when AUTO didn't run recently). TeleOp INIT reads it; TeleOp START clears
+     * it (clearAutoHeading), so INIT-ing TeleOp twice before START still gets it (review, 10 Nov).
+     */
+    public static double autoHeading() {
         double age = (System.nanoTime() - autoHeadingNanos) / 1e9;
-        double h = !Double.isNaN(autoHeadingDeg) && age >= 0 && age <= BioBuzzConstants.AUTO_HEADING_HANDOFF_SEC
+        return !Double.isNaN(autoHeadingDeg) && age >= 0 && age <= BioBuzzConstants.AUTO_HEADING_HANDOFF_SEC
                 ? autoHeadingDeg : Double.NaN;
+    }
+
+    public static void clearAutoHeading() {
         autoHeadingDeg = Double.NaN;
-        return h;
     }
 }

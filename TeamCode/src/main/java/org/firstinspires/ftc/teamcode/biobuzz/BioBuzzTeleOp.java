@@ -104,7 +104,7 @@ public class BioBuzzTeleOp extends OpMode {
             pinpoint.reset();                                   // robot still at INIT (AUTO start position to teach AUTO)
         }
         imuAtInit = robot.headingDeg();
-        double fromAuto = BioBuzzMatchState.takeAutoHeading();  // AUTO just ran: the robot hasn't moved since
+        double fromAuto = BioBuzzMatchState.autoHeading();      // AUTO just ran: the robot hasn't moved since
         fieldHeading = FieldHeading.standard(Double.isNaN(fromAuto) ? 0 : fromAuto);
         headingFrom = Double.isNaN(fromAuto) ? "as placed: the INTAKE must point AWAY from you"
                 : String.format("from AUTO: intake %.0f deg %s of away", Math.abs(fromAuto), fromAuto > 0 ? "left" : "right");
@@ -136,8 +136,8 @@ public class BioBuzzTeleOp extends OpMode {
         if (gamepad1.leftBumperWasPressed()) {
             BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
         }
-        if (gamepad1.optionsWasPressed() || gamepad1.startWasPressed()) {
-            fieldHeading.reset();
+        if (gamepad1.optionsWasPressed()) {                      // (SDK 12: options and start are one button with
+            fieldHeading.reset();                                // two latches: reading both would reset twice)
             headingFrom = "set in INIT: the intake points away from you";
         }
         telemetry.addData("Alliance", "%s   (B/Circle = RED, A/Cross = BLUE)  <-- CHECK", alliance);
@@ -163,6 +163,7 @@ public class BioBuzzTeleOp extends OpMode {
     @Override
     public void start() {
         BioBuzzMatchState.rememberAlliance(alliance);
+        BioBuzzMatchState.clearAutoHeading();                   // used by this TeleOp: a later one starts "as placed"
         settings.alliance = alliance;
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
@@ -292,7 +293,7 @@ public class BioBuzzTeleOp extends OpMode {
         if (fieldHeading.event() != null) {
             diag.event("DRIVE_HEADING", fieldHeading.event());
         }
-        if (gamepad1.optionsWasPressed() || gamepad1.startWasPressed()) {
+        if (gamepad1.optionsWasPressed()) {
             double before = driverHeading;
             fieldHeading.reset();
             driverHeading = fieldHeading.heading();
