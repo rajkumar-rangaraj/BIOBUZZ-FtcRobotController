@@ -10,7 +10,12 @@ import com.qualcomm.robotcore.util.Range;
 /*
  * BIOBUZZ competition TeleOp - ONE gamepad (Xbox name / PlayStation symbol).
  *
- *   Left stick            drive + strafe          (intake side is FRONT)
+ *   Left stick            drive + strafe. FIELD-CENTRIC by default: stick up = AWAY FROM THE DRIVERS, whichever way the
+ *                         robot faces (FieldHeading: Pinpoint heading, IMU backup). While X aims at a CELL in view the
+ *                         stick is robot-centric (sideways = sideways to the CELL). Robot-centric (L1 in INIT): stick
+ *                         up = intake side (FRONT)
+ *   Options               field-centric reset: point the INTAKE away from you and press (after a big hit or a hub
+ *                         restart; the start heading comes from AUTO when it ran just before, else "as placed")
  *   Right stick X         turn
  *   Left bumper  (hold)   precision drive
  *   Right trigger         intake IN (analog)
@@ -38,7 +43,9 @@ import com.qualcomm.robotcore.util.Range;
  * During INIT: B / Circle = RED, A / Cross = BLUE (defaults to the alliance the last AUTO ran),
  *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2),
  *               X / Square = aim gate on/off (off = FIRE never waits for the camera),
- *               Y / Triangle = auto shot speed on/off (off = NEAR / FAR presets only, as before 7 Nov).
+ *               Y / Triangle = auto shot speed on/off (off = NEAR / FAR presets only, as before 7 Nov),
+ *               LB / L1 = field-centric driving on/off (ON by default; kept until the robot app restarts),
+ *               Options = the intake points away from you now (field-centric start heading).
  * While the arm is DEPLOYED, driving is limited to precision speed.
  */
 @TeleOp(name = "BioBuzz TeleOp", group = "BioBuzz")
@@ -84,6 +91,8 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean lastUnjam = false;
     private Pinpoint pinpoint;                                  // zeroed at INIT: SHARE teaches AUTO where to shoot
     private double imuAtInit;
+    private FieldHeading fieldHeading;                          // field-centric driving: heading relative to the drivers
+    private String headingFrom;
 
     @Override
     public void init() {
@@ -95,6 +104,10 @@ public class BioBuzzTeleOp extends OpMode {
             pinpoint.reset();                                   // robot still at INIT (AUTO start position to teach AUTO)
         }
         imuAtInit = robot.headingDeg();
+        double fromAuto = BioBuzzMatchState.takeAutoHeading();  // AUTO just ran: the robot hasn't moved since
+        fieldHeading = FieldHeading.standard(Double.isNaN(fromAuto) ? 0 : fromAuto);
+        headingFrom = Double.isNaN(fromAuto) ? "as placed: the INTAKE must point AWAY from you"
+                : String.format("from AUTO: intake %.0f deg %s of away", Math.abs(fromAuto), fromAuto > 0 ? "left" : "right");
         try {
             vision = new HiveVision(hardwareMap);
             vision.setAimTrimDeg(settings.aimTrimDeg);
@@ -120,7 +133,19 @@ public class BioBuzzTeleOp extends OpMode {
         if (gamepad1.yWasPressed()) {
             shotSpeed.setAutoEnabled(!shotSpeed.autoEnabled());
         }
+        if (gamepad1.leftBumperWasPressed()) {
+            BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
+        }
+        if (gamepad1.optionsWasPressed() || gamepad1.startWasPressed()) {
+            fieldHeading.reset();
+            headingFrom = "set in INIT: the intake points away from you";
+        }
         telemetry.addData("Alliance", "%s   (B/Circle = RED, A/Cross = BLUE)  <-- CHECK", alliance);
+        telemetry.addData("Drive", BioBuzzMatchState.fieldCentric
+                ? "FIELD-CENTRIC: stick up = away from you   (L1 toggles)" : "robot-centric: stick up = intake side   (L1 toggles)");
+        if (BioBuzzMatchState.fieldCentric) {
+            telemetry.addData("Start heading", "%s   (Options = the intake points away from you now)", headingFrom);
+        }
         telemetry.addData("Aim gate", "%s   (X/Square toggles; OFF = fire without the camera check)",
                 aimGate.enabled() ? "ON" : "OFF");
         telemetry.addData("Shot speed", "%s   (Y/Triangle toggles; OFF = NEAR/FAR presets only)",
@@ -142,13 +167,15 @@ public class BioBuzzTeleOp extends OpMode {
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
         diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
-                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f feed_empty_wait=%s spot=%s aim_gate=%s auto_speed=%s",
+                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f feed_empty_wait=%s spot=%s aim_gate=%s auto_speed=%s"
+                        + " field_centric=%s start_heading=\"%s\"",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
                 settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
                 SHOT_SKIP_EMPTY_PAUSE ? String.format("%.2f", settings.feedEmptyWaitSec) : "off",
                 settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none",
-                aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off"));
+                aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off",
+                BioBuzzMatchState.fieldCentric ? "on" : "off", headingFrom));
         robot.stowArm();
     }
 
@@ -257,6 +284,30 @@ public class BioBuzzTeleOp extends OpMode {
         double strafe = gamepad1.left_stick_x * scale;
         double turn = gamepad1.right_stick_x * scale;
         boolean aim = gamepad1.x;
+        // Field-centric: the heading relative to the drivers, every loop (ready even while robot-centric). The IMU is read
+        // once here and reused below; the Pinpoint was read at the top of the loop.
+        double imuNow = BioBuzzMatchState.fieldCentric || pinpoint != null ? robot.headingDeg() : Double.NaN;
+        double driverHeading = fieldHeading.update(matchTimer.seconds(),
+                pinpoint != null && pinpoint.ok() ? pinpoint.headingDeg() : Double.NaN, imuNow);
+        if (fieldHeading.event() != null) {
+            diag.event("DRIVE_HEADING", fieldHeading.event());
+        }
+        if (gamepad1.optionsWasPressed() || gamepad1.startWasPressed()) {
+            double before = driverHeading;
+            fieldHeading.reset();
+            driverHeading = fieldHeading.heading();
+            gamepad1.rumble(200);
+            setStatus("Field-centric reset: the way the intake points now = away from you");
+            diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
+        }
+        boolean fieldDrive = BioBuzzMatchState.fieldCentric && !Double.isNaN(driverHeading) && !(aim && target != null);
+        if (fieldDrive) {                                       // stick up = away from the drivers
+            double[] r = MecanumMath.driverToRobot(forward, strafe, driverHeading);
+            forward = r[0];
+            strafe = r[1];
+        }
+        robot.lastDriveHeadingDeg = driverHeading;
+        robot.lastFieldDrive = fieldDrive;
         if (aim && !lastAim) {
             if (shotSpeed.autoEnabled() && vision != null) {
                 if (shotSpeed.manual()) {                       // aiming with the camera = the camera's shot speed again
@@ -497,7 +548,11 @@ public class BioBuzzTeleOp extends OpMode {
                 shotResults.count(ShotResults.Result.LONG), shotResults.count(ShotResults.Result.SIDE),
                 waiting > 0 ? String.format("   %d waiting: LB + D-pad UP in, DOWN short, RIGHT long, LEFT side", waiting) : "");
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? robot.armState().toString() : "NOT CALIBRATED");
-        telemetry.addData("Drive", "%s", armDeployed ? "ARM OUT - precision" : (gamepad1.left_bumper ? "precision" : "normal"));
+        telemetry.addData("Drive", "%s, %s", armDeployed ? "ARM OUT - precision" : (gamepad1.left_bumper ? "precision" : "normal"),
+                !BioBuzzMatchState.fieldCentric ? "robot-centric"
+                        : Double.isNaN(driverHeading) ? "robot-centric: NO HEADING (Pinpoint + IMU)"
+                        : String.format("FIELD-CENTRIC, intake %+.0f deg from away (%s)%s   Options = intake away now",
+                                driverHeading, fieldHeading.source(), fieldDrive ? "" : ", robot-centric while aiming"));
         if (vision == null) {
             telemetry.addData("HIVE aim", "camera not found");
         } else if (target != null) {
@@ -515,7 +570,7 @@ public class BioBuzzTeleOp extends OpMode {
         }
         if (pinpoint != null) {
             telemetry.addData("From INIT", "fwd %.0f  left %.0f in  hdg %.0f  %s   (LB+Share teaches AUTO)%s",
-                    pinpoint.xIn(), pinpoint.yIn(), MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit),
+                    pinpoint.xIn(), pinpoint.yIn(), MecanumMath.normalizeDegrees(imuNow - imuAtInit),
                     pinpoint.ok() ? "" : pinpoint.status(),
                     settings.hasShootPose() ? String.format("  AUTO: %.0f/%.0f/%.0f", settings.shootFwdIn,
                             settings.shootLeftIn, settings.shootHeadingDeg) : "  AUTO: not taught");

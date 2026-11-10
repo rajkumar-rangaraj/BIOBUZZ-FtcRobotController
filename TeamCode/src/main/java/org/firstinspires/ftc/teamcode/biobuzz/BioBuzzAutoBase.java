@@ -209,6 +209,8 @@ public abstract class BioBuzzAutoBase extends LinearOpMode implements DriveIO, A
         updateOdometry();
         double t = clock.seconds() - matchStart;
         double heading = headingDeg();
+        // TeleOp field-centric start: the START has the intake against our alliance wall, i.e. toward the drivers (180)
+        BioBuzzMatchState.recordAutoHeading(MecanumMath.normalizeDegrees(180 + heading));
         double fwd = forwardInches();
         double right = strafeRightInches();
         double launcherVel = robot.launcherVelocity();

@@ -157,7 +157,8 @@ const c = [
   warn('D-pad in other programs is different: BioBuzz Shot Log = speed \u00b150 (UP/DOWN) and \u00b110 (RIGHT/LEFT); BioBuzz Calibration and Arm Setup = arm position; AUTO INIT = start delay.'),
   p(''),
   table(['Button', 'Action'], [
-    ['Left stick / right stick X', 'Drive + strafe / turn  (intake side = FRONT)'],
+    ['Left stick / right stick X', 'Drive + strafe / turn. FIELD-CENTRIC by default: stick up = away from you, whichever way the robot faces (L1 in INIT = robot-centric: up = intake side). While X aims at a CELL the stick is robot-centric'],
+    ['Options', 'Field-centric reset: point the intake away from you and press (after a big hit; the start comes from AUTO, or the robot is assumed to have its intake pointing away at INIT)'],
     ['LB (hold)', 'Precision (slow) drive'],
     ['RT / LT', 'Intake IN / OUT (half LT = flower back-out)'],
     ['RB (hold)', 'FIRE: spins up and feeds one ball at a time, when the flywheel is steady and (CELL in view) the aim is good. FIRE HELD on the screen says why; the ball goes anyway after 1.5 s'],
@@ -169,7 +170,7 @@ const c = [
     ['LB + D-pad', 'Shot result for the log: UP IN, DOWN SHORT, RIGHT LONG, LEFT SIDE (see the D-pad table)'],
     ['A / Cross', 'Flower arm DOWN / UP (only when stopped)'],
     ['B / Circle (hold)', 'Unjam: windmill slowly backwards'],
-    ['INIT: B / A, Back, X, Y', 'Alliance RED / BLUE (remembered; AUTO sets it); diagnostics log on/off; aim gate on/off (off = FIRE never waits for the camera); auto shot speed on/off (off = NEAR / FAR only)'],
+    ['INIT: B / A, Back, X, Y, L1, Options', 'Alliance RED / BLUE (remembered; AUTO sets it); diagnostics log on/off; aim gate on/off (off = FIRE never waits for the camera); auto shot speed on/off (off = NEAR / FAR only); field-centric on/off (ON by default); Options = the intake points away from you now'],
   ], [3600, 6480]),
 ];
 

@@ -56,4 +56,19 @@ public final class MecanumMath {
         }
         return a;
     }
+
+    /**
+     * Field-centric driving: the stick's "away from the drivers" / "to the drivers' right" command, turned into the
+     * robot's forward / strafe-right command.
+     *
+     * @param awayFromDrivers stick up (+) = away from the drivers
+     * @param driversRight    stick right (+) = to the drivers' right
+     * @param headingDeg      robot heading relative to the drivers: 0 = intake away from them, counter-clockwise +
+     * @return {forward, strafeRight} for {@link #wheelPowers}
+     */
+    public static double[] driverToRobot(double awayFromDrivers, double driversRight, double headingDeg) {
+        double h = Math.toRadians(headingDeg);
+        double c = Math.cos(h), s = Math.sin(h);
+        return new double[]{awayFromDrivers * c - driversRight * s, awayFromDrivers * s + driversRight * c};
+    }
 }
