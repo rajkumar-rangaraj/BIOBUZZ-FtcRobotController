@@ -42,6 +42,10 @@ public final class AutoPlanner {
     public static final double SPEED_SWEEP_APPROACH = 0.40;
     public static final double SPEED_SWEEP = 0.15;
     public static final double SPEED_PARK = 0.70;
+    /** Slot A only: speed while passing beside slot B, where the partner may already be parked. */
+    public static final double SPEED_PASS = 0.30;
+    /** The slow pass starts/ends this far before/after our robot is level with a robot in slot B. */
+    public static final double PASS_MARGIN_IN = 3.0;
 
     /** Margins of the footprint check. */
     public static final double HIVE_MARGIN_IN = 2.0;
@@ -137,6 +141,21 @@ public final class AutoPlanner {
         Pose laneIn = new Pose(LANE_X, laneY, FACE_ALLIANCE_WALL);
         if (from.distanceTo(laneIn) > 0.5 || Math.abs(normalizeDeg(from.headingDeg - FACE_ALLIANCE_WALL)) > 2) {
             legs.add(new Leg("TO LANE", laneIn, SPEED_PARK, Action.DRIVE));
+        }
+        if (slot == Slot.A) {
+            // Slot A: a partner may already be parked in B. Pass beside B slowly (a block there stops us gently).
+            Pose b = AutoField.slot(Slot.B);
+            double passFrom = b.y - 2 * HALF_WIDTH_IN - PASS_MARGIN_IN, passTo = b.y + 2 * HALF_WIDTH_IN + PASS_MARGIN_IN;
+            double y = laneY;
+            if (y < passFrom - 0.5) {
+                legs.add(leg("LANE", LANE_X, passFrom, FACE_ALLIANCE_WALL, SPEED_PARK));
+                y = passFrom;
+            }
+            if (y < passTo - 0.5) {
+                legs.add(leg("PASS SLOT B", LANE_X, Math.min(passTo, target.y), FACE_ALLIANCE_WALL, SPEED_PASS));
+                y = Math.min(passTo, target.y);
+            }
+            laneY = y;
         }
         if (Math.abs(target.y - laneY) > 0.5) {
             legs.add(leg("LANE", LANE_X, target.y, FACE_ALLIANCE_WALL, SPEED_PARK));

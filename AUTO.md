@@ -7,12 +7,13 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 | When (s) | Step | Points |
 |---|---|---|
 | 0–1 | Leave the wall, spin up the flywheel | LEAVE +3 (counted at the end) |
-| 1–9 | Camera aim at our up CELL, fire the 4 pre-loads | HIVE TIP +20 if it tips |
-| 9–14 | Drive to our GARDEN, intake its 4 POLLEN | (used for the stretch or in TeleOp) |
-| 14–24 | **Stretch:** back to the spot, fire again, only if the camera sees our CELL still **up** | another TIP? |
-| **by 24** | **PARK** in our LOADING ZONE, slot A or B | PARK +5 |
+| 1–7 | Camera aim at our up CELL, fire the 4 pre-loads | HIVE TIP +20 if it tips |
+| 7–14 | Drive to our GARDEN, sweep slowly along the wall into the corner with the intake on | (POLLEN for TeleOp) |
+| 14–18 | Intake keeps running at the corner for up to 4 s (cut short only when it must park) | |
+| ~18 | **PARK** in our LOADING ZONE: slot **B** (default) is parked by ~24 s, slot A by ~28 s | PARK +5 |
+| (off) | **Stretch** (○ in INIT, off by default): back to the spot and fire the GARDEN POLLEN; it fires only if the camera sees our CELL still **up** | another TIP? |
 
-**Parking always wins.** At the park time (24 s, or earlier when the drive to the slot is long), the robot stops whatever it is doing and parks.
+**Parking always wins.** At the park time (24 s, or earlier when the drive to the slot is long), the robot stops whatever it is doing and parks. Drive times are measured from the 9 Nov runs (park drive about 6 s to B, 10 s to A).
 
 - If the robot is blocked for 1 s before parking (for example by our partner), it drops that step and goes to park.
 - If it is blocked while parking, it waits and tries again until the end of AUTO.
@@ -41,8 +42,9 @@ Rules the code keeps:
 ```
 
 - **S1 = CELL wall start** (best): intake against the **audience** wall (BLUE: rear wall), centred on our up CELL, square to the wall. The robot shoots from here.
-- **S2 = ALLIANCE wall start:** intake against our alliance wall, centred on the field's middle line (between the FLOWER and the LOADING ZONE). It drives about 5 s to the shot spot, so the stretch is usually skipped.
-- **Slot A** = the CORNER end of the LOADING ZONE. **Slot B** = the MIDDLE end (toward the FLOWER). The robot ends 2 in off the wall with 5 in of its body inside the zone. The two slots leave a gap of about 11 in between the robots.
+- **S2 = ALLIANCE wall start:** intake against our alliance wall, centred on the field's middle line (between the FLOWER and the LOADING ZONE). It drives about 5 s to the shot spot, so the GARDEN is short or skipped.
+- **Slot B** (default) = the MIDDLE end of the LOADING ZONE (toward the FLOWER). **Slot A** = the CORNER end. The robot ends 2 in off the wall with 5 in of its body inside the zone. The two slots leave a gap of about 11 in between the robots.
+- **Why B is the default:** the way to A goes past B. When A is chosen, the robot slows to 30 % while it passes B, in a lane exactly halfway between the HIVE frame and a robot parked in B (3.9 in from each). The partner must park at their end of the zone, close to the wall.
 
 ## Before every match: agree with your partner
 
@@ -56,10 +58,10 @@ Rules the code keeps:
 | Button | Setting |
 |---|---|
 | D-pad ← / → | Start S1 / S2 |
-| □ / X | Park slot A / B |
+| □ / X | Park slot B (default) / A |
 | ✕ / A | Shoot pre-loads on/off |
 | △ / Y | GARDEN on/off |
-| ○ / B | Stretch (second volley) on/off |
+| ○ / B | Stretch (second volley) on/off (default off) |
 | D-pad ↑ / ↓ | Start delay 0–10 s |
 | LB / RB | Park-by time 18–27 s (default 24) |
 

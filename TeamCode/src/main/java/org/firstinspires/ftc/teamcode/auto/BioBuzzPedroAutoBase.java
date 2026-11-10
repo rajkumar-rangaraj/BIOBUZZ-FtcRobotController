@@ -53,8 +53,12 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     /** While parking: wait this long after a block, then try again. */
     static final double BLOCKED_WAIT_SEC = 0.75;
     static final double GARDEN_INTAKE_POWER = 1.0;
-    /** Intake keeps running at the end of the GARDEN sweep (9 Nov: 0.6 s was too short), then again on the way back. */
-    static final double GARDEN_DWELL_SEC = 1.5;
+    /**
+     * Intake keeps running at the end of the GARDEN sweep, up to this long (9 Nov: 1 s at the corner did not take 4
+     * POLLEN). Cut short at the park start; the GARDEN is only started when at least GARDEN_MIN_DWELL_SEC fits.
+     */
+    static final double GARDEN_DWELL_SEC = 4.0;
+    static final double GARDEN_MIN_DWELL_SEC = 1.0;
     /** Stretch only when at least this much time is left for aim + settle + a few pockets at the spot. */
     static final double STRETCH_MIN_FIRE_SEC = 4.0;
     /** CELL opening height when UP is ~59 in, when tipped down ~30-35 in. CALIBRATE: logged as height_in. */
@@ -63,8 +67,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double FALLBACK_LEAVE_IN = 8.0;
 
     private Start start = Start.CELL_WALL;
-    private Slot slot = Slot.A;
-    private boolean shoot = true, garden = true, stretch = true;
+    private Slot slot = Slot.B;                                 // B: no driving past a partner parked in the other slot
+    private boolean shoot = true, garden = true, stretch = false;
     private int delaySec = 0;
     private int parkBySec = PARK_BY_DEFAULT_SEC;
 
@@ -172,7 +176,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         }
         boolean collected = false;
         if (garden && preloadsGone
-                && AutoPlanner.fits(now(), redHere(), AutoPlanner.toGarden(), GARDEN_DWELL_SEC, slot, parkBySec)) {
+                && AutoPlanner.fits(now(), redHere(), AutoPlanner.toGarden(), GARDEN_MIN_DWELL_SEC, slot, parkBySec)) {
             if (!stretch) {
                 robot.setLauncherVelocity(0);
             }
@@ -545,10 +549,11 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             at = AutoField.SHOT;
             telemetry.addData("Plan", "shot spot + 4 pre-loads done ~%.0f s", t);
         }
-        if (shoot && garden && AutoPlanner.fits(t, at, AutoPlanner.toGarden(), GARDEN_DWELL_SEC, slot, parkBySec)) {
-            t += AutoPlanner.estimateSec(at, AutoPlanner.toGarden()) + GARDEN_DWELL_SEC;
+        if (shoot && garden && AutoPlanner.fits(t, at, AutoPlanner.toGarden(), GARDEN_MIN_DWELL_SEC, slot, parkBySec)) {
+            t += AutoPlanner.estimateSec(at, AutoPlanner.toGarden());
             at = AutoPlanner.end(at, AutoPlanner.toGarden());
-            telemetry.addData("Plan", "GARDEN done ~%.0f s", t);
+            t = Math.min(t + GARDEN_DWELL_SEC, AutoPlanner.parkStartSec(at, slot, parkBySec));
+            telemetry.addData("Plan", "GARDEN done ~%.0f s (intake at the corner until then)", t);
         }
         double parkAt = Math.max(t, Math.min(AutoPlanner.parkStartSec(at, slot, parkBySec), parkBySec));
         telemetry.addData("Plan", "PARK %s starts by %.0f s, takes ~%.0f s", slot,

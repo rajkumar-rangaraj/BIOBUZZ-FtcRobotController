@@ -127,10 +127,10 @@ public final class AutoField {
     public static final Pose SHOT = new Pose(CELL_X, -WALL_IN + HALF_LENGTH_IN + SHOT_WALL_GAP_IN, FACE_AUDIENCE);
 
     /**
-     * Lane beside the HIVE frame used to drive between the audience side and the LOADING ZONE. It passes 4.25 in from
-     * the HIVE frame and 3.5 in from a partner parked in the other slot.
+     * Lane beside the HIVE frame used to drive between the audience side and the LOADING ZONE: the middle of the gap
+     * between the HIVE frame (x -24.75) and a partner parked in slot B (x -50.5), 3.9 in from each.
      */
-    public static final double LANE_X = -38.0;
+    public static final double LANE_X = (-HIVE_HALF_X_IN + (-WALL_IN + 2 * HALF_LENGTH_IN + 2.0)) / 2;
     /** Where the robot turns on the audience side (far enough from the wall for its corners). */
     public static final double TURN_Y = -48.0;
 

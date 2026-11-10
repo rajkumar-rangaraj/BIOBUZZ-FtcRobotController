@@ -120,12 +120,35 @@ public class AutoPlannerTest {
     /** The time model against the 9 Nov BLUE runs (medians); it may be slower, never much faster. */
     @Test
     public void timeModelMatchesTheRobot() {
+        Pose laneStart = new Pose(LANE_X, TURN_Y, FACE_ALLIANCE_WALL);
+        double lane = AutoPlanner.legSec(laneStart, new AutoPlanner.Leg("LANE",
+                new Pose(LANE_X, SLOT_A_Y, FACE_ALLIANCE_WALL), AutoPlanner.SPEED_PARK, AutoPlanner.Action.DRIVE));
+        assertTrue("LANE 97.6 in: measured 3.9 s, model " + lane, lane >= 3.9 && lane <= 4.6);
         Pose gardenEnd = AutoPlanner.end(SHOT, AutoPlanner.toGarden());
-        List<AutoPlanner.Leg> park = AutoPlanner.park(SHOT, Slot.A);
-        double est = AutoPlanner.estimateSec(SHOT, park);
-        assertTrue("park A from the shot spot: measured 6.3 s, model " + est, est >= 6.3 && est <= 7.5);
         double back = AutoPlanner.legSec(gardenEnd, AutoPlanner.gardenToShot().get(0));
         assertTrue("BACK TURN: measured 1.46 s, model " + back, back >= 1.4 && back <= 2.0);
+    }
+
+    /** Slot A: the robot passes slot B slowly, where the partner may already be parked. */
+    @Test
+    public void slotAPassesSlotBSlowly() {
+        for (Pose from : new Pose[]{SHOT, AutoPlanner.end(SHOT, AutoPlanner.toGarden()), START_ALLIANCE_WALL}) {
+            List<AutoPlanner.Leg> legs = AutoPlanner.park(from, Slot.A);
+            Pose p = from;
+            for (AutoPlanner.Leg l : legs) {
+                boolean besideB = Math.abs(l.to.x - LANE_X) < 0.01 && Math.abs(p.x - LANE_X) < 0.01
+                        && Math.max(p.y, l.to.y) > SLOT_B_Y - 2 * HALF_WIDTH_IN
+                        && Math.min(p.y, l.to.y) < SLOT_B_Y + 2 * HALF_WIDTH_IN;
+                if (besideB) {
+                    assertEquals("leg " + l.label + " from " + from, AutoPlanner.SPEED_PASS, l.speed, 1e-9);
+                }
+                p = l.to;
+            }
+            assertNull(AutoPlanner.routeProblem(from, legs, Slot.B));
+        }
+        for (AutoPlanner.Leg l : AutoPlanner.park(SHOT, Slot.B)) {
+            assertTrue("slot B never slows down", l.speed == AutoPlanner.SPEED_PARK);
+        }
     }
 
     @Test
