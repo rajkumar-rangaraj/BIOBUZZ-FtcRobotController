@@ -56,8 +56,9 @@ Key files are in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/
 
 | File | Role |
 |---|---|
-| `BioBuzzConstants` | All tunables (launcher presets NEAR 1450 / FAR 1570 t/s for ONE flywheel wheel since 7 Nov (two wheels: 1150 / 1240), auto shot speed table `AUTO_SPEED_*`, flywheel P 100, trim step 15, windmill power 0.40, AUTO route, aim and aim-gate, ball-count dip, Pinpoint …) |
+| `BioBuzzConstants` | All tunables (launcher presets NEAR 1450 / FAR 1570 t/s for ONE flywheel wheel since 7 Nov (two wheels: 1150 / 1240), auto shot speed table `AUTO_SPEED_*`, flywheel P 100, trim step 5 (was 15 until 9 Nov), windmill power 0.40, AUTO route, aim and aim-gate, ball-count dip, Pinpoint …) |
 | `ShotSpeed` | TeleOp auto shot speed (`b1cee74`, 7 Nov): base speed from the camera floor distance by the `AUTO_SPEED_*` table (1440 t/s at 30 in … 1640 at 64 in), rounded to 5, hysteresis 10 t/s, latched while FIRE is held (a new target resets `LauncherGate`), kept 3 s after the CELL is lost then the preset, follows ONE CELL (switches only after it is out of view 0.5 s). MANUAL (D-pad ↑/↓) ignores the camera until □. Trim on top. Diag event `SPEED`. Unit-tested |
+| `ShotResults` + `tools/shot_results.py` | TeleOp shot labels → speed table (9 Nov); see "Shot results" below the table |
 | `BioBuzzRobot` | Hardware wrapper (drive, launcher PIDF velocity, `updateLauncherReady()` once per loop / `launcherReady()` = `LauncherGate`, intake, indexer, arm) |
 | `LauncherGate` | FIRE rule: speed within ±30 t/s of the target for 0.1 s; fallback after 1 s only inside target −60…+30 (never long). Unit-tested |
 | `AimGate` | TeleOp aim gate: with our CELL in view, a ready ball waits for aim ≤ 2.0° and no turning (and, while X drives to a saved spot, the right distance); 0.75 s hold through a lost CELL; every hold gives way 1.5 s after it first held a ready ball; X in INIT = off. Unit-tested |
@@ -72,6 +73,19 @@ Key files are in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/biobuzz/
 | `BioBuzzShotLog`, `BioBuzzVisionTest`, `BioBuzzSystemCheck`, `BioBuzzWiringCheck`, `BioBuzzCalibration`, `BioBuzzArmSetup`, `BioBuzzPinpointSetup` | Test and setup tools |
 | `BioBuzzDiag` | TeleOp diagnostics CSV (`diag_teleop_*`, `events_teleop_*`) |
 | `ArmCalibration`, `PinpointCalibration` | Saved calibrations `/sdcard/biobuzz_arm.txt` (deploy 0.16, dir +1), `/sdcard/biobuzz_pinpoint.txt` |
+
+**Shot results** (9 Nov; the user asked for "trim ±5, an option to tell what made it vs not, in the diag, so the speed can be set automatically; it's off by ±10"):
+- **TeleOp logs every launched ball** (event `BALL`), found as a flywheel dip by `BallCounter.forTuning()`. Each entry has:
+  - the camera floor distance, range, bearing, CELL and tags (from the last sighting, at most 1 s old);
+  - the speed source, base, trim, target and the table value at that distance;
+  - the actual speed at launch (max of the last 0.35 s) and the dip;
+  - ready/fallback, the aim gate, battery, the IMU heading since INIT and the Pinpoint pose.
+- **LB + D-pad labels the oldest unlabelled ball of the last 10 s** (`SHOT_LABEL_WINDOW_SEC`): ↑ IN, ↓ SHORT, → LONG, ← SIDE. Event `SHOT_RESULT`; with nothing waiting, `SHOT_RESULT_IGNORED`. The screen's `Balls` line shows the counts.
+- **`tools/shot_results.py robot_logs [since] [--write]`** (Shot Log IN shots count too):
+  - For each table point it uses the balls within 3 in: offset = target − table(d).
+  - The IN median sets the centre, kept above the SHORTs and below the LONGs. A point needs ≥ 3 labelled balls; the table is kept rising; values are rounded to 5.
+  - `--write` puts the result into `AUTO_SPEED_TPS` (then rebuild and install). Tested on synthetic logs.
+- Note: `AUTO_SPEED_HYSTERESIS` 10 can by itself leave the auto speed up to 10 off the table; the BALL log shows both values.
 
 ### `/sdcard/biobuzz_teleop.txt` (read by TeleOp, AUTO and Tune; survives reinstalls)
 
@@ -111,7 +125,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 | ✕ | flower arm |
 | ○ hold | unjam |
 | D-pad ↑ / ↓ | MANUAL FAR / NEAR (camera speed off until □) |
-| D-pad → / ← | trim ±15 t/s (stays on top of AUTO) |
+| D-pad → / ← | trim ±5 t/s since 9 Nov (was ±15; stays on top of AUTO) |
+| LB + D-pad | shot result for the diag log (`ShotResults`, 9 Nov): ↑ IN, ↓ SHORT, → LONG, ← SIDE; goes to the oldest unlabelled ball of the last 10 s |
 | **SHARE** (Back) | save the SHOT SPOT |
 | **L1 + SHARE** | also teach AUTO this exact position (Pinpoint zeroed at TeleOp INIT, so INIT at the AUTO start) |
 | INIT: ○ / ✕ | RED / BLUE |
@@ -505,6 +520,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - [ ] Straight-on check for the SHOT SPOT (cluster yaw), if aiming from the side keeps missing.
 - [ ] Set `feed_pause_sec` to about 0.6 (BioBuzz Tune or adb sed).
 - [ ] **The last ball:** PPR1 v2 was rejected (§7). The `ShotFeeder` no-pause change is done (§5.14); it also helps the vane-throw lone-ball problem (§5.12 model: no pause → never fed 6 % vs 37 %).
+- [ ] **Install `auto-work` `150b183`** (Pedro AUTO + empty-pocket feed + trim 5 + shot results; 137 tests) when the robot is on and nobody is driving. Then practice with LB + D-pad labels after each ball, pull the logs, run `python tools/shot_results.py robot_logs <since>` and `--write` when the proposals look right.
+- [ ] **Re-export `BioBuzz_Shooting_Guide.pdf`** from the new `.docx` (`1f157a9`). On 9 Nov ~21:20 Word's `ExportAsFixedFormat` hung behind a Windows "Enter your PIN" prompt (locked screen or Office sign-in). Open the docx in Word and Save as PDF, or re-run the Word COM export when the user is at the PC.
 - [ ] **Empty-pocket feeder change: installed 9 Nov ~16:22** (in `auto-work` `b06abaf`). Practice with the default 0.10 s and pull the logs: count weak shots, `FEED HOLD`, `NO PAUSE` and `RELEASED` (`tools/windmill_logs.py`). If weak shots are rare, try 0.05 in Tune (LB + D-pad ←) for ~19 % less time per ball.
 - [ ] Maybe a 3D-printed windmill rotor (the guide exists in goBildaStarter). Do the hand-feed test first: if balls fed by hand score well, the windmill is the problem.
 - [ ] Pedro AutoTune from the start, then the Field Tour test (§8). `field-tour` now carries all match code from `master`; use `master` alone for competitions if unsure.
