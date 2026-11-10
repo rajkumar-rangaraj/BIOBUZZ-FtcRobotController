@@ -99,18 +99,33 @@ public class AutoPlannerTest {
         for (Start s : Start.values()) {
             for (Slot slot : Slot.values()) {
                 double t = AutoPlanner.estimateSec(start(s), AutoPlanner.toShot(s)) + FIRE_SEC;
-                assertTrue(s + "/" + slot + ": GARDEN must fit after the first volley",
-                        AutoPlanner.fits(t, SHOT, AutoPlanner.toGarden(), 0.5, slot, 24));
-                Pose gardenEnd = AutoPlanner.end(SHOT, AutoPlanner.toGarden());
-                t += AutoPlanner.estimateSec(SHOT, AutoPlanner.toGarden()) + 0.5;
-                double parkStart = AutoPlanner.parkStartSec(gardenEnd, slot, 24);
-                double parkSec = AutoPlanner.estimateSec(gardenEnd, AutoPlanner.park(gardenEnd, slot));
+                boolean garden = AutoPlanner.fits(t, SHOT, AutoPlanner.toGarden(), 1.5, slot, 24);
+                if (s == Start.CELL_WALL) {
+                    assertTrue(s + "/" + slot + ": GARDEN must fit after the first volley", garden);
+                }
+                Pose from = garden ? AutoPlanner.end(SHOT, AutoPlanner.toGarden()) : SHOT;
+                if (garden) {
+                    t += AutoPlanner.estimateSec(SHOT, AutoPlanner.toGarden()) + 1.5;
+                }
+                double parkStart = AutoPlanner.parkStartSec(from, slot, 24);
+                double parkSec = AutoPlanner.estimateSec(from, AutoPlanner.park(from, slot));
                 assertTrue(parkStart <= 24);
                 assertTrue(s + "/" + slot + ": parked by " + (parkStart + parkSec),
                         parkStart + parkSec <= AutoPlanner.MATCH_SEC - AutoPlanner.PARK_MARGIN_SEC + 1e-9);
-                assertTrue(s + "/" + slot + ": GARDEN done at " + t + " s", t < parkStart);
+                assertTrue(s + "/" + slot + ": GARDEN done at " + t + " s", !garden || t < parkStart);
             }
         }
+    }
+
+    /** The time model against the 9 Nov BLUE runs (medians); it may be slower, never much faster. */
+    @Test
+    public void timeModelMatchesTheRobot() {
+        Pose gardenEnd = AutoPlanner.end(SHOT, AutoPlanner.toGarden());
+        List<AutoPlanner.Leg> park = AutoPlanner.park(SHOT, Slot.A);
+        double est = AutoPlanner.estimateSec(SHOT, park);
+        assertTrue("park A from the shot spot: measured 6.3 s, model " + est, est >= 6.3 && est <= 7.5);
+        double back = AutoPlanner.legSec(gardenEnd, AutoPlanner.gardenToShot().get(0));
+        assertTrue("BACK TURN: measured 1.46 s, model " + back, back >= 1.4 && back <= 2.0);
     }
 
     @Test

@@ -53,8 +53,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     /** While parking: wait this long after a block, then try again. */
     static final double BLOCKED_WAIT_SEC = 0.75;
     static final double GARDEN_INTAKE_POWER = 1.0;
-    /** Intake keeps running at the end of the GARDEN sweep. */
-    static final double GARDEN_DWELL_SEC = 0.6;
+    /** Intake keeps running at the end of the GARDEN sweep (9 Nov: 0.6 s was too short), then again on the way back. */
+    static final double GARDEN_DWELL_SEC = 1.5;
     /** Stretch only when at least this much time is left for aim + settle + a few pockets at the spot. */
     static final double STRETCH_MIN_FIRE_SEC = 4.0;
     /** CELL opening height when UP is ~59 in, when tipped down ~30-35 in. CALIBRATE: logged as height_in. */

@@ -148,6 +148,8 @@ public final class AutoField {
     public static final double GARDEN_SIDE_GAP_IN = 1.5;
     public static final double GARDEN_LANE_Y = -WALL_IN + HALF_WIDTH_IN + GARDEN_SIDE_GAP_IN;
     public static final double GARDEN_SWEEP_START_X = -36.0;
+    /** The slow part starts with the intake bumper 5 in before the first POLLEN (x -60.6). */
+    public static final double GARDEN_SWEEP_SLOW_X = GARDEN_BALL_X[GARDEN_BALL_X.length - 1] + HALF_LENGTH_IN + 5.0;
     /** Intake bumper 1 in from the RED wall at the end of the sweep (the corner POLLEN is against that wall). */
     public static final double GARDEN_SWEEP_END_X = -WALL_IN + HALF_LENGTH_IN + 1.0;
     /** Back-off point between the shot spot and the GARDEN, where the robot turns. */

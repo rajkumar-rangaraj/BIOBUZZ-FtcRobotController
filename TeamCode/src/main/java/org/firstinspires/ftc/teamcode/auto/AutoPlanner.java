@@ -25,14 +25,22 @@ public final class AutoPlanner {
     public static final double PARK_MARGIN_SEC = 1.0;
     /** Pedro Foresight forward top speed (pedro.Constants, AutoTune 4 Nov), in/s. */
     public static final double TOP_SPEED_IN_PER_SEC = 61.4;
-    /** Per leg: speed-up + slow-down + settle. */
-    public static final double LEG_OVERHEAD_SEC = 0.5;
+    /**
+     * Average speed over a leg as a fraction of the commanded path speed (speed-up and slow-down included). Fitted to 7
+     * BLUE runs on 9 Nov: lane 97.6 in at 0.7 took 3.9 s, sweep 24.5 in at 0.25 took 2.9 s, line-up 0.95 s, park leg 0.9 s.
+     */
+    public static final double SPEED_EFFICIENCY = 0.6;
+    /** Per leg: settle at the end. */
+    public static final double LEG_OVERHEAD_SEC = 0.4;
+    /** A turn of 90 deg adds half of this on top of the drive time (the robot turns while it drives). */
     public static final double TURN_SEC_PER_90 = 0.5;
 
     /** Path speeds as a fraction of top speed (Pedro maxPathSpeed). */
     public static final double SPEED_SHOT = 0.30;
     public static final double SPEED_TRANSIT = 0.60;
-    public static final double SPEED_SWEEP = 0.25;
+    /** GARDEN: quick to just before the first POLLEN, then slow through the line so the intake grabs them. */
+    public static final double SPEED_SWEEP_APPROACH = 0.40;
+    public static final double SPEED_SWEEP = 0.15;
     public static final double SPEED_PARK = 0.70;
 
     /** Margins of the footprint check. */
@@ -104,14 +112,16 @@ public final class AutoPlanner {
         return Arrays.asList(
                 new Leg("GARDEN TURN", GARDEN_TURN, SPEED_TRANSIT, Action.DRIVE),
                 leg("GARDEN LINE-UP", GARDEN_SWEEP_START_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL, SPEED_TRANSIT),
+                new Leg("GARDEN APPROACH", new Pose(GARDEN_SWEEP_SLOW_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL),
+                        SPEED_SWEEP_APPROACH, Action.INTAKE),
                 new Leg("GARDEN SWEEP", new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL), SPEED_SWEEP,
                         Action.INTAKE));
     }
 
-    /** End of the GARDEN sweep back to the shot spot (stretch). */
+    /** End of the GARDEN sweep back to the shot spot (stretch); the intake keeps pulling the POLLEN in on the way. */
     public static List<Leg> gardenToShot() {
         return Arrays.asList(
-                new Leg("BACK TURN", GARDEN_TURN, SPEED_TRANSIT, Action.DRIVE),
+                new Leg("BACK TURN", GARDEN_TURN, SPEED_TRANSIT, Action.INTAKE),
                 new Leg("SHOT SPOT", SHOT, SPEED_SHOT, Action.DRIVE));
     }
 
@@ -138,9 +148,9 @@ public final class AutoPlanner {
     // ---------------- Time ----------------
 
     public static double legSec(Pose from, Leg leg) {
-        double drive = from.distanceTo(leg.to) / (leg.speed * TOP_SPEED_IN_PER_SEC);
+        double drive = from.distanceTo(leg.to) / (leg.speed * TOP_SPEED_IN_PER_SEC * SPEED_EFFICIENCY);
         double turn = Math.abs(normalizeDeg(leg.to.headingDeg - from.headingDeg)) / 90 * TURN_SEC_PER_90;
-        return Math.max(drive, turn) + LEG_OVERHEAD_SEC;
+        return drive + turn / 2 + LEG_OVERHEAD_SEC;
     }
 
     public static double estimateSec(Pose from, List<Leg> legs) {
