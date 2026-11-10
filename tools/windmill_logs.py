@@ -8,6 +8,8 @@ the measured stroke is the encoder travel from the push's start until the windmi
 Things to check after the 6 Nov fixes: no push aimed more than 2 pockets ahead, strokes near 1 pocket, few late dips
 (> 0.15 s after the windmill stopped), few pushes that may have fed two balls (two dips, or one extra-deep or extra-long
 dip: two balls 0.1-0.3 s apart make one dip), STUCK mostly followed by a SHOT, few JAMs.
+Since 9 Nov (TeleOp skips the pause after an empty pocket): FEED HOLD stops the windmill mid-pocket, so a held pocket
+shows here as two short pushes. Compare NO PAUSE and HOLD counts with the shots seen to pick Tune's empty wait.
 """
 import csv, glob, os, sys
 import numpy as np
@@ -109,8 +111,8 @@ for n in sorted(events):
     with open(events[n], newline='') as f:
         feed = [r['detail'] for r in csv.DictReader(f) if r.get('event') == 'FEED']
     for k, d in enumerate(feed):
-        w = d.split(' ')[0]
-        if w in ('STUCK', 'JAM', 'JAMMED'):
+        w = 'NO PAUSE' if d.startswith('NO PAUSE') else d.split(' ')[0]
+        if w in ('STUCK', 'JAM', 'JAMMED', 'NO PAUSE', 'HOLD'):
             kinds[w] = kinds.get(w, 0) + 1
         if w == 'STUCK':
             nxt = next((e.split(' ')[0] for e in feed[k + 1:] if e.split(' ')[0] in ('SHOT', 'JAM', 'JAMMED')), 'none')

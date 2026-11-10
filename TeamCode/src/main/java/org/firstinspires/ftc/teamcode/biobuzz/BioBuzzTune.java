@@ -16,10 +16,12 @@ import com.qualcomm.robotcore.util.Range;
  *   R1 / RB (hold)             FIRE with the values below          Triggers: intake in / out
  *   Circle / B (hold)          unjam (windmill backwards)
  *   D-pad LEFT / RIGHT         AIM TRIM: shots go more LEFT / RIGHT (0.5 deg per press)
+ *   LB + D-pad LEFT / RIGHT    EMPTY WAIT -/+ 0.05 s: after a pocket that launched nothing, the next one turns after
+ *                              this instead of the pause (shorter = faster, but more often right behind a late ball)
  *   D-pad UP / DOWN            PAUSE between pockets +/- 0.1 s
  *   LB + D-pad UP / DOWN       WINDMILL POWER +/- 0.05
  *   Cross / A                  reset the ball counter
- *   SHARE / Back               SAVE trim, power and pause on the robot
+ *   SHARE / Back               SAVE trim, power, pause and empty wait on the robot
  */
 @TeleOp(name = "BioBuzz Tune", group = "BioBuzz Test")
 public class BioBuzzTune extends OpMode {
@@ -28,7 +30,7 @@ public class BioBuzzTune extends OpMode {
     private HiveVision vision;
     private TeleOpSettings settings;
     private ShotFeeder feeder;
-    private double trim, power, pause;
+    private double trim, power, pause, emptyWait;
     private boolean launcherOn = false;
     private int pockets = 0, jams = 0;
     private int feederShotsSeen = 0;
@@ -44,6 +46,7 @@ public class BioBuzzTune extends OpMode {
         trim = settings.aimTrimDeg;
         power = settings.feedPower;
         pause = settings.feedPauseSec;
+        emptyWait = settings.feedEmptyWaitSec;
         try {
             vision = new HiveVision(hardwareMap);
         } catch (Exception e) {
@@ -55,14 +58,16 @@ public class BioBuzzTune extends OpMode {
     @Override
     public void init_loop() {
         telemetry.addData("Alliance", "%s (from the last TeleOp / AUTO)", settings.alliance);
-        telemetry.addData("Saved", "trim %+.1f deg, power %.2f, pause %.2f s", trim, power, pause);
+        telemetry.addData("Saved", "trim %+.1f deg, power %.2f, pause %.2f s, empty wait %.2f s", trim, power, pause,
+                emptyWait);
         telemetry.addData("Camera", vision == null ? "NOT FOUND" : "ok");
     }
 
     private void rebuildFeeder() {
         settings.feedPower = power;
         settings.feedPauseSec = pause;
-        feeder = ShotFeeder.fromSettings(settings);
+        settings.feedEmptyWaitSec = emptyWait;
+        feeder = ShotFeeder.fromSettings(settings).skipEmptyPockets(SHOT_SKIP_EMPTY_PAUSE, emptyWait);
         feederShotsSeen = 0;
         if (vision != null) {
             vision.setAimTrimDeg(trim);
@@ -88,10 +93,20 @@ public class BioBuzzTune extends OpMode {
         // ---------------- Settings ----------------
         boolean changed = false;
         if (gamepad1.dpadLeftWasPressed()) {
-            trim = Range.clip(trim + 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
+            if (gamepad1.left_bumper) {
+                emptyWait = Range.clip(round2(emptyWait - 0.05), TeleOpSettings.FEED_EMPTY_WAIT_MIN,
+                        TeleOpSettings.FEED_EMPTY_WAIT_MAX);
+            } else {
+                trim = Range.clip(trim + 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
+            }
             changed = true;
         } else if (gamepad1.dpadRightWasPressed()) {
-            trim = Range.clip(trim - 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
+            if (gamepad1.left_bumper) {
+                emptyWait = Range.clip(round2(emptyWait + 0.05), TeleOpSettings.FEED_EMPTY_WAIT_MIN,
+                        TeleOpSettings.FEED_EMPTY_WAIT_MAX);
+            } else {
+                trim = Range.clip(trim - 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
+            }
             changed = true;
         } else if (gamepad1.dpadUpWasPressed()) {
             if (gamepad1.left_bumper) {
@@ -122,8 +137,10 @@ public class BioBuzzTune extends OpMode {
             saved.aimTrimDeg = trim;
             saved.feedPower = power;
             saved.feedPauseSec = pause;
+            saved.feedEmptyWaitSec = emptyWait;
             boolean ok = saved.trySave();
-            say(ok ? String.format("SAVED: trim %+.1f, power %.2f, pause %.2f", trim, power, pause) : "SAVE FAILED");
+            say(ok ? String.format("SAVED: trim %+.1f, power %.2f, pause %.2f, empty wait %.2f", trim, power, pause,
+                    emptyWait) : "SAVE FAILED");
             gamepad1.rumble(ok ? 600 : 200);
         }
 
@@ -178,6 +195,8 @@ public class BioBuzzTune extends OpMode {
         // ---------------- Screen ----------------
         telemetry.addData("AIM TRIM", "%+.1f deg   (D-pad LEFT = shots more left, RIGHT = more right, seen from behind the launcher)", trim);
         telemetry.addData("PAUSE", "%.2f s between pockets   (D-pad UP / DOWN)", pause);
+        telemetry.addData("EMPTY WAIT", "%.2f s after a pocket that launched nothing%s   (LB + D-pad LEFT / RIGHT)",
+                emptyWait, emptyWait >= pause ? " = OFF (not below the pause)" : "");
         telemetry.addData("WINDMILL", "power %.2f   (LB + D-pad UP / DOWN)", power);
         telemetry.addData("Balls / pockets", "%d / %d  = %s   jams %d   (A resets)", ballCounter.balls(), pockets,
                 pockets == 0 ? "-" : String.format("%.0f%%", 100.0 * ballCounter.balls() / pockets), jams);

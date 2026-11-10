@@ -125,6 +125,15 @@ public final class BioBuzzConstants {
     public static final double SHOT_POCKET_TIMEOUT_SEC = 1.0;                    // a pocket taking longer = jam
     public static final double SHOT_UNJAM_SEC = 0.25;                            // back-off time after a jam (stops after a quarter pocket)
     public static final int SHOT_MAX_JAMS = 3;
+    // TeleOp and Tune: no pause after a pocket that launched nothing (the flywheel stayed ready while it turned and for
+    // the empty wait after); a dip during a pocket started that early stops the windmill until the flywheel is back.
+    // 7 Nov logs (one wheel, printed windmill): 2.7 pockets per ball, and the pause after every pocket was 42 % of FIRE
+    // time, the windmill turning only 27 %. AUTO keeps the plain pause. SHOT_EMPTY_WAIT_SEC is the default; BioBuzz Tune
+    // changes it on the robot (LB + D-pad LEFT / RIGHT). Simulated with the 7 Nov dip timing (60-76 ms loops, 2900 balls):
+    // 0.10 s = 11 % less time per ball, 0.45 % of balls into a slowed flywheel; 0.07 s = 14 %, 1.1 %; 0.05 s = 19 %,
+    // 1.6 %; 0.15 s = 3 %, none.
+    public static final boolean SHOT_SKIP_EMPTY_PAUSE = true;
+    public static final double SHOT_EMPTY_WAIT_SEC = 0.10;
 
     // ---------------- Intake ----------------
     public static final double FEED_INTAKE_BOOST = 0.5;
