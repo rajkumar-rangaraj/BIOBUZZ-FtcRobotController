@@ -79,6 +79,8 @@ public final class BioBuzzConstants {
     public static final double HEADING_GLITCH_MARGIN_DEG = 6;                    // (a hard hit's spin: both sensors agree)
     public static final double HEADING_REBASE_SEC = 0.3;                         // a jump that stays this long = sensor restart
     public static final double FIELD_CENTRIC_HOLD_SEC = 1.0;                     // Options held this long in TeleOp: on/off
+    public static final double AIM_FRAME_HOLD_SEC = 0.5;    // X: the stick stays robot-centric this long after the CELL
+                                                            // drops out of view (diag: 175 of 180 drop-outs < 0.3 s)
     // TeleOp INIT: a Pinpoint turning this much more than the IMU while the robot is still (IMU < STILL) drifts (moved
     // while it calibrated): it is recalibrated (PinpointInitCheck)
     public static final double PINPOINT_INIT_DRIFT_DEG = 1.0;

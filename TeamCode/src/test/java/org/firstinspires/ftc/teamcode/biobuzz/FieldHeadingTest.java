@@ -453,13 +453,120 @@ public class FieldHeadingTest {
     public void badPinpointReadingsThatAgreeCanNotDragTheImu() {
         // simulation 10 Nov: two bad Pinpoint readings within the agree window pulled the IMU along, then the IMU won
         FieldHeading h = FieldHeading.standard(0);
-        h.update(0, 0, 0);
-        h.update(0.05, 0, 0);
-        h.update(0.10, 8, 0);                                          // bad, but within 10 deg of the IMU
-        h.update(0.15, 17, 0);                                         // bad again
-        assertEquals("the IMU kept the real heading", 0, h.update(0.20, 0, 0), 1e-9);
+        h.update(0, 0, 0.01);                                          // a live IMU: a little noise
+        h.update(0.05, 0, -0.01);
+        h.update(0.10, 8, 0.01);                                       // bad, but within 10 deg of the IMU
+        h.update(0.15, 17, -0.01);                                     // bad again
+        assertEquals("the IMU kept the real heading", 0, h.update(0.20, 0, 0.01), 1e-9);
         assertEquals(FieldHeading.Source.PINPOINT, h.source());
-        assertEquals("and the IMU alone agrees", 0, h.update(0.25, Double.NaN, 0), 1.0);
+        assertEquals("and the IMU alone agrees", 0, h.update(0.25, Double.NaN, -0.01), 1.0);
+    }
+
+    @Test
+    public void aShortPinpointExcursionDoesNotCorruptALiveImu() {
+        // review 10 Nov (GPT-6.1): Pinpoint 8, 30, 60 deg then back to 0 (80 ms loops, the robot still): the IMU was
+        // lined up with it after two disagreements, so the real heading was lost for good (~60 deg off)
+        FieldHeading h = FieldHeading.standard(0);
+        double[] pin = {0, 0, 0, 0, 8, 30, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        double t = 0;
+        for (int k = 0; k < pin.length; k++, t += 0.08) {
+            h.update(t, pin[k], k % 2 == 0 ? 0.01 : -0.01);
+        }
+        assertEquals(0, h.heading(), 0.5);
+        FieldHeading fast = FieldHeading.standard(0);                  // the same at 23 ms: 8, 17, 26 then back
+        double[] pin2 = {0, 0, 0, 0, 8, 17, 26, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        t = 0;
+        for (int k = 0; k < pin2.length; k++, t += 0.023) {
+            fast.update(t, pin2[k], k % 2 == 0 ? 0.01 : -0.01);
+        }
+        assertEquals(0, fast.heading(), 0.5);
+        assertEquals("the IMU alone agrees", 0, fast.update(t, Double.NaN, 0.01), 0.5);
+    }
+
+    @Test
+    public void shortBadPinpointBurstsLeaveNoLastingError() {
+        // review 10 Nov (Opus 5.5): still, 23 ms loops, the IMU at 37. Pinpoint 9, 20, 32 then right again left 32 deg
+        // for good (with the IMU constant: it looked frozen); 9, 60, -120, 180 then right again left 180 (stick up
+        // reversed: the IMU was ruled out by a fake turn rate, then a Pinpoint reading matched it flipped)
+        double[][] bursts = {{9, 20, 32}, {9, 60, -120, 180}, {5, 15, 25}};
+        for (double[] burst : bursts) {
+            for (double noise : new double[] {0, 0.01}) {
+                String what = java.util.Arrays.toString(burst) + " IMU noise " + noise;
+                FieldHeading h = FieldHeading.standard(0);
+                double t = 0;
+                int k = 0;
+                for (; k < 44; k++, t += 0.023) {
+                    h.update(t, 0, 37 + (k % 2 == 0 ? noise : -noise));
+                }
+                for (double bad : burst) {
+                    h.update(t, bad, 37 + (k++ % 2 == 0 ? noise : -noise));
+                    t += 0.023;
+                }
+                for (int j = 0; j < 10; j++, k++, t += 0.023) {
+                    h.update(t, 0, 37 + (k % 2 == 0 ? noise : -noise));
+                }
+                assertEquals(what, 0, h.heading(), 1.5);
+                for (int j = 1; j <= 20; j++, k++, t += 0.023) {               // then a real 90 deg turn (196 deg/s)
+                    double imu = 37 + 4.5 * j + (k % 2 == 0 ? noise : -noise);
+                    h.update(t, 4.5 * j, Math.abs(imu) > 90 ? MecanumMath.normalizeDegrees(imu + 180) : imu);
+                }
+                assertEquals(what, 90, h.heading(), 1.5);
+            }
+        }
+    }
+
+    @Test
+    public void aHardHitWhileTheImuIsApartIsFollowed() {
+        // the IMU restarted a little (14 deg: a possible move, so the two are apart for a while), then a hit turns the
+        // robot 60 deg in one loop: both sensors jump alike, so it is a real move, not two glitches
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 0, 0.01);
+        h.update(0.023, 0, -0.01);
+        double t = 0.046;
+        h.update(t, 0, 14.01);
+        assertTrue(h.event(), h.event() != null && h.event().contains("IMU 14 deg off the Pinpoint"));
+        for (int k = 0; k < 5; k++) {
+            t += 0.023;
+            h.update(t, 0, k % 2 == 0 ? 13.99 : 14.01);
+        }
+        t += 0.023;
+        assertEquals(60, h.update(t, 60, 74.01), 1e-9);
+        assertTrue(h.event(), h.event() != null && h.event().contains("seen by both"));
+        for (int k = 0; k < 20; k++) {
+            t += 0.023;
+            assertEquals("loop " + k, 60, h.update(t, 60, k % 2 == 0 ? 73.99 : 74.01), 1e-9);
+        }
+        assertEquals(FieldHeading.Source.PINPOINT, h.source());
+    }
+
+    @Test
+    public void aPinpointThatWandersThenDropsOutHandsOverToTheImusOwnHeading() {
+        FieldHeading h = FieldHeading.standard(0);
+        double[] pin = {0, 0, 0, 0, 8, 30, 60};
+        double t = 0;
+        for (int k = 0; k < pin.length; k++, t += 0.08) {
+            h.update(t, pin[k], k % 2 == 0 ? 0.01 : -0.01);
+        }
+        assertEquals("the Pinpoint leads meanwhile", 60, h.heading(), 0.5);
+        assertEquals("the IMU kept its own heading (1 deg nudge while they agreed at 8)", 0,
+                h.update(t, Double.NaN, 0.01), 1.5);
+    }
+
+    @Test
+    public void anImuThatJumpedALittleIsLinedUpWithThePinpointAfterAWhile() {
+        // an IMU restart small enough to be a possible move, which loses to the Pinpoint: it is apart, then lined up
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 0, 0.01);
+        h.update(0.05, 0, -0.01);
+        double t = 0.10;
+        assertEquals(0, h.update(t, 0, 20.01), 1e-9);
+        assertTrue(h.event(), h.event() != null && h.event().contains("IMU 20 deg off the Pinpoint"));
+        for (int k = 1; t < 0.10 + FieldHeading.IMU_REALIGN_SEC + 0.1; k++) {
+            t += 0.05;
+            assertEquals(0, h.update(t, 0, k % 2 == 0 ? 20.01 : 19.99), 1e-9);
+        }
+        assertEquals("then the IMU alone carries on from the Pinpoint's heading", 0,
+                h.update(t + 0.05, Double.NaN, 20.01), 0.05);
     }
 
     @Test

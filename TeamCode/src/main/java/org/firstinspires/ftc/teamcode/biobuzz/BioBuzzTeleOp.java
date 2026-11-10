@@ -88,6 +88,7 @@ public class BioBuzzTeleOp extends OpMode {
     private boolean lastFire = false;
     private boolean lastAim = false;
     private boolean lastAimHadTarget = false;
+    private double aimCellSeenT = Double.NaN;                   // X held: when our CELL was last in view
     private boolean lastUnjam = false;
     private Pinpoint pinpoint;                                  // zeroed at INIT: SHARE teaches AUTO where to shoot
     private final PinpointInitCheck pinpointCheck = PinpointInitCheck.standard();
@@ -95,8 +96,8 @@ public class BioBuzzTeleOp extends OpMode {
     private double imuAtInit;
     private FieldHeading fieldHeading;                          // field-centric driving: heading relative to the drivers
     private String headingFrom;
-    private double optionsDownSince = Double.NaN;               // Options held 1 s: field-centric on/off
-    private boolean optionsHoldDone = false;
+    private double optionsDownSince = Double.NaN;               // Options down since: a tap = reset (on release),
+    private boolean optionsHoldDone = false;                    // held 1 s = field-centric on/off
 
     @Override
     public void init() {
@@ -315,31 +316,44 @@ public class BioBuzzTeleOp extends OpMode {
         if (fieldHeading.event() != null) {
             diag.event("DRIVE_HEADING", fieldHeading.event());
         }
+        // Options: a tap (released within FIELD_CENTRIC_HOLD_SEC) = the intake points away now; held that long =
+        // field-centric on/off, leaving "away" alone (review 10 Nov: resetting on the press moved the frame first)
         if (gamepad1.optionsWasPressed()) {
-            double before = driverHeading;
-            fieldHeading.reset();
-            driverHeading = fieldHeading.heading();
-            gamepad1.rumble(200);
-            setStatus("Field-centric reset: the way the intake points now = away from you");
-            diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
-        }
-        if (gamepad1.options) {                                 // held: field-centric on/off (if "up" ever goes wrong)
-            if (Double.isNaN(optionsDownSince)) {
-                optionsDownSince = matchTimer.seconds();
-            } else if (!optionsHoldDone && matchTimer.seconds() - optionsDownSince >= FIELD_CENTRIC_HOLD_SEC) {
-                optionsHoldDone = true;
-                BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
-                gamepad1.rumbleBlips(BioBuzzMatchState.fieldCentric ? 1 : 2);
-                setStatus(BioBuzzMatchState.fieldCentric ? "FIELD-CENTRIC on: stick up = away from you"
-                        : "robot-centric: stick up = intake side (hold Options 1 s for field-centric)");
-                diag.event("DRIVE_MODE", BioBuzzMatchState.fieldCentric ? "field-centric (Options held)"
-                        : "robot-centric (Options held)");
-            }
-        } else {
-            optionsDownSince = Double.NaN;
+            optionsDownSince = matchTimer.seconds();
             optionsHoldDone = false;
         }
-        boolean fieldDrive = BioBuzzMatchState.fieldCentric && !Double.isNaN(driverHeading) && !(aim && target != null);
+        if (!Double.isNaN(optionsDownSince)) {
+            if (gamepad1.options) {
+                if (!optionsHoldDone && matchTimer.seconds() - optionsDownSince >= FIELD_CENTRIC_HOLD_SEC) {
+                    optionsHoldDone = true;
+                    BioBuzzMatchState.fieldCentric = !BioBuzzMatchState.fieldCentric;
+                    gamepad1.rumbleBlips(BioBuzzMatchState.fieldCentric ? 1 : 2);
+                    setStatus(BioBuzzMatchState.fieldCentric ? "FIELD-CENTRIC on: stick up = away from you"
+                            : "robot-centric: stick up = intake side (hold Options 1 s for field-centric)");
+                    diag.event("DRIVE_MODE", BioBuzzMatchState.fieldCentric ? "field-centric (Options held)"
+                            : "robot-centric (Options held)");
+                }
+            } else {                                            // released
+                if (!optionsHoldDone) {                         // a tap
+                    double before = driverHeading;
+                    fieldHeading.reset();
+                    driverHeading = fieldHeading.heading();
+                    gamepad1.rumble(200);
+                    setStatus("Field-centric reset: the way the intake points now = away from you");
+                    diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
+                }
+                optionsDownSince = Double.NaN;
+            }
+        }
+        // While X aims at our CELL the stick is robot-centric (sideways = sideways to the CELL), and stays so for a
+        // moment when the CELL drops out of view (review 10 Nov: the frame flipped back and forth with the camera)
+        if (!aim) {
+            aimCellSeenT = Double.NaN;
+        } else if (target != null) {
+            aimCellSeenT = matchTimer.seconds();
+        }
+        boolean aimFrame = !Double.isNaN(aimCellSeenT) && matchTimer.seconds() - aimCellSeenT < AIM_FRAME_HOLD_SEC;
+        boolean fieldDrive = BioBuzzMatchState.fieldCentric && !Double.isNaN(driverHeading) && !aimFrame;
         if (fieldDrive) {                                       // stick up = away from the drivers
             double[] r = MecanumMath.driverToRobot(forward, strafe, driverHeading);
             forward = r[0];

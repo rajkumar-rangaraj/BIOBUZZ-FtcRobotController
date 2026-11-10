@@ -6,20 +6,25 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * Control Hub IMU (read right after the Pinpoint, so the two agree while turning).
  * <ul>
  *   <li>The IMU yaw flips by 180 deg, mostly where it crosses +-90 (diag logs 30 Oct - 9 Nov: ~1290 flips, each one the
- *       wheels' turn +-180). An IMU reading is taken as is or flipped: whichever fits its own track, else whichever is
- *       nearer the Pinpoint (or the predicted heading).</li>
+ *       wheels' turn +-180). An IMU reading is taken as is or flipped: whichever fits its last reading on its track
+ *       (also while it is off its track), else whichever is nearer the Pinpoint (or the predicted heading).</li>
  *   <li>Both sensors agree (within AGREE_DEG): that is the heading, however fast it moved (a hard hit, or a turn during
  *       a loop stall).</li>
  *   <li>Otherwise a reading must be a move the robot can make since that sensor's last good reading (looking back at
  *       most GATE_DT_CAP_SEC: after a loop stall the check would pass anything). A bigger jump is a glitch: that sensor
  *       is off its track. A sensor leading on its own must also read where the robot can get from the predicted heading
  *       (last turn rate, MAX_ACCEL_DPS2): a bad reading can pass the rate check from standing still. If the new reading
- *       only fits without its last one, that last one was bad: it is dropped.</li>
+ *       only fits without its last one, that last one was bad: it is dropped. The turn rate comes from the leading
+ *       sensor's own move: a jump to the other sensor's heading (taking over, or back in line) isn't a turn.</li>
  *   <li>Both fit their tracks but disagree: if both are in reach of the predicted heading, the one nearer it leads,
  *       unless the IMU repeats its last reading exactly (frozen: at the start of a turn it would be nearer); else the
  *       one in reach (e.g. not a Pinpoint restart); neither: the Pinpoint. While the two agree, the IMU follows the
- *       Pinpoint by at most NUDGE_DEG a loop (bad Pinpoint readings within the agree window can't drag it); an IMU that
- *       disagrees two loops in a row is lined up with the Pinpoint.</li>
+ *       Pinpoint by at most NUDGE_DEG a loop (bad Pinpoint readings within the agree window can't drag it). An IMU
+ *       apart from the leading Pinpoint keeps its own offset for IMU_REALIGN_SEC (the Pinpoint leads meanwhile and wins
+ *       every contest; both jumping alike is a hard hit, followed): a Pinpoint that comes back in line with it was the
+ *       glitch (review 10 Nov), and if the Pinpoint drops out, the IMU takes over with its own heading. Then it is
+ *       lined up with the Pinpoint (a frozen IMU too: a still robot's IMU repeats its reading, so "frozen" can't be
+ *       told apart from a bad Pinpoint while still).</li>
  *   <li>A sensor off its track is back when it agrees with the other one again or, if the other one isn't on its track,
  *       when it reads near the predicted heading (a restarted sensor moves on smoothly: only very near). If it moves
  *       on smoothly from its jump for rebaseSec instead, it restarted: it is lined up with the current heading, after
@@ -27,12 +32,14 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  *   <li>A sensor that comes back after a gap (no reading in the last update) rejoins at the current heading.</li>
  *   <li>Reset turns the whole frame: a glitch in progress is sorted out the same way afterwards.</li>
  * </ul>
- * Limits (FieldHeadingSimTest: 400 runs per fault): a Pinpoint restart small enough to pass as a turn can stay until
- * Options (up to ~10 deg). With the IMU alone, a bad reading that looks like a possible move can leave up to ~20 deg
- * (the heading waits 0.3 s meanwhile). A Pinpoint that freezes with a good status, or whose gyro drifts, leads anyway
- * (two gyros can't tell a drift from a frozen IMU while turning slowly; the wheel-encoder referee tried 10 Nov wasn't
- * reliable yet): TeleOp INIT recalibrates a drifting Pinpoint (PinpointInitCheck), and holding Options 1 s turns
- * field-centric off. No FTC SDK dependency: unit-tested (FieldHeadingTest, FieldHeadingSimTest).
+ * Limits (FieldHeadingSimTest: 400 runs per fault; 20,000 short bad-Pinpoint bursts leave no error): a Pinpoint
+ * restart small enough to pass as a turn can stay until Options (up to ~10 deg). With the IMU alone, a bad reading that
+ * looks like a possible move can leave up to ~20 deg (the heading waits 0.3 s meanwhile). If the IMU restarts by a
+ * possible move (up to ~16 deg) and the Pinpoint drops out within IMU_REALIGN_SEC, that restart stays. A Pinpoint that
+ * freezes with a good status, or whose gyro drifts, leads anyway (two gyros can't tell a drift from a frozen IMU while
+ * turning slowly; the wheel-encoder referee tried 10 Nov wasn't reliable yet): TeleOp INIT recalibrates a drifting
+ * Pinpoint (PinpointInitCheck), and holding Options 1 s turns field-centric off. No FTC SDK dependency: unit-tested
+ * (FieldHeadingTest, FieldHeadingSimTest).
  */
 public class FieldHeading {
 
@@ -43,6 +50,7 @@ public class FieldHeading {
     static final double MAX_ACCEL_DPS2 = 3000;       // turn acceleration (diag logs, wheel encoders: 99.9 % < 2620)
     static final double BACK_DT_CAP_SEC = 0.1;       // a sensor that moved on smoothly is back only this near
     static final double NUDGE_DEG = 1;               // while both agree, the IMU follows the Pinpoint this much a loop
+    static final double IMU_REALIGN_SEC = 2;         // an IMU apart from the leading Pinpoint this long: lined up
     static final double FLIP_EVENT_SEC = 1;          // IMU flips are logged at most this often
 
     /** One heading sensor. */
@@ -83,7 +91,8 @@ public class FieldHeading {
     private double beforeHeading = Double.NaN, beforeT, beforeRate, beforeRateDt;   // the same before the last update
     private boolean beforeRateKnown = false;         // that gave the heading (to drop that one if it was bad)
     private Source lastLeader = Source.NONE;         // the sensor that gave the heading in the last update
-    private boolean imuDisagreed = false;            // the IMU fit its track but not the Pinpoint's, last update
+    private double imuApartSince = Double.NaN;       // the live IMU fit its track but not the leading Pinpoint since
+    private double imuApartBy;                       // ... this far behind it (Pinpoint - IMU, deg)
     private Source source = Source.NONE;
     private int glitches = 0;
     private int imuFlips = 0;
@@ -137,6 +146,7 @@ public class FieldHeading {
         }
         boolean pinT = pinIn && !pinJoins, imuT = imuIn && !imuJoins;      // judged against their tracks
         boolean pinWasOn = pinT && pin.onTrack(), imuWasOn = imuT && imu.onTrack();
+        boolean imuApart = !Double.isNaN(imuApartSince);
         double pred = predicted(t);
 
         // Each reading against its own sensor's track; the IMU's as is or flipped.
@@ -147,11 +157,13 @@ public class FieldHeading {
                 <= (rateKnown ? envelope(since) : maxRateDps * since + marginDeg);
         double iAs = imuT ? MecanumMath.normalizeDegrees(imuDeg + imu.off) : Double.NaN;
         double iFlip = MecanumMath.normalizeDegrees(iAs + 180);
-        boolean asFits = imuWasOn && fits(imu, imuDeg, t);
-        boolean flipFits = imuWasOn && fits(imu, imuDeg + 180, t);
+        // As is or flipped, from its last reading on its track: also for an IMU off its track (review 10 Nov: else any
+        // Pinpoint reading near the flipped IMU was followed, and a 180 deg error could stay).
+        boolean asNear = imuT && fits(imu, imuDeg, t), flipNear = imuT && fits(imu, imuDeg + 180, t);
+        boolean asFits = imuWasOn && asNear, flipFits = imuWasOn && flipNear;
         boolean flip;
-        if (asFits != flipFits) {
-            flip = flipFits;
+        if (asNear != flipNear) {
+            flip = flipNear;
         } else {                                             // neither or both fit: the one nearer the Pinpoint/prediction
             double ref = pinFits ? p : pred;
             flip = dist(iFlip, ref) < dist(iAs, ref);
@@ -162,10 +174,12 @@ public class FieldHeading {
         boolean pinLeads = false, imuLeads = false;
         // An IMU reading its own track rules out (the other one fits) agrees only with a Pinpoint move the robot can
         // make: else a bad Pinpoint reading that happens to match it would be followed (simulation, 10 Nov).
-        boolean agreeAs = pinT && imuT && dist(p, iAs) <= AGREE_DEG && (asFits || !flipFits || pinPossible);
-        boolean agreeFlip = pinT && imuT && dist(p, iFlip) <= AGREE_DEG && (flipFits || !asFits || pinPossible);
+        boolean agreeAs = pinT && imuT && dist(p, iAs) <= AGREE_DEG && (asNear || !flipNear || pinPossible);
+        boolean agreeFlip = pinT && imuT && dist(p, iFlip) <= AGREE_DEG && (flipNear || !asNear || pinPossible);
         if (agreeAs || agreeFlip) {                          // both agree: that's the heading, however fast it moved
-            if (pinWasOn && !pinFits) {
+            if (imuApart) {
+                addEvent(String.format("Pinpoint back in line with the IMU after %.1f s: followed", t - imuApartSince));
+            } else if (pinWasOn && !pinFits) {
                 addEvent(String.format("fast turn seen by both sensors (%.0f deg): followed",
                         MecanumMath.normalizeDegrees(p - heading)));
             }
@@ -173,8 +187,13 @@ public class FieldHeading {
                 imuFlipped(t);
             }
             pinLeads = true;
-            imuDisagreed = false;
-            setHeading(p, t);
+            imuApartSince = Double.NaN;
+            boolean imuSmooth = imuWasOn && (agreeAs ? asFits : flipFits);
+            if (!pinFits && imuSmooth) {                     // the Pinpoint jumped back in line: the turn rate is the
+                setHeading(p, t, imu, agreeAs ? imuDeg : imuDeg + 180);                 // IMU's, not that jump
+            } else {
+                setHeading(p, t);
+            }
             keep(pin, pinpointDeg, t);
             double flipBy = agreeAs ? 0 : 180;               // the IMU follows the Pinpoint at most NUDGE_DEG a loop: a
             double miss = MecanumMath.normalizeDegrees(p - (imuDeg + flipBy + imu.off));     // bad Pinpoint reading
@@ -183,6 +202,17 @@ public class FieldHeading {
             keep(imu, imuDeg, t);
         } else {
             boolean pinOk = pinFits, imuOk = imuFits;
+            if (imuApart && pinWasOn && imuWasOn && !pinFits && !asNear && !flipNear) {
+                double asMiss = dist(p, iAs + imuApartBy), flipMiss = dist(p, iFlip + imuApartBy);
+                if (Math.min(asMiss, flipMiss) <= AGREE_DEG) {   // apart, and both jumped alike: a hard hit seen by
+                    pinOk = true;                                // both (they keep their own offsets; the Pinpoint
+                    imuOk = true;                                // leads, as it did)
+                    flip = flipMiss < asMiss;
+                    i = flip ? iFlip : iAs;
+                    addEvent(String.format("fast turn seen by both sensors (%.0f deg): followed",
+                            MecanumMath.normalizeDegrees(p - heading)));
+                }
+            }
             if (pinT && !pinWasOn && !imuOk && back(pin, pinpointDeg, p, pred, t)) {
                 pinOk = true;                                // back from a glitch (no IMU on its track to agree with)
             }
@@ -192,10 +222,12 @@ public class FieldHeading {
             double reach = rateKnown ? envelope(Math.min(t - headingT, GATE_DT_CAP_SEC)) : gate(t - headingT);
             boolean pinNear = dist(p, pred) <= reach, imuNear = dist(i, pred) <= reach;
             if (pinOk && imuOk) {                            // both possible, but they disagree
-                // Both in reach: the one nearer the prediction, unless the IMU repeats its last reading exactly (frozen:
-                // at the start of a turn it would be nearer). Else the one in reach; neither: the Pinpoint.
-                boolean pinWins = pinNear && imuNear ? imuDeg == imu.prev || dist(p, pred) <= dist(i, pred)
-                        : pinNear || !imuNear;
+                // Apart already: the Pinpoint (it won when they split: the prediction follows it, so a contest each
+                // loop would hand an IMU restart the lead sooner or later). Both in reach: the one nearer the
+                // prediction, unless the IMU repeats its last reading exactly (frozen: at the start of a turn it would
+                // be nearer). Else the one in reach; neither: the Pinpoint.
+                boolean pinWins = imuApart || (pinNear && imuNear ? imuDeg == imu.prev || dist(p, pred) <= dist(i, pred)
+                        : pinNear || !imuNear);
                 if (!pinWins) {
                     pinOk = false;                           // e.g. a Pinpoint restart
                     glitches++;
@@ -212,7 +244,7 @@ public class FieldHeading {
             }
             if (imuWasOn && !imuOk) {
                 glitch(imu, imuDeg, t);
-                imuDisagreed = false;
+                imuApartSince = Double.NaN;
             }
             if (pinOk) {
                 pinLeads = true;
@@ -223,21 +255,32 @@ public class FieldHeading {
                         imu.off = MecanumMath.normalizeDegrees(imu.off + 180);
                         imuFlipped(t);
                     }
-                    if (imuDisagreed) {
-                        lineUp(imu, imuDeg, t);              // again: it's the IMU that is off (e.g. frozen)
+                    if (!imuApart) {                         // it keeps its own offset for a while (review 10 Nov: a
+                        imuApartSince = t;                   // Pinpoint excursion 8, 30, 60 deg then back had corrupted
+                        imuApartBy = MecanumMath.normalizeDegrees(p - i);   // it for good; a frozen IMU too: a
+                        keep(imu, imuDeg, t);                               // still one repeats its reading)
+                        addEvent(String.format("IMU %.0f deg off the Pinpoint: Pinpoint leads", dist(p, i)));
+                    } else if (t - imuApartSince >= IMU_REALIGN_SEC) {
+                        addEvent(String.format("IMU lined up with the Pinpoint (%.0f deg apart for %.1f s)", dist(p, i),
+                                t - imuApartSince));
+                        lineUp(imu, imuDeg, t);
+                        imuApartSince = Double.NaN;
                     } else {
-                        keep(imu, imuDeg, t);                // once: maybe a bad Pinpoint reading (sim 10 Nov)
+                        keep(imu, imuDeg, t);
                     }
-                    imuDisagreed = true;
                 }
             } else if (imuOk) {                              // the Pinpoint is missing or off its track: the IMU leads
                 imuLeads = true;
-                imuDisagreed = false;
+                imuApartSince = Double.NaN;
                 if (flip) {
                     imu.off = MecanumMath.normalizeDegrees(imu.off + 180);
                     imuFlipped(t);
                 }
-                setHeading(i, t);
+                if (imuFits) {                               // the turn rate is its own move, not the jump from the
+                    setHeading(i, t, imu, flip ? imuDeg + 180 : imuDeg);   // Pinpoint's heading when it takes over
+                } else {                                     // (review 10 Nov: a fake 350 deg/s then ruled it out)
+                    setHeading(i, t);
+                }
                 keep(imu, imuDeg, t);
             }                                                // else nobody on its track: keep the last good heading
         }
@@ -249,6 +292,7 @@ public class FieldHeading {
         }
         if (imuJoins) {
             lineUp(imu, imuDeg, t);
+            imuApartSince = Double.NaN;
         }
         if (held && !pinBack && (pinJoins || imuJoins)) {
             rateDps = 0;                                     // a sensor (re)joined at a kept heading: no turn known
@@ -409,12 +453,25 @@ public class FieldHeading {
     }
 
     private void setHeading(double h, double t) {
+        setHeading(h, t, null, 0);
+    }
+
+    /**
+     * @param from a sensor on its track: the turn rate is its move since its last reading (raw: this reading, flipped
+     *             if taken flipped), not the heading's change (null: the heading's change)
+     */
+    private void setHeading(double h, double t, Track from, double raw) {
         beforeHeading = heading;
         beforeT = headingT;
         beforeRate = rateDps;
         beforeRateDt = rateDt;
         beforeRateKnown = rateKnown;
-        if (t - headingT > 1e-3) {
+        if (from != null && t - from.goodT > 1e-3) {
+            double rate = MecanumMath.normalizeDegrees(raw - from.good) / (t - from.goodT);
+            rateDps = Math.max(-maxRateDps, Math.min(maxRateDps, rate));
+            rateDt = t - from.goodT;
+            rateKnown = true;
+        } else if (t - headingT > 1e-3) {
             double rate = MecanumMath.normalizeDegrees(h - heading) / (t - headingT);
             rateDps = Math.max(-maxRateDps, Math.min(maxRateDps, rate));
             rateDt = t - headingT;

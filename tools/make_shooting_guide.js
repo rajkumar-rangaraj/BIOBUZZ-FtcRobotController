@@ -158,7 +158,7 @@ const c = [
   p(''),
   table(['Button', 'Action'], [
     ['Left stick / right stick X', 'Drive + strafe / turn. FIELD-CENTRIC by default: stick up = away from you, whichever way the robot faces (L1 in INIT = robot-centric: up = intake side). While X aims at a CELL the stick is robot-centric'],
-    ['Options', 'Field-centric reset: point the intake away from you and press (after a big hit; the start comes from AUTO, or the robot is assumed to have its intake pointing away at INIT). Hold 1 s: field-centric off / on (1 blip = on, 2 = off)'],
+    ['Options', 'Field-centric reset: point the intake away from you and tap it (after a big hit; the start comes from AUTO, or the robot is assumed to have its intake pointing away at INIT). Hold 1 s instead: field-centric off / on (1 blip = on, 2 = off; no reset)'],
     ['LB (hold)', 'Precision (slow) drive'],
     ['RT / LT', 'Intake IN / OUT (half LT = flower back-out)'],
     ['RB (hold)', 'FIRE: spins up and feeds one ball at a time, when the flywheel is steady and (CELL in view) the aim is good. FIRE HELD on the screen says why; the ball goes anyway after 1.5 s'],
