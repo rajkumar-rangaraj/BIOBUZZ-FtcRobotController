@@ -344,15 +344,21 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
       - Not built yet: waiting for the user's choice.
     - **BUILT as Plan A (user chose A, 9 Nov):** Fusion **v26**, component `Electronics_Mounts_v2` (v1 hidden, REV models moved).
       - **Scripts:** `electronics_v2_build.py` asserts the hub placement from its own transform, because occurrences added in the same run report empty boxes. `electronics_v2_check.py` checks 31 regions and the placement; all clear. `make_electronics_v2_jobs.py` makes the print jobs.
-      - **Print jobs:** `bambu_p2s/Electronics_v2_Hub_Plates_P2S_PETG` (both plates flat on the tower side, 5.3 h, 148 g) and `Electronics_v2_Switch_Shroud_P2S_PETG` (1.2 h, 22 g). Guide: `stl_electronics/README.md`.
+      - **Print jobs:** `bambu_p2s/Electronics_v2_Hub_Plates_P2S_PETG` (both plates flat on the tower side, 5.3 h, 149 g since v2.1) and `Electronics_v2_Switch_Shroud_P2S_PETG` (1.2 h, 22 g). Guide: `stl_electronics/README.md`.
       - **Final geometry:** hubs x ±97.05..126.6, y 72.5..175.5, z 88.5..231.5. Plates 5 mm at x ±92.05..97.05, y 71..186 (lower back extended to 191.5), z 26..236. No removable carrier: all 8 hub screws are reachable in place.
       - **Fasteners:**
         - Hub: 4 × M3 × 16 per hub into M3 nuts in 2.6 mm hex pockets on the plate's tower side. The front holes (y 80, z 96/224) line up with the tower's 4 mm holes.
         - Plate to tower: 3 × M4 × 12 button head at (y 104, z 112/152/192), flush in counterbores on the hub side, nyloc inside the tower (open back).
-        - Feet: 2 × M4 × 14 socket head at x ±108/±116, y 184.
+        - Feet: 2 × M4 × 16 socket head + washer at x ±108/±116, y 184 (v2.1; v2 had M4 × 14 through a 4 mm foot).
         - Switch: REV-31-1387 rotated 90°, bracket plate at y 160–163, rocker tip y 171.5. Shroud PPE6 at x 50..90, y 157..191.5, z 24..82, no roof, screws at x 60/76.
       - **Orientation:** Control Hub N +x, motor edge up, servo/USB edge forward; servo 0 and webcam USB at the top, above the flywheel motor. Expansion Hub N −x, motor edge up, servo edge back; servos 0/1 at the top with 16.5 mm to y 192. Servo ports are unchanged from `testbotnew.xml`.
       - **Review (rubber-duck):** confirmed holes, lengths, print and IMU. It found the first gusset (y 183–186) capping both foot screws. I found a socket head at x 100 rubbing the plate face by 0.55 mm. Fixed: feet use x 108/116, and the gusset sits at y 188.5–191.5 on a plate extension. The STL measurements show all holes and head/tool columns open.
+      - **v2.1 feet (9 Nov evening, before the first print; user asked "would any corners bend"; goBildaStarter `5c62fcd`, pushed):**
+        - The v2 foot was the weak corner, and the review had missed it. It was 4 mm thick (y 180.2–191.5) with ±1.5 mm slots: 1.6 mm of plastic in front of the slots, 0.6 mm between them, and the outer slot open at the foot's end (x 119.5 limit from the existing screw head at x 120.5). An M4 head bore on ~1.3 mm strips, ~2× PETG's crush limit at ~1 N·m. The foot prints as a standing fin, so bending it pulls across its layers.
+        - Now: `FOOT` y 176–191.5, z 24–30 (6 mm), round Ø4.8 holes, a 3 mm chamfer at the plate (`FOOT_CHAMFER`), and the gusset at y 189–191.5. STL measurements: 5.5 mm in front of the holes, 5.1 behind, 3.1 between, 1.0 beyond the outer hole; the washer and head columns are clear. 33 check regions are clear. The plate job is 5.3 h, 149 g.
+        - Screws: M4 × 16 + washer (the shroud gets washers too). Plate corners, shroud walls, nut-pocket and counterbore floors (2.4 mm) are fine if not over-tightened.
+        - **Fusion:** `doc.save()` returned True and the doc shows no changes, but after 10+ minutes the cloud still lists v26 as the latest and `dataFile.isComplete` is False. The upload may be slow or retrying on the bad Wi-Fi. Check Fusion's Job Status and keep Fusion open; the repo scripts can rebuild the component anyway.
+        - Renders: a Fusion viewport capture needs `cam.isFitView = False` and `cam.viewExtents` (cm), or it fits the whole robot. Hide `Camera_FOV_preview` (normally ON) for the capture and restore it afterwards.
       - **Robot code `master` `ca1cbcf` (local, 107 tests):** `BioBuzzConstants.HUBS_ON_EDGE = false` → BACKWARD/LEFT; true → LEFT/FORWARD. Flip it ONLY after the rebuild, then check the heading in BioBuzz Calibration (CCW turn → heading increases). No install is needed until then.
 
 ## 8. Branch `field-tour`: Pedro Pathing "Field Tour" (test, later AUTO base)
@@ -472,9 +478,9 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - After the session: pull the logs and run `python tools/windmill_logs.py <logs> <date>`: late dips, two-ball pushes (two dips or one > 160 t/s), STUCK → SHOT, few JAMs. Turn a few pockets with an empty windmill: if STUCK appears without balls, raise `INDEXER_MIN_POWER`.
 - [ ] **Check the auto shot speed on the robot** (`b1cee74`, installed 7 Nov ~21:05): 5 shots at ~50 in and 5 at ~60 in, trim until they score, put the speeds into `AUTO_SPEED_TPS`; check the `SPEED` events in the logs. No SHOT SPOT is saved on the robot (`spot=none`), so AUTO shoots at NEAR 1450 until one is saved.
 - [ ] Retire the weak battery (sagged to ~6 V on 7 Nov). Optional: flywheel I term (steady error +30 / −40 t/s with the battery).
-- [ ] **Electronics v2:** print `bambu_p2s/Electronics_v2_*` and fit per `stl_electronics/README.md`. Then set `HUBS_ON_EDGE = true` (`ca1cbcf`), install, check the IMU in BioBuzz Calibration, and check the Wi-Fi ping (§7).
+- [ ] **Electronics v2.1:** print `bambu_p2s/Electronics_v2_*` (the hub plate job has the v2.1 feet since `5c62fcd`) and fit per `stl_electronics/README.md` (M4 × 16 + washer on the feet). Then set `HUBS_ON_EDGE = true` (`ca1cbcf`), install, check the IMU in BioBuzz Calibration, and check the Wi-Fi ping (§7).
 - [ ] **Front-left gap (lone ball, §5.12):** the user is testing a duct-tape filler between the lower roller and PPR1's front edge. If it works, design the printed strip.
-- [ ] Fusion trial: the window title said "Trial ends in 6 days" on 9 Nov. Make sure the team keeps a working Fusion licence (CAD is in Fusion v26).
+- [ ] Fusion trial: the window title said "Trial ends in 6 days" on 9 Nov. Make sure the team keeps a working Fusion licence (CAD is in Fusion v26; the v2.1 save on 9 Nov ~16:55 hadn't shown up as v27 in the cloud by 17:10: check Fusion's Job Status, or re-run `electronics_v2_build.py` and save).
 - [ ] Straight-on check for the SHOT SPOT (cluster yaw), if aiming from the side keeps missing.
 - [ ] Set `feed_pause_sec` to about 0.6 (BioBuzz Tune or adb sed).
 - [ ] **The last ball:** PPR1 v2 was rejected (§7). The `ShotFeeder` no-pause change is done (§5.14); it also helps the vane-throw lone-ball problem (§5.12 model: no pause → never fed 6 % vs 37 %).
