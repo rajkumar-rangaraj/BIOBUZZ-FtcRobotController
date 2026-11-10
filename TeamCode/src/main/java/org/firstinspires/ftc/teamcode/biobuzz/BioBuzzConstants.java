@@ -78,6 +78,11 @@ public final class BioBuzzConstants {
                                                                                  // 104 mm mecanum); faster = a sensor glitch
     public static final double HEADING_GLITCH_MARGIN_DEG = 6;                    // (a hard hit's spin: both sensors agree)
     public static final double HEADING_REBASE_SEC = 0.3;                         // a jump that stays this long = sensor restart
+    public static final double FIELD_CENTRIC_HOLD_SEC = 1.0;                     // Options held this long in TeleOp: on/off
+    // TeleOp INIT: a Pinpoint turning this much more than the IMU while the robot is still (IMU < STILL) drifts (moved
+    // while it calibrated): it is recalibrated (PinpointInitCheck)
+    public static final double PINPOINT_INIT_DRIFT_DEG = 1.0;
+    public static final double PINPOINT_INIT_STILL_DEG = 3.0;
 
     // ---------------- Launcher: Yellow Jacket converted to 1:1 (6000 RPM, 28 ticks/rev) ----------------
     public static final double LAUNCHER_TICKS_PER_REV = 28.0;
