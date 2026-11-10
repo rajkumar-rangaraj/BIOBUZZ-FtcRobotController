@@ -69,7 +69,10 @@
       <text x="185" y="153" text-anchor="end" class="sub">→ +5 if short · ← −5 if long</text>
       <text x="185" y="169" text-anchor="end" class="sub">L1 + D-pad = shot result (log)</text>
       <path class="ln" d="M285 172 L190 196"/><text x="185" y="196" text-anchor="end" class="lbl">Left stick = drive</text>
-      <text x="185" y="212" text-anchor="end" class="sub">(intake side is FRONT)</text>
+      <text x="185" y="212" text-anchor="end" class="sub">↑ = AWAY from you, any way it faces</text>
+      <text x="185" y="227" text-anchor="end" class="sub">(field-centric; L1 in INIT = off)</text>
+      <!-- top callout -->
+      <path class="ln" d="M384 106 L352 19"/><text x="330" y="14" text-anchor="middle" class="lbl" style="fill:#1565C0">OPTIONS = intake points away now</text>
       <!-- right callouts -->
       <path class="ln" d="M410 68 L475 26"/><text x="480" y="30" class="lbl">R2 = intake IN</text>
       <path class="ln" d="M410 86 L475 56"/><text x="480" y="60" class="lbl" style="fill:#C00000">R1 hold = FIRE 🔥</text>
@@ -87,7 +90,7 @@
         <tr><td>1</td><td>Gamepad on: <b>OPTIONS + ✕</b></td></tr>
         <tr><td>2</td><td>AUTO: pick <span class="tag red">AUTO RED</span> or <span class="tag blue">AUTO BLUE</span></td></tr>
         <tr><td>3</td><td>4 balls, <b>one per pocket</b></td></tr>
-        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b></td></tr>
+        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b><br><b>Drive: FIELD-CENTRIC</b> (L1 = off)</td></tr>
         <tr><td>5</td><td>Battery ≥ <b>12.5 V</b></td></tr>
       </table>
     </div>
@@ -127,13 +130,14 @@
         <tr><td>Balls land SHORT</td><td>D-pad → (+5) one press at a time</td></tr>
         <tr><td>Balls go LONG</td><td>D-pad ← (−5)</td></tr>
         <tr><td>Left / right misses</td><td>That's aim, not speed → hold □ until the buzz</td></tr>
-        <tr><td>□ does nothing</td><td>Wrong alliance! Screen says <span class="mono">no BLUE CELL tags</span> → restart TeleOp, INIT, press ○/✕</td></tr>
-        <tr><td>SHARE: "Can't save"</td><td>Camera can't see our goal's tags – turn the launcher toward the goal</td></tr>
-        <tr><td>Always the same side</td><td><b>BioBuzz Tune</b>: D-pad ← / → moves the shots left / right, SHARE saves</td></tr>
-        <tr><td>Balls stay in robot</td><td><b>BioBuzz Tune</b>: D-pad ↑ = longer pause between pockets, SHARE saves</td></tr>
+        <tr><td>□ does nothing</td><td>Wrong alliance (<span class="mono">no BLUE CELL tags</span>): restart TeleOp, ○ / ✕</td></tr>
+        <tr><td>SHARE: "Can't save"</td><td>Turn the launcher toward our goal's tags</td></tr>
+        <tr><td>Always the same side</td><td><b>BioBuzz Tune</b>: D-pad ← / →, SHARE saves</td></tr>
+        <tr><td>Balls stay in robot</td><td><b>BioBuzz Tune</b>: D-pad ↑ = longer pause, SHARE saves</td></tr>
         <tr><td>Windmill stuck</td><td>Hold ○ (unjam) 1 s, then R1 again</td></tr>
-        <tr><td>R1 waits: <span class="mono">FIRE HELD</span></td><td>Screen says why (aim off / turning / driving to spot) → hold □. It fires anyway after 1.5 s</td></tr>
+        <tr><td>R1 waits: <span class="mono">FIRE HELD</span></td><td>Screen says why → hold □; fires anyway after 1.5 s</td></tr>
         <tr><td>Buttons don't work</td><td>Gamepad not connected → OPTIONS + ✕</td></tr>
+        <tr><td>Stick goes the wrong way</td><td>Intake away from you → <b>OPTIONS</b> (L1 in INIT = off)</td></tr>
         <tr><td>Practice: teach speeds</td><td><b>L1 + D-pad</b> after each ball: ↑ IN · ↓ short · → long · ← side</td></tr>
       </table>
     </div>
@@ -145,6 +149,7 @@
         <tr><td>Launcher</td><td><span class="tag green">READY</span> = ok to fire</td></tr>
         <tr><td>HIVE aim</td><td>tags seen + distance to the goal</td></tr>
         <tr><td>Shot spot</td><td><span class="mono">now 58 in (+6)</span> = 6 in too far<br><b>ON SPOT - FIRE</b> = go!</td></tr>
+        <tr><td>Drive</td><td><span class="mono">FIELD-CENTRIC, intake +35 deg</span> = ok<br><span class="mono">NO HEADING</span> = robot-centric now</td></tr>
       </table>
     </div>
   </div>

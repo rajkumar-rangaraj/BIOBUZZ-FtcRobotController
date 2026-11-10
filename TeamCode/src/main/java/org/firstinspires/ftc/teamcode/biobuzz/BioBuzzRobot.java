@@ -45,6 +45,9 @@ public class BioBuzzRobot {
     public double lastIndexerPower = 0;
     /** Launcher current from the last launcherCurrentAmps() this loop (NaN = not read; TeleOp reads it only while firing). */
     public double lastLauncherAmps = Double.NaN;
+    /** TeleOp field-centric driving, for the diagnostics log: heading relative to the drivers, and whether it was used. */
+    public double lastDriveHeadingDeg = Double.NaN;
+    public boolean lastFieldDrive = false;
     private double launcherTarget = 0;
     private final ElapsedTime launcherTimer = new ElapsedTime();
     private final LauncherGate launcherGate = LauncherGate.standard();

@@ -19,4 +19,29 @@ public final class BioBuzzMatchState {
 
     /** Diagnostics log on/off. Toggled in INIT (Back / Share) and kept until the robot app restarts. */
     public static boolean diagnostics = BioBuzzConstants.DIAG_DEFAULT_ON;
+
+    /** TeleOp field-centric driving on/off. Toggled in TeleOp INIT (LB / L1) and kept until the robot app restarts. */
+    public static boolean fieldCentric = BioBuzzConstants.FIELD_CENTRIC_DEFAULT;
+
+    private static double autoHeadingDeg = Double.NaN;
+    private static long autoHeadingNanos = 0;
+
+    /**
+     * AUTO, every loop: the robot's heading relative to its DRIVERS (0 = intake away from them, counter-clockwise +).
+     * TeleOp INIT takes it when AUTO ran less than AUTO_HEADING_HANDOFF_SEC ago, so field-centric driving starts right
+     * without a reset (the robot doesn't move between AUTO and TeleOp in a match).
+     */
+    public static void recordAutoHeading(double driverHeadingDeg) {
+        autoHeadingDeg = driverHeadingDeg;
+        autoHeadingNanos = System.nanoTime();
+    }
+
+    /** The heading AUTO left the robot at (NaN when AUTO didn't run recently); it is handed over only once. */
+    public static double takeAutoHeading() {
+        double age = (System.nanoTime() - autoHeadingNanos) / 1e9;
+        double h = !Double.isNaN(autoHeadingDeg) && age >= 0 && age <= BioBuzzConstants.AUTO_HEADING_HANDOFF_SEC
+                ? autoHeadingDeg : Double.NaN;
+        autoHeadingDeg = Double.NaN;
+        return h;
+    }
 }

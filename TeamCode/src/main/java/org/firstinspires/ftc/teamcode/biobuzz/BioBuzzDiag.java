@@ -38,7 +38,7 @@ public class BioBuzzDiag {
                 "fwd_in", "right_in", "intake_pw", "indexer_pw", "indexer_ticks",
                 "launcher_on", "launcher_target", "launcher_vel", "launcher_ready",
                 "arm_state", "arm_cmd", "aim_cell", "aim_tags", "aim_bearing", "aim_range_in", "aim_floor_in", "note",
-                "launcher_amps");
+                "launcher_amps", "drive_hdg", "field_drive");
         events = new CsvLog("events_" + opMode, "t", "event", "detail");
         event("START", opMode);
     }
@@ -82,7 +82,8 @@ public class BioBuzzDiag {
                 target == null ? "" : target.bearingDeg, target == null ? "" : target.rangeIn,
                 target == null ? "" : target.horizontalIn(),
                 note == null ? "" : note,
-                Double.isNaN(r.lastLauncherAmps) ? "" : (Object) r.lastLauncherAmps);   // read only while firing
+                Double.isNaN(r.lastLauncherAmps) ? "" : (Object) r.lastLauncherAmps,   // read only while firing
+                Double.isNaN(r.lastDriveHeadingDeg) ? "" : (Object) r.lastDriveHeadingDeg, r.lastFieldDrive);
         maxLoopMs = 0;
         String w = r.launcherWarning();
         if (w != null && !w.equals(lastWarning) && warningsLogged < 50) {

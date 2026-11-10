@@ -266,6 +266,18 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
 
+**Field-centric driving (TeleOp, ON by default, 10 Nov 2026):**
+- **Stick up = away from the drivers**, whichever way the robot faces. Right = the drivers' right. The right stick still turns. With the intake pointing away from you it drives exactly like before.
+- **Off switch:** **LB / L1 in INIT** turns it off (robot-centric: stick up = intake side, as before). The INIT screen shows `Drive: FIELD-CENTRIC` or `robot-centric`. The choice stays until the robot app restarts; then it's ON again (`FIELD_CENTRIC_DEFAULT` in `BioBuzzConstants`).
+- **Which way is "away" at the start:**
+  - **After AUTO** (either AUTO, the Pedro one or OLD AUTO, ran less than 60 s before TeleOp INIT): AUTO hands TeleOp the robot's heading, so nothing needs doing. The INIT screen shows `Start heading: from AUTO …`. AUTO knows it from its start: the Pedro AUTO from its field pose (CELL-wall start = intake 90° to the drivers' right, alliance-wall start = intake toward them), OLD AUTO from its start against the alliance wall.
+  - **Otherwise:** the robot is assumed to have its **intake pointing away from you at INIT**. If it doesn't, press **Options** once the intake points away from you, in INIT or during the match.
+- **Options** (during the match too) = "the intake points away from me now". Use it after a big hit, a hub restart, or whenever "up" feels wrong.
+- **While X aims at a CELL in view**, the stick is robot-centric, so sideways is sideways to the CELL (as before).
+- **Heading:** from the Pinpoint (it doesn't depend on how the hub is mounted); the hub IMU takes over without a jump if the Pinpoint has no reading. A jump faster than the robot can turn (the IMU did that on 9 Nov: −58° → +89° → −68°) is ignored. A jump that stays 0.3 s is a sensor restart, and the heading carries on from the last good value. With no heading at all, the drive falls back to robot-centric and the screen says `NO HEADING`.
+- **Screen:** the `Drive` line shows `FIELD-CENTRIC, intake +35 deg from away (PINPOINT)`.
+- **Log:** `CONFIG` has `field_centric=on/off` and the start heading; `DRIVE_HEADING` events record resets, ignored jumps, sensor restarts and source changes; the 20-per-second rows have `drive_hdg` and `field_drive`.
+
 **One flywheel wheel + auto shot speed (7 Nov 2026):**
 - **One wheel.** Since 7 Nov noon the flywheel has one wheel (the other was removed) and the windmill is the printed PPW1.
   - One wheel throws the ball slower at the same motor speed.
