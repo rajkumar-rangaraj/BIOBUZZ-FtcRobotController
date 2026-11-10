@@ -189,6 +189,9 @@ public class BioBuzzTeleOp extends OpMode {
         if (pinpoint != null) {
             pinpoint.update();
         }
+        // Field-centric: the IMU is read right after the Pinpoint, so the two headings agree while turning (FieldHeading
+        // compares them); the value is reused by the drive and telemetry below.
+        double imuNow = BioBuzzMatchState.fieldCentric || pinpoint != null ? robot.headingDeg() : Double.NaN;
         HiveVision.Target target = vision == null ? null : vision.target(alliance, null);   // every loop: logged + shown
         double floorIn = target == null ? Double.NaN : target.horizontalIn();
 
@@ -286,9 +289,8 @@ public class BioBuzzTeleOp extends OpMode {
         double strafe = gamepad1.left_stick_x * scale;
         double turn = gamepad1.right_stick_x * scale;
         boolean aim = gamepad1.x;
-        // Field-centric: the heading relative to the drivers, every loop (ready even while robot-centric). The IMU is read
-        // once here and reused below; the Pinpoint was read at the top of the loop.
-        double imuNow = BioBuzzMatchState.fieldCentric || pinpoint != null ? robot.headingDeg() : Double.NaN;
+        // Field-centric: the heading relative to the drivers, every loop (ready even while robot-centric). The Pinpoint
+        // and the IMU were read at the top of the loop.
         double driverHeading = fieldHeading.update(matchTimer.seconds(),
                 pinpoint != null && pinpoint.ok() ? pinpoint.headingDeg() : Double.NaN, imuNow);
         if (fieldHeading.event() != null) {

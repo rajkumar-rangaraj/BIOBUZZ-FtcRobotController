@@ -168,7 +168,129 @@ public class FieldHeadingTest {
         h.reset();
         assertEquals(0, h.heading(), 1e-9);
         assertEquals("not -40", 0, h.update(0.06, 0, Double.NaN), 1e-9);
-        assertEquals(5, h.update(0.10, 5, Double.NaN), 1e-9);
+        assertEquals("a glitch or a restart? not known yet", 0, h.update(0.10, 5, Double.NaN), 1e-9);
+        assertEquals("0.3 s on the new level: a restart", 0, h.update(0.34, 5, Double.NaN), 1e-9);
+        assertEquals(5, h.update(0.38, 10, Double.NaN), 1e-9);
+    }
+
+    @Test
+    public void aResetJustAfterAGlitchDoesNotJumpWhenTheSensorComesBack() {
+        // final review 10 Nov: a reset anchored to the rejected 20 made the heading -20 when the Pinpoint read 0 again
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 0, Double.NaN);
+        h.update(0.02, 20, Double.NaN);                                // rejected (15 deg allowed in 20 ms)
+        h.reset();
+        assertEquals("not -20", 0, h.update(0.07, 0, Double.NaN), 1e-9);
+        for (double t = 0.12; t < 0.5; t += 0.05) {
+            assertEquals(0, h.update(t, 0, Double.NaN), 1e-9);
+        }
+        assertEquals(4, h.update(0.55, 4, Double.NaN), 1e-9);
+    }
+
+    @Test
+    public void aResetWhileTheImuIsOffItsTrackKeepsBothLinedUp() {
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 30, 0);
+        h.update(0.05, 40, 10);
+        assertEquals("IMU glitch: the Pinpoint leads", 20, h.update(0.10, 50, 100), 1e-9);
+        h.reset();
+        assertEquals("the IMU back on its track agrees", 0, h.update(0.15, 50, 20), 1e-9);
+        assertEquals(FieldHeading.Source.PINPOINT, h.source());
+        assertEquals(5, h.update(0.20, 55, 25), 1e-9);
+        assertEquals(1, h.glitches());
+    }
+
+    @Test
+    public void aPinpointRestartAfterALoopStallDoesNotPassAsATurn() {
+        // final review 10 Nov: after a 0.4 s stall the rate check allowed 186 deg, so a Pinpoint restart led
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 170, 30);
+        h.update(0.05, 170, 30);
+        assertEquals(0, h.update(0.45, 0, 30), 1e-9);                 // stationary: Pinpoint 170 -> 0, IMU unchanged
+        assertEquals(FieldHeading.Source.IMU, h.source());
+        FieldHeading k = FieldHeading.standard(0);                    // a restart small enough for the rate check:
+        k.update(0, 100, 30);                                         // the IMU is closer to the prediction
+        k.update(0.05, 100, 30);
+        assertEquals(0, k.update(0.45, 0, 30), 1e-9);
+        assertEquals(FieldHeading.Source.IMU, k.source());
+        assertTrue(k.event().contains("off the IMU"));
+        assertEquals("the restarted Pinpoint stays out", 0, k.update(0.50, 0, 30), 1e-9);
+    }
+
+    @Test
+    public void aTurnDuringALongLoopStallSeenByBothIsKept() {
+        // final review 10 Nov: a sensor silent for 0.5 s used to rejoin at the old heading, losing the turn meanwhile
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 0, 50);
+        h.update(0.05, 0, 50);
+        assertEquals(120, h.update(0.65, 120, 170), 1e-9);            // a 0.6 s stall: both turned 120 deg (200 deg/s)
+        assertEquals(125, h.update(0.70, 125, 175), 1e-9);
+        assertEquals(0, h.glitches());
+    }
+
+    @Test
+    public void aFrozenImuDoesNotStopTheHeadingWhileTurning() {
+        FieldHeading h = FieldHeading.standard(0);
+        double t = 0, raw = 0;
+        for (int i = 0; i < 25; i++, t += 0.06, raw += 18) {          // 300 deg/s; the IMU freezes after 5 loops
+            h.update(t, MecanumMath.normalizeDegrees(raw), i < 5 ? raw : 72);
+            assertEquals("loop " + i, MecanumMath.normalizeDegrees(raw), h.heading(), 1e-9);
+        }
+        assertEquals(FieldHeading.Source.PINPOINT, h.source());
+    }
+
+    @Test
+    public void anImuGlitchBurstDoesNotMoveTheHeadingWhileThePinpointIsFine() {
+        FieldHeading h = FieldHeading.standard(0);
+        double[] imu = {10, 10, 10, -48, 99, -58, 10, 10, 10};         // the IMU reads 10 deg off the Pinpoint
+        double t = 0;
+        for (double v : imu) {
+            assertEquals(0, h.update(t, 0, v), 1e-9);
+            t += 0.05;
+        }
+        assertEquals(FieldHeading.Source.PINPOINT, h.source());
+        assertEquals(1, h.glitches());
+    }
+
+    @Test
+    public void anImuGlitchBurstWithoutThePinpointIsIgnored() {
+        FieldHeading h = FieldHeading.standard(0);
+        double[] imu = {0, 0, 0, -58, 89, -68, 0};
+        double t = 0;
+        for (int i = 0; i < imu.length; i++, t += 0.05) {
+            assertEquals("reading " + i, 0, h.update(t, Double.NaN, imu[i]), 1e-9);
+        }
+        assertEquals(3, h.update(t, Double.NaN, 3), 1e-9);
+        assertEquals(1, h.glitches());
+    }
+
+    @Test
+    public void anImuYawThatFlips180DegreesAtPlusMinus90IsCorrected() {
+        // diag logs 30 Oct - 9 Nov: the IMU yaw stays within +-90 and jumps 180 deg where the robot turns past it
+        FieldHeading alone = FieldHeading.standard(0);
+        FieldHeading both = FieldHeading.standard(0);
+        double t = 0, real = 60;
+        for (int i = 0; i < 30; i++, t += 0.06, real += 18) {          // turning CCW 300 deg/s from 60 deg
+            double imuYaw = MecanumMath.normalizeDegrees(real);
+            if (Math.abs(imuYaw) > 90) {
+                imuYaw = MecanumMath.normalizeDegrees(imuYaw + 180);   // what the IMU reports
+            }
+            alone.update(t, Double.NaN, imuYaw);
+            both.update(t, MecanumMath.normalizeDegrees(real + 25), imuYaw);
+            assertEquals("IMU alone, loop " + i, MecanumMath.normalizeDegrees(real - 60), alone.heading(), 1e-9);
+            assertEquals("both, loop " + i, MecanumMath.normalizeDegrees(real - 60), both.heading(), 1e-9);
+        }
+        assertEquals(0, alone.glitches());
+        assertEquals(0, both.glitches());
+        assertEquals(FieldHeading.Source.PINPOINT, both.source());
+    }
+
+    @Test
+    public void aPinpointJumpOf180IsNotTakenForAFlip() {
+        FieldHeading h = FieldHeading.standard(0);
+        h.update(0, 0, Double.NaN);
+        assertEquals(0, h.update(0.05, 180, Double.NaN), 1e-9);       // only the IMU flips
+        assertEquals(1, h.glitches());
     }
 
     @Test
@@ -193,13 +315,19 @@ public class FieldHeadingTest {
 
     @Test
     public void theStandardGateLetsTheRobotsFastestTurnThrough() {
-        FieldHeading h = FieldHeading.standard(0);
-        double t = 0, raw = 0;
-        for (int i = 0; i < 20; i++, t += 0.06, raw += 18) {          // 300 deg/s at 60 ms loops
-            h.update(t, MecanumMath.normalizeDegrees(raw), MecanumMath.normalizeDegrees(raw + 7));
+        for (double dt : new double[] {0.02, 0.06, 0.15}) {            // normal loops and a slow one
+            FieldHeading pinOnly = FieldHeading.standard(0);
+            FieldHeading imuOnly = FieldHeading.standard(0);
+            double t = 0, raw = 0;
+            for (int i = 0; i < 40; i++, t += dt, raw += 300 * dt) {   // 300 deg/s: the robot's fastest turn
+                pinOnly.update(t, MecanumMath.normalizeDegrees(raw), Double.NaN);
+                imuOnly.update(t, Double.NaN, MecanumMath.normalizeDegrees(raw + 7));
+            }
+            assertEquals(0, pinOnly.glitches());
+            assertEquals(0, imuOnly.glitches());
+            assertEquals(MecanumMath.normalizeDegrees(raw - 300 * dt), pinOnly.heading(), 1e-6);
+            assertEquals(MecanumMath.normalizeDegrees(raw - 300 * dt), imuOnly.heading(), 1e-6);
         }
-        assertEquals(0, h.glitches());
-        assertEquals(MecanumMath.normalizeDegrees(raw - 18), h.heading(), 1e-9);
     }
 
     @Test
