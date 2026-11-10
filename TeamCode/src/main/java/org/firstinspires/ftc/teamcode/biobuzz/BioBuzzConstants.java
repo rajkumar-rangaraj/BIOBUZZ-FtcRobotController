@@ -74,8 +74,9 @@ public final class BioBuzzConstants {
     // the IMU when the Pinpoint has none. Options = "the intake points away from me now".
     public static final boolean FIELD_CENTRIC_DEFAULT = true;
     public static final double AUTO_HEADING_HANDOFF_SEC = 60;                    // TeleOp INIT takes AUTO's heading if this fresh
-    public static final double HEADING_MAX_RATE_DPS = 720;                       // faster heading changes are sensor glitches
-    public static final double HEADING_GLITCH_MARGIN_DEG = 15;
+    public static final double HEADING_MAX_RATE_DPS = 450;                       // the robot turns <= ~300 deg/s (312 rpm,
+                                                                                 // 104 mm mecanum); faster = a sensor glitch
+    public static final double HEADING_GLITCH_MARGIN_DEG = 6;                    // (a hard hit's spin: both sensors agree)
     public static final double HEADING_REBASE_SEC = 0.3;                         // a jump that stays this long = sensor restart
 
     // ---------------- Launcher: Yellow Jacket converted to 1:1 (6000 RPM, 28 ticks/rev) ----------------

@@ -272,7 +272,7 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
 - **Which way is "away" at the start:**
   - **After AUTO** (either AUTO, the Pedro one or OLD AUTO, ran less than 60 s before TeleOp INIT): AUTO hands TeleOp the robot's heading, so nothing needs doing. The INIT screen shows `Start heading: from AUTO …`. AUTO knows it from its start: the Pedro AUTO from its field pose (CELL-wall start = intake 90° to the drivers' right, alliance-wall start = intake toward them), OLD AUTO from its start against the alliance wall.
   - **Otherwise:** the robot is assumed to have its **intake pointing away from you at INIT**. If it doesn't, press **Options** once the intake points away from you, in INIT or during the match.
-- **Options** (during the match too) = "the intake points away from me now". Use it after a big hit, a hub restart, or whenever "up" feels wrong.
+- **Options** (during the match too) = "the intake points away from me now". Use it after a big hit, a hub restart, or whenever "up" feels wrong. Pressed in INIT, it also replaces the heading AUTO handed over.
 - **While X aims at a CELL in view**, the stick is robot-centric, so sideways is sideways to the CELL (as before).
 - **Heading:** from the Pinpoint (it doesn't depend on how the hub is mounted); the hub IMU takes over without a jump if the Pinpoint has no reading. A jump faster than the robot can turn (the IMU did that on 9 Nov: −58° → +89° → −68°) is ignored. A jump that stays 0.3 s is a sensor restart, and the heading carries on from the last good value. With no heading at all, the drive falls back to robot-centric and the screen says `NO HEADING`.
 - **Screen:** the `Drive` line shows `FIELD-CENTRIC, intake +35 deg from away (PINPOINT)`.
