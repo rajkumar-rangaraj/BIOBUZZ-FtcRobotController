@@ -101,16 +101,16 @@ public final class BioBuzzConstants {
     // camera distance or a driver's manual choice, and AUTO's speed when no SHOT SPOT is saved.
     public static final double LAUNCHER_NEAR_VELOCITY = 1450;                    // one wheel (was 1150 with two)
     public static final double LAUNCHER_FAR_VELOCITY = 1570;                     // one wheel (was 1240); few FAR shots yet
-    public static final double LAUNCHER_TRIM_STEP = 5;                           // D-pad RIGHT/LEFT (was 15: the auto speed
-                                                                                 // was off by ~10). Below one encoder reading step
-                                                                                 // (~20 t/s), but the hub's PIDF still moves the
-                                                                                 // average speed
+    public static final double LAUNCHER_TRIM_STEP = 10;                          // D-pad RIGHT/LEFT (15 until 9 Nov, 5 on
+                                                                                 // 10 Nov: one press was too small)
     public static final double LAUNCHER_MAX_VELOCITY = 2600;
     // Auto shot speed (ShotSpeed): camera floor distance to our CELL (in) -> flywheel t/s. 30-57 in from the drivers'
     // one-wheel shots of 7 Nov (above), in between and beyond shaped by tools/shot_model.py (flat to ~36 in, then
-    // ~0.6 %/in). Past ~57 in there are only 2 logged shots: CHECK 5 shots at ~50 and ~60 in, then adjust.
+    // ~0.6 %/in). 36-44 in lowered 10 Nov from 51 labelled TeleOp shots (tools/shot_results.py: IN balls 10-26 t/s
+    // under the table there; 1450 at ~40 in went IN 8 of 10). 48 in and up: not enough labelled shots at auto speed
+    // yet (10 Nov: 1450 at 48-52 in went IN 5, SHORT 4 of 14). Used by the Pedro AUTO too when it sees the CELL.
     public static final double[] AUTO_SPEED_DIST_IN = {30, 36, 40, 44, 48, 52, 56, 60, 64};
-    public static final double[] AUTO_SPEED_TPS = {1440, 1450, 1465, 1490, 1525, 1555, 1585, 1610, 1640};
+    public static final double[] AUTO_SPEED_TPS = {1440, 1440, 1440, 1465, 1525, 1555, 1585, 1610, 1640};
     public static final double AUTO_SPEED_KEEP_SEC = 3.0;                        // keep the auto speed after the CELL is lost
     public static final double AUTO_SPEED_HYSTERESIS = 10;                       // t/s: camera jitter can't move the target
     // Two of our CELLs in view (6 Nov logs: REAR at 31 in and AUDIENCE at 66 in, both ~1 deg) made the "best" CELL flip

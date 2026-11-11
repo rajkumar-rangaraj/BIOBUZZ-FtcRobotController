@@ -9,7 +9,10 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  *   <li>the speed falls more than {@code dipTps} below the speed the flywheel really holds (a running average outside
  *       dips, never above the target): a flywheel that settles a little low doesn't make its normal readings dips;</li>
  *   <li>every reading stays below that line for at least {@code minDipSec}: one odd hub sample (~50 ms, maybe read
- *       2-3 times) is never a ball, a real ball keeps the speed down for 100 ms or more;</li>
+ *       2-3 times) is never a ball, a real ball keeps the speed down for 100 ms or more. Optionally (TeleOp, Tune:
+ *       twoSamples) two low readings in a row that differ and are at least TWO_SAMPLES_MIN_SEC apart count too: they
+ *       are two hub samples, not one read twice. With 55-60 ms loops (TeleOp while firing, 10 Nov logs) a real dip
+ *       gives only two low readings ~55 ms apart: 6 of 34 shots weren't counted, and their LB + D-pad labels lost;</li>
  *   <li>it starts while the windmill feeds a pocket or within {@code windowSec} after it, at most {@code maxPerPocket}
  *       per pocket: spin-up, speed changes and anything between pockets never count.</li>
  * </ul>
@@ -20,11 +23,13 @@ public class BallCounter {
 
     private static final double BASELINE_ALPHA = 0.2;          // per loop: ~0.1 s at 20 ms loops
     private static final double MAX_DIP_SEC = 1.0;             // longer than this is not a ball's dip: re-learn
+    static final double TWO_SAMPLES_MIN_SEC = 0.045;           // two different low readings this far apart: a ball
 
     private final double dipTps;
     private final double windowSec;
     private final double minDipSec;
     private final int maxPerPocket;
+    private final boolean twoSamples;
 
     private int balls = 0;
     private int ignored = 0;
@@ -35,14 +40,22 @@ public class BallCounter {
     private double baseline = Double.NaN;
     private double dipSince = Double.NaN;                      // below the line, not yet recovered, since (NaN = no dip)
     private double runSince = Double.NaN;                      // every reading below the line since
+    private double runFirstTps;                                // the first reading of that run
+    private boolean runDistinct = false;                       // a later reading of the run differs from it
     private boolean runArmed = false;
     private boolean decided = false;                           // this dip was already counted or ignored
 
     public BallCounter(double dipTps, double windowSec, double minDipSec, int maxPerPocket) {
+        this(dipTps, windowSec, minDipSec, maxPerPocket, false);
+    }
+
+    /** @param twoSamples two different low readings TWO_SAMPLES_MIN_SEC apart are a ball too (slow loops) */
+    public BallCounter(double dipTps, double windowSec, double minDipSec, int maxPerPocket, boolean twoSamples) {
         this.dipTps = dipTps;
         this.windowSec = windowSec;
         this.minDipSec = minDipSec;
         this.maxPerPocket = maxPerPocket;
+        this.twoSamples = twoSamples;
     }
 
     /** AUTO: one ball per pocket at most (an extra pocket is cheaper than leaving a preload behind). */
@@ -51,10 +64,13 @@ public class BallCounter {
                 BioBuzzConstants.AUTO_DIP_MIN_SEC, 1);
     }
 
-    /** Tune: up to 2 per pocket, so a pocket that throws two separate balls can show more than 100 %. */
+    /**
+     * TeleOp, Tune: up to 2 per pocket, so a pocket that throws two separate balls can show more than 100 %; two
+     * different low readings count (TeleOp's loop is ~55-60 ms while firing).
+     */
     public static BallCounter forTuning() {
         return new BallCounter(BioBuzzConstants.AUTO_SHOT_DIP_TPS, BioBuzzConstants.AUTO_DIP_WINDOW_SEC,
-                BioBuzzConstants.AUTO_DIP_MIN_SEC, 2);
+                BioBuzzConstants.AUTO_DIP_MIN_SEC, 2, true);
     }
 
     /**
@@ -106,9 +122,15 @@ public class BallCounter {
         }
         if (Double.isNaN(runSince)) {
             runSince = t;
+            runFirstTps = velocityTps;
+            runDistinct = false;
             runArmed = t <= armedUntil;
+        } else if (velocityTps != runFirstTps) {
+            runDistinct = true;
         }
-        if (!decided && t - runSince >= minDipSec - 1e-9) {
+        boolean longEnough = t - runSince >= minDipSec - 1e-9
+                || twoSamples && runDistinct && t - runSince >= TWO_SAMPLES_MIN_SEC - 1e-9;
+        if (!decided && longEnough) {
             decided = true;
             if (runArmed && thisPocket < maxPerPocket) {
                 thisPocket++;

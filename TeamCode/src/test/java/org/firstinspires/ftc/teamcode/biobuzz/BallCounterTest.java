@@ -128,4 +128,57 @@ public class BallCounterTest {
         c.reset();
         assertEquals(0, c.balls());
     }
+
+    /** Readings dt apart from t0; returns the balls counted. */
+    private static int feed(BallCounter c, double t0, double dt, boolean feeding, double target, double... vels) {
+        int counted = 0;
+        double t = t0;
+        for (double v : vels) {
+            if (c.update(t, feeding, target, v)) {
+                counted++;
+            }
+            t += dt;
+        }
+        return counted;
+    }
+
+    private static void learnAndFeedAPocket(BallCounter c, double dt) {
+        feed(c, 0.0, dt, false, 1450, 1460, 1440, 1460, 1460, 1440, 1460);
+        feed(c, 0.33, dt, true, 1450, 1460, 1460);
+    }
+
+    @Test
+    public void slowLoopsCountABallSeenInTwoDifferentLowReadings() {
+        // 10 Nov TeleOp logs: 55-60 ms loops while firing; a ball's dip (1460, 1180, 1260, 1440) gave two low readings
+        // ~55 ms apart, under the 60 ms rule: 6 of 34 shots weren't counted and their LB + D-pad labels were lost
+        BallCounter teleOp = new BallCounter(35, 0.6, 0.06, 2, true);
+        BallCounter auto = auto();
+        learnAndFeedAPocket(teleOp, 0.055);
+        learnAndFeedAPocket(auto, 0.055);
+        assertEquals(1, feed(teleOp, 0.44, 0.055, false, 1450, 1460, 1180, 1260, 1440, 1520, 1480));
+        assertEquals("AUTO keeps its rule", 0, feed(auto, 0.44, 0.055, false, 1450, 1460, 1180, 1260, 1440, 1520, 1480));
+    }
+
+    @Test
+    public void oneHubSampleReadTwiceIsStillNotABall() {
+        BallCounter c = new BallCounter(35, 0.6, 0.06, 2, true);
+        learnAndFeedAPocket(c, 0.05);
+        assertEquals(0, feed(c, 0.44, 0.05, false, 1450, 1460, 1180, 1180, 1460, 1460));    // the same value twice
+        BallCounter fast = new BallCounter(35, 0.6, 0.06, 2, true);
+        learnAndFeedAPocket(fast, 0.02);
+        assertEquals(0, feed(fast, 0.44, 0.02, false, 1450, 1460, 1400, 1390, 1460, 1460));   // 20 ms apart: noise
+    }
+
+    @Test
+    public void noiseInsideAnArmedWindowDoesNotCountWithTwoSamplesEither() {
+        BallCounter c = new BallCounter(35, 0.6, 0.06, 2, true);
+        run(c, 0.0, 0.3, false, 1240, t -> 1240);
+        run(c, 0.3, 0.46, true, 1240, t -> 1240);
+        assertEquals(0, run(c, 0.46, 1.1, false, 1240,
+                t -> Math.round(t / DT) % 2 == 0 ? 1200 : 1240));       // every other reading low
+        run(c, 1.1, 1.26, true, 1240, t -> 1240);
+        assertEquals(0, run(c, 1.26, 1.9, false, 1240,
+                t -> Math.round(t / DT) % 4 < 2 ? 1200 : 1240));        // one hub sample read twice
+        assertEquals(0, c.balls());
+    }
 }

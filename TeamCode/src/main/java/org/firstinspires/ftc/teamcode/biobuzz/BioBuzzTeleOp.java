@@ -31,7 +31,7 @@ import com.qualcomm.robotcore.util.Range;
  *   A / Cross             flower arm DEPLOY / STOW (deploys only while the sticks are released)
  *   B / Circle   (hold)   unjam: windmill slowly backwards
  *   D-pad up / down       MANUAL shot speed FAR / NEAR (the camera distance is ignored until X is pressed)
- *   D-pad right / left    shot speed trim +/- LAUNCHER_TRIM_STEP ticks/s (5); stays on top of AUTO for the match
+ *   D-pad right / left    shot speed trim +/- LAUNCHER_TRIM_STEP ticks/s (10); stays on top of AUTO for the match
  *   LB + D-pad            what the ball did, for the diagnostics log (ShotResults): UP = IN, DOWN = SHORT (too slow),
  *                         RIGHT = LONG (too fast), LEFT = SIDE (left / right / bounced out). Goes to the oldest ball of
  *                         the last 10 s without a result, so a volley is labelled in the order the balls flew.
