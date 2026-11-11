@@ -13,8 +13,10 @@ clear of both lips (same rule as the launcher plan).
 
 Flywheel speed -> ball speed: the ball rolls between the moving tread and the still hood, so with no slip it leaves at
 half the tread speed: v_ball = eta * (tps / 28) * pi * 0.096 / 2. eta (slip + squeeze + the dip as the ball passes)
-is about 0.85-0.93; 0.89 is the value used in the hood review. Only test shots can pin it down, so the code presets
-are starting points and the drivers trim from there (5 t/s per press since 9 Nov; it was 15).
+was about 0.85-0.93 with TWO wheels (0.89 used in the hood review); with ONE wheel (since 7 Nov) the drivers' speeds
+give about 0.71, and the dip changes from ball to ball (see FLYWHEEL_PHYSICS.md: it spreads the ball speed about
++/-4 %, as wide as the scoring window). Only test shots can pin eta down, so the speed table comes from labelled shots
+and the drivers trim from there (10 t/s per press since 10 Nov; 15 before 9 Nov, 5 on 10 Nov).
 """
 import math
 
@@ -115,19 +117,19 @@ if __name__ == '__main__':
     print('Upward CELL: lips %.1f / %.1f in, opening centre %.1f in; exit %.1f in high at 74 deg\n'
           % (LOWER[1] / IN, UPPER[1] / IN, CENTRE[1] / IN, EXIT_H / IN))
     print('exit->opening   vacuum          drag only       drag+topspin (used)          flywheel t/s at eta')
-    print('  (in)        centre  +/-%     centre  +/-%     low-high m/s  centre  +/-%    0.85   0.89   0.93')
+    print('  (in)        centre  +/-%     centre  +/-%     low-high m/s  centre  +/-%    0.71 (1 wheel)  0.89 (2 wheels)')
     for d_in in range(28, 58, 2):
         D = d_in * IN
         a = window(D, drag=False, magnus=False)
         b = window(D, magnus=False)
         c = window(D)
         fmt = lambda w: '  --    --  ' if w is None else '%5.2f  %4.1f' % (w[2], w[3])
-        tail = '' if c is None else '%5.2f-%5.2f   %5.2f  %4.1f   %5.0f  %5.0f  %5.0f' % (
-            c[0], c[1], c[2], c[3], tps(c[2], 0.85), tps(c[2], 0.89), tps(c[2], 0.93))
+        tail = '' if c is None else '%5.2f-%5.2f   %5.2f  %4.1f   %8.0f  %14.0f' % (
+            c[0], c[1], c[2], c[3], tps(c[2], 0.71), tps(c[2], 0.89))
         print('  %4d       %s      %s      %s' % (d_in, fmt(a), fmt(b), tail))
     print('\nLaunch angle sensitivity at 36 in (drag+topspin):')
     for th in (72, 73, 74, 75, 76):
         w = window(36 * IN, theta=th)
-        print('  %d deg: %s' % (th, 'no window' if w is None else 'centre %.2f m/s +/-%.1f%%  (%.0f t/s at 0.89)' % (w[2], w[3], tps(w[2]))))
+        print('  %d deg: %s' % (th, 'no window' if w is None else 'centre %.2f m/s +/-%.1f%%  (%.0f t/s at 0.71)' % (w[2], w[3], tps(w[2], 0.71))))
     print('\nBall size at 36 in: 71 mm %s, 73 mm %s' % (
         '%.2f m/s' % window(36 * IN, ball_d=0.071)[2], '%.2f m/s' % window(36 * IN, ball_d=0.073)[2]))

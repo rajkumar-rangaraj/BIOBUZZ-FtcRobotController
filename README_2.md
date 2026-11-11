@@ -258,28 +258,41 @@ Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AI
 
 **SHOT SPOT (TeleOp):**
 1. Pick the alliance whose HIVE tags you can see. At home that's the practice goal's tags; tags 42–45 are BLUE.
-2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera's floor distance to the CELL and the current shot speed.
-3. Later, **hold X**: the robot turns to the HIVE and drives to the saved distance. The controller rumbles and the screen shows **ON SPOT - FIRE**.
-   - The speed comes from the camera (auto shot speed, below).
+2. Find a place where shots score, then press **Back / Share**. TeleOp saves the camera's floor distance to the CELL, **which CELL** (10 Nov night) and the current shot speed. Share only saves with that CELL in view and locked by the shot speed.
+3. Later, **hold RB (FIRE)** with the CELL in view: the robot turns to the HIVE, drives to the saved distance and fires when it gets there (10 Nov night). **Hold X** does the same without firing. The controller rumbles and the screen shows **ON SPOT - FIRE**.
+   - It drives only while the **same CELL** is the one in view, or the same CELL on the other alliance's HIVE (the field is point-symmetric: RED AUDIENCE ↔ BLUE SCORING, RED SCORING ↔ BLUE AUDIENCE), so one save works for both alliances. With two of our CELLs in view, the far one's distance would drive the robot under the near one, into the HIVE.
+   - A spot saved before 10 Nov night has no CELL: the screen shows `? - press Share again`, and RB / X only aim until Share saves it again. AUTO still uses its speed.
+   - The speed comes from the camera (auto shot speed, below), unless the driver picked one with the D-pad.
    - The saved speed is used by AUTO, and by TeleOp only when the auto shot speed is OFF.
-4. Push the left stick forward or back to take over the driving.
+4. Push the left stick forward or back to take over the driving (e.g. to shoot from somewhere else).
 
 The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so they survive robot app restarts and new installs.
 
-**Field-centric driving (TeleOp, ON by default, 10 Nov 2026):**
-- **Stick up = away from the drivers**, whichever way the robot faces. Right = the drivers' right. The right stick still turns. With the intake pointing away from you it drives exactly like before.
-- **Off switch:** **LB / L1 in INIT** turns it off (robot-centric: stick up = intake side, as before). The INIT screen shows `Drive: FIELD-CENTRIC` or `robot-centric`. **During the match, hold Options 1 s** to switch it off or on (1 rumble blip = on, 2 = off), e.g. if "up" ever goes wrong. The choice stays until the robot app restarts; then it's ON again (`FIELD_CENTRIC_DEFAULT` in `BioBuzzConstants`).
+**RB (FIRE) aims by itself (TeleOp, 10 Nov night):** with our CELL in view, holding **RB** now does what X did, then fires:
+- the camera turns the robot onto the CELL (the right stick is ignored meanwhile);
+- with a saved SHOT SPOT it drives forward / back to that distance, on the CELL the spot was saved to (push the left stick to take over);
+- the shot speed is the camera's (auto shot speed), unless the driver picked one: D-pad ↑ / ↓ (MANUAL FAR / NEAR) and ← / → (trim) stay as the driver set them. Only **X** switches back to the camera speed;
+- the speed follows the distance while the robot gets there, and is frozen once the first ball of the burst goes (until RB is let go). With no CELL in view at the press it is frozen at once, as before;
+- once the first ball has gone, RB **stops driving** to the spot: the robot stays where it fired (still turning to aim), so the frozen speed fits the distance. Let go of RB and press it again to go to the spot again;
+- with two of our CELLs in view, it aims and drives on the one the shot speed follows (the "best" CELL can flip every few frames);
+- a ball goes when the flywheel is at speed, the aim is within 2° and steady and the robot is at the distance (aim gate, below; it gives way after 1.5 s).
+- Without our CELL in view RB fires as before (aim by eye). **X** still aims (and drives to the spot) without firing.
+
+**Field-centric driving (TeleOp, optional; OFF by default since 10 Nov night, ON 10 Nov):**
+- **Robot-centric is the default** (stick up = intake side), as the drivers prefer. **LB / L1 in INIT** or **holding Options 1 s** in the match turns field-centric on (1 rumble blip = on, 2 = off). The INIT screen shows `Drive: FIELD-CENTRIC` or `robot-centric`. The choice stays until the robot app restarts; then it's robot-centric again (`FIELD_CENTRIC_DEFAULT` in `BioBuzzConstants`).
+- **Field-centric: stick up = away from the drivers**, whichever way the robot faces. Right = the drivers' right. The right stick still turns. With the intake pointing away from you it drives exactly like robot-centric.
 - **Which way is "away" at the start:**
   - **After AUTO** (either AUTO, the Pedro one or OLD AUTO, ran less than 60 s before TeleOp INIT): AUTO hands TeleOp the robot's heading, so nothing needs doing. The INIT screen shows `Start heading: from AUTO …`. AUTO knows it from its start: the Pedro AUTO from its field pose (CELL-wall start = intake 90° to the drivers' right, alliance-wall start = intake toward them), OLD AUTO from its start against the alliance wall.
   - **Otherwise:** the robot is assumed to have its **intake pointing away from you at INIT**. If it doesn't, tap **Options** once the intake points away from you, in INIT or during the match.
 - **Options tap** (during the match too) = "the intake points away from me now" (applied when you let go). Use it after a big hit, a hub restart, or whenever "up" feels wrong. Pressed in INIT, it also replaces the heading AUTO handed over. Holding it 1 s doesn't do this: it switches field-centric off / on.
-- **While X aims at a CELL in view**, the stick is robot-centric, so sideways is sideways to the CELL (as before). It stays robot-centric for 0.5 s when the CELL drops out of view (the camera loses it for a moment quite often), so the stick doesn't switch back and forth.
+- **While X or RB aims at a CELL in view**, the stick is robot-centric, so sideways is sideways to the CELL (as before). It stays robot-centric for 0.5 s when the CELL drops out of view (the camera loses it for a moment quite often), so the stick doesn't switch back and forth.
 - **Heading:** from the Pinpoint (it doesn't depend on how the hub is mounted), cross-checked against the hub IMU every loop; the IMU takes over without a jump if the Pinpoint has no reading or goes off its track. When the two agree, the heading follows them however fast it moves (a hard hit). **The hub IMU's yaw flips by 180°**, mostly where it crosses ±90° (diag logs 30 Oct – 9 Nov: about 1290 flips; the wheel encoders show each was the real turn ± 180°). Field-centric corrects these flips. A bad reading from one sensor is ignored, and a short run of bad Pinpoint readings leaves no lasting error (the IMU keeps its own heading for 2 s while the two disagree); a sensor that restarts (jumps and stays 0.3 s) carries on from the current heading. With no heading at all, the drive falls back to robot-centric and the screen says `NO HEADING`. Tested against a simulated robot with sensor faults (`FieldHeadingSimTest`); if "up" ever feels wrong, tap **Options**.
 - **Keep the robot still in INIT.** The Pinpoint calibrates its gyro when TeleOp INITs; if the robot moves then, its heading drifts all match and "up" slowly turns. INIT checks it against the hub IMU while the robot stands still and recalibrates it if it drifts (INIT screen: `Pinpoint gyro: ok`, or `was drifting: recalibrated`). Field-centric can't spot a Pinpoint that drifts or freezes later on its own: tap Options, or hold it 1 s for robot-centric.
 - **Screen:** the `Drive` line shows `FIELD-CENTRIC, intake +35 deg from away (PINPOINT)`.
 - **Log:** `CONFIG` has `field_centric=on/off`, the start heading and `pinpoint_recal` (INIT recalibrations); `DRIVE_HEADING` events record resets, ignored jumps, IMU flips (at most once a second), sensor restarts, source changes and the two sensors splitting / back in line; `DRIVE_MODE` events the Options-held switches; the 20-per-second rows have `drive_hdg` and `field_drive`.
 
 **One flywheel wheel + auto shot speed (7 Nov 2026):**
+- **Physics check (10 Nov): see [FLYWHEEL_PHYSICS.md](FLYWHEEL_PHYSICS.md).** The formula is right. With one wheel, though, each ball pulls the flywheel down ~20 %, and the dip varies from ball to ball. If that maps to the ball speed (likely, not yet measured), it spreads the ball speed about ±4 %, as wide as the scoring window (±4.2–4.7 %): IN / SHORT / LONG from the same spot at the same speed, ~60–70 % IN at best. More flywheel inertia from a mass that doesn't touch the ball (e.g. ~170 g of steel within 38 mm radius where wheel 2 was: 1.74×) would raise that to roughly 84–90 %; check its clearance in CAD and by hand first.
 - **One wheel.** Since 7 Nov noon the flywheel has one wheel (the other was removed) and the windmill is the printed PPW1.
   - One wheel throws the ball slower at the same motor speed.
   - In the 7 Nov diag logs (78 shots, good battery), the drivers trimmed to about 1440 t/s at 30–36 in, 1480 at 36–44 in and 1585–1600 at 52–60 in. With two wheels it was 1150–1240.
@@ -287,7 +300,7 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
 - **Auto shot speed (TeleOp, ON by default).** The camera's floor distance to our CELL picks the speed from `AUTO_SPEED_DIST_IN` / `AUTO_SPEED_TPS` in `BioBuzzConstants`: 1440 t/s from 30 to 40 in, 1465 at 44 in, 1525 at 48 in, 1640 at 64 in (`ShotSpeed.java`). The Pedro AUTO uses the same table when it sees the CELL.
   - **10 Nov: 36–44 in lowered** (36 in 1450 → 1440, 40 in 1465 → 1440, 44 in 1490 → 1465) from 51 shots the drivers labelled with LB + D-pad (`tools/shot_results.py`): the IN balls were 10–26 t/s under the table there, and 1450 at ~40 in went IN 8 of 10. 48 in and up are unchanged: nearly all shots there were at MANUAL NEAR 1450 (IN 5, SHORT 4 of 14), so label some at auto speed first.
   - The speed moves only when the table speed is more than 10 t/s away, so camera jitter can't make the flywheel hunt.
-  - It doesn't change while RB (FIRE) is held. A new target would make the flywheel settle again in the middle of a burst.
+  - It doesn't change once the first ball of a RB (FIRE) burst has gone, until RB is let go. A new target would make the flywheel settle again in the middle of a burst. (Before 10 Nov night it froze as soon as RB was pressed; now RB also drives to the SHOT SPOT, so the speed follows the distance until the first ball.)
   - It follows one CELL. With two of our CELLs in view, it switches to the other one only after the first has been out of view for 0.5 s. In the 6 Nov logs the camera's best CELL flipped between 31 in and 66 in every few frames, which would have changed the speed 75–140 times a minute.
   - When the CELL drops out of view, the speed stays for 3 s, then falls back to the NEAR / FAR preset (NEAR unless FAR was picked last).
   - The D-pad trim (→ / ←) stays on top of the auto speed for the whole match. It is **10 t/s per press since 10 Nov** (15 until 9 Nov; 5 on 10 Nov was too small: the drivers' usual one press then left the shots ~10 t/s faster than before).
@@ -338,8 +351,8 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   - The old rule (at least target − 100) was much looser.
   - The ball would score within about ±4.7 % of the right speed.
   - If the speed can't settle for 1 s but stays between 60 t/s below and 30 t/s above the target, FIRE goes anyway. The screen then shows `READY (speed not settled)` and the log records `READY_FALLBACK`. Too fast never fires (e.g. just after FAR → NEAR).
-- **Aim gate:** while our CELL is in view, FIRE also waits until the aim is within 2.0° and the robot has stopped turning. While X drives to a saved SHOT SPOT, it also waits for the right distance (not when the arm is out or you push the left stick).
-  - The screen shows `FIRE HELD` and the reason (which way to turn, "turning", or "driving to the SHOT SPOT"). Holding X aims for you.
+- **Aim gate:** while our CELL is in view, FIRE also waits until the aim is within 2.0° and the robot has stopped turning. While X or FIRE drives to a saved SHOT SPOT, it also waits for the right distance (not when the arm is out or you push the left stick).
+  - The screen shows `FIRE HELD` and the reason ("aiming", "turning", or "driving to the SHOT SPOT"). FIRE (and X) aim for you.
   - If the CELL drops out of view, the hold lasts 0.75 s more. After that (no CELL), it's the driver's call.
   - It never holds forever: 1.5 s after it first holds back a ready ball, that ball goes anyway (log `AIM_GIVEWAY`). Every ball gets its own 1.5 s; a READY flicker doesn't restart the clock. The flywheel speed rule still applies. If the SHOT SPOT can't be reached, the distance gives way first (until FIRE is let go), and the aim and turning checks still get their own 1.5 s, so a ball never leaves while the robot is turning.
   - Turn it off in INIT with **X / Square** (e.g. camera knocked). The INIT screen shows `Aim gate ON/OFF` and the `CONFIG` log shows `aim_gate=on/off`.

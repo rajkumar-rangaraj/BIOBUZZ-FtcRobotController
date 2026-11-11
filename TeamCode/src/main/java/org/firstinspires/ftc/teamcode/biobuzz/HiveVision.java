@@ -54,6 +54,24 @@ public class HiveVision {
         boolean belongsTo(Alliance alliance) {
             return (alliance == Alliance.RED) == (this == RED_REAR || this == RED_AUDIENCE);
         }
+
+        /**
+         * The same CELL on the other alliance's HIVE. The field is point-symmetric (the AUTO route is the same for both),
+         * so RED AUDIENCE pairs with BLUE SCORING (the two CELLs that start upward, {@link #startingUpCell}) and RED
+         * SCORING with BLUE AUDIENCE.
+         */
+        public Cell otherAlliance() {
+            switch (this) {
+                case RED_REAR:
+                    return BLUE_AUDIENCE;
+                case RED_AUDIENCE:
+                    return BLUE_REAR;
+                case BLUE_AUDIENCE:
+                    return RED_REAR;
+                default:
+                    return RED_AUDIENCE;
+            }
+        }
     }
 
     /** The CELL that faces upward at the start of every MATCH (Competition Manual, Figure 10-2). */

@@ -69,18 +69,18 @@
       <text x="185" y="153" text-anchor="end" class="sub">→ +10 if short · ← −10 if long</text>
       <text x="185" y="169" text-anchor="end" class="sub">L1 + D-pad = shot result (log)</text>
       <path class="ln" d="M285 172 L190 196"/><text x="185" y="196" text-anchor="end" class="lbl">Left stick = drive</text>
-      <text x="185" y="212" text-anchor="end" class="sub">↑ = AWAY from you, any way it faces</text>
-      <text x="185" y="227" text-anchor="end" class="sub">(field-centric; L1 in INIT = off)</text>
+      <text x="185" y="212" text-anchor="end" class="sub">↑ = intake side (robot-centric)</text>
+      <text x="185" y="227" text-anchor="end" class="sub">L1 in INIT = field-centric</text>
       <!-- top callout -->
-      <path class="ln" d="M384 106 L352 19"/><text x="330" y="14" text-anchor="middle" class="lbl" style="fill:#1565C0">OPTIONS tap = intake points away now · hold 1 s = field-centric off/on</text>
+      <path class="ln" d="M384 106 L352 19"/><text x="330" y="14" text-anchor="middle" class="lbl" style="fill:#1565C0">OPTIONS hold 1 s = field-centric on/off · tap = intake points away now</text>
       <!-- right callouts -->
       <path class="ln" d="M410 68 L475 26"/><text x="480" y="30" class="lbl">R2 = intake IN</text>
-      <path class="ln" d="M410 86 L475 56"/><text x="480" y="60" class="lbl" style="fill:#C00000">R1 hold = FIRE 🔥</text>
+      <path class="ln" d="M410 86 L475 56"/><text x="480" y="60" class="lbl" style="fill:#C00000">R1 hold = AIM + FIRE 🔥</text>
       <path class="ln" d="M445 112 L475 96"/><text x="480" y="100" class="lbl">△ flywheel on/off</text>
       <path class="ln" d="M461 132 L475 136"/><text x="480" y="140" class="lbl">○ hold = unjam</text>
       <path class="ln" d="M445 152 L475 176"/><text x="480" y="180" class="lbl">✕ = flower arm</text>
       <path class="ln" d="M395 176 L475 220"/><text x="480" y="224" class="lbl">Right stick = turn</text>
-      <path class="ln" d="M420 140 L360 252"/><text x="360" y="270" text-anchor="middle" class="lbl" style="fill:#D81B60;font-size:16px">□ hold = AIM + drive to SHOT SPOT</text>
+      <path class="ln" d="M420 140 L360 252"/><text x="360" y="270" text-anchor="middle" class="lbl" style="fill:#D81B60;font-size:16px">□ hold = AIM + drive to SHOT SPOT (no fire)</text>
     </svg>
 
     <!-- Before the match -->
@@ -90,7 +90,7 @@
         <tr><td>1</td><td>Gamepad on: <b>OPTIONS + ✕</b></td></tr>
         <tr><td>2</td><td>AUTO: pick <span class="tag red">AUTO RED</span> or <span class="tag blue">AUTO BLUE</span></td></tr>
         <tr><td>3</td><td>4 balls, <b>one per pocket</b></td></tr>
-        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b><br><b>Drive: FIELD-CENTRIC</b> (L1 = off) · don't move the robot in INIT</td></tr>
+        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b><br><b>Drive: robot-centric</b> (L1 = field-centric) · don't move the robot in INIT</td></tr>
         <tr><td>5</td><td>Battery ≥ <b>12.5 V</b></td></tr>
       </table>
     </div>
@@ -99,9 +99,9 @@
   <div style="font-size:21px;font-weight:800;margin-top:6px">🎯 HOW WE SCORE (every time)</div>
   <div class="steps">
     <div class="step"><div class="n">1</div><div class="big">🚗</div><b>DRIVE CLOSE</b><span>launcher toward our goal<br>tap △ to spin up</span></div>
-    <div class="step"><div class="n">2</div><div class="big">□</div><b>HOLD SQUARE</b><span>robot aims + drives<br>to the spot by itself</span></div>
+    <div class="step"><div class="n">2</div><div class="big">🔥</div><b>HOLD R1</b><span>robot aims + drives<br>to the spot by itself</span></div>
     <div class="step"><div class="n">3</div><div class="big">📳</div><b>FEEL THE BUZZ</b><span>screen says<br><b>ON SPOT - FIRE</b></span></div>
-    <div class="step"><div class="n">4</div><div class="big">🔥</div><b>KEEP □ + HOLD R1</b><span>one ball every<br>half second</span></div>
+    <div class="step"><div class="n">4</div><div class="big">🎯</div><b>KEEP HOLDING R1</b><span>it fires when aimed<br>one ball at a time</span></div>
     <div class="step"><div class="n">5</div><div class="big">🏁</div><b>LET GO, DRIVE OFF</b><span>go get more balls</span></div>
   </div>
   <div class="rule">NO BUZZ = NO SHOT. &nbsp;Never shoot while moving. &nbsp;Last 20 s (3 buzzes) → PARK!</div>
@@ -119,8 +119,9 @@
     <div class="step" style="border-color:#B8860B"><div class="n">4</div><div class="big">💾</div><b>PRESS SHARE</b><span>buzz + screen:<br><b>SHOT SPOT saved</b></span></div>
   </div>
   <div class="card ok" style="margin-top:10px;font-size:15px">
-    <b>Test it:</b> drive away, hold □ → the robot comes back, buzzes, fire 4 balls. Most go in? <b>Done!</b>
+    <b>Test it:</b> drive away, hold R1 → the robot comes back, buzzes and fires. Most go in? <b>Done!</b>
     Not good? Move a little, fix the speed, press SHARE again (it replaces the old spot).
+    Screen says <b>"? - press Share again"</b>? That spot is from before 10 Nov night: save it again.
   </div>
 
   <div class="row">
@@ -129,15 +130,15 @@
       <table class="fix">
         <tr><td>Balls land SHORT</td><td>D-pad → (+10) one press at a time</td></tr>
         <tr><td>Balls go LONG</td><td>D-pad ← (−10)</td></tr>
-        <tr><td>Left / right misses</td><td>That's aim, not speed → hold □ until the buzz</td></tr>
-        <tr><td>□ does nothing</td><td>Wrong alliance (<span class="mono">no BLUE CELL tags</span>): restart TeleOp, ○ / ✕</td></tr>
+        <tr><td>Left / right misses</td><td>That's aim, not speed → R1 aims by itself (needs the tags in view)</td></tr>
+        <tr><td>R1 doesn't aim</td><td>Wrong alliance (<span class="mono">no BLUE CELL tags</span>): restart TeleOp, ○ / ✕</td></tr>
         <tr><td>SHARE: "Can't save"</td><td>Turn the launcher toward our goal's tags</td></tr>
         <tr><td>Always the same side</td><td><b>BioBuzz Tune</b>: D-pad ← / →, SHARE saves</td></tr>
         <tr><td>Balls stay in robot</td><td><b>BioBuzz Tune</b>: D-pad ↑ = longer pause, SHARE saves</td></tr>
         <tr><td>Windmill stuck</td><td>Hold ○ (unjam) 1 s, then R1 again</td></tr>
-        <tr><td>R1 waits: <span class="mono">FIRE HELD</span></td><td>Screen says why → hold □; fires anyway after 1.5 s</td></tr>
+        <tr><td>R1 waits: <span class="mono">FIRE HELD</span></td><td>It is aiming / driving to the spot; fires anyway after 1.5 s</td></tr>
         <tr><td>Buttons don't work</td><td>Gamepad not connected → OPTIONS + ✕</td></tr>
-        <tr><td>Stick goes the wrong way</td><td>Intake away from you → tap <b>OPTIONS</b>. Still wrong: <b>hold OPTIONS 1 s</b> = robot-centric</td></tr>
+        <tr><td>Want field-centric</td><td><b>L1 in INIT</b>, or <b>hold OPTIONS 1 s</b> (stick ↑ = away from you)</td></tr>
         <tr><td>Practice: teach speeds</td><td><b>L1 + D-pad</b> after each ball: ↑ IN · ↓ short · → long · ← side</td></tr>
       </table>
     </div>
@@ -149,7 +150,7 @@
         <tr><td>Launcher</td><td><span class="tag green">READY</span> = ok to fire</td></tr>
         <tr><td>HIVE aim</td><td>tags seen + distance to the goal</td></tr>
         <tr><td>Shot spot</td><td><span class="mono">now 58 in (+6)</span> = 6 in too far<br><b>ON SPOT - FIRE</b> = go!</td></tr>
-        <tr><td>Drive</td><td><span class="mono">FIELD-CENTRIC, intake +35 deg</span> = ok<br><span class="mono">NO HEADING</span> = robot-centric now</td></tr>
+        <tr><td>Drive</td><td><span class="mono">robot-centric</span> = default<br><span class="mono">FIELD-CENTRIC, intake +35 deg</span> = after L1 / OPTIONS hold</td></tr>
       </table>
     </div>
   </div>

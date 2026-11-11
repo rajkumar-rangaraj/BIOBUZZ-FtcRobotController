@@ -15,11 +15,42 @@ public class TeleOpSettingsTest {
         s.alliance = HiveVision.Alliance.BLUE;
         s.spotRangeIn = 52.4;
         s.spotSpeed = 1275;
+        s.spotCell = HiveVision.Cell.BLUE_REAR;
         TeleOpSettings back = TeleOpSettings.parse(s.format());
         assertEquals(HiveVision.Alliance.BLUE, back.alliance);
         assertTrue(back.hasSpot());
         assertEquals(52.4, back.spotRangeIn, 0.05);
         assertEquals(1275, back.spotSpeed, 0.5);
+        assertEquals(HiveVision.Cell.BLUE_REAR, back.spotCell);
+    }
+
+    @Test
+    public void aSpotSavedWithoutItsCellStillHasItsSpeedButNoCell() {
+        // saved before 10 Nov night: AUTO still uses the speed; TeleOp drives to it only after Share saves the CELL
+        TeleOpSettings s = TeleOpSettings.parse("spot_range_in=36.0\nspot_speed=1440\nspot_ref=floor\n");
+        assertTrue(s.hasSpot());
+        assertEquals(null, s.spotCell);
+        assertEquals(null, TeleOpSettings.parse("spot_range_in=36.0\nspot_speed=1440\nspot_ref=floor\nspot_cell=PURPLE\n")
+                .spotCell);
+        assertEquals(null, TeleOpSettings.parse("spot_range_in=abc\nspot_speed=1440\nspot_ref=floor\nspot_cell=RED_REAR\n")
+                .spotCell);                                            // no valid spot: no CELL either
+        assertFalse(s.spotIsFor(HiveVision.Cell.BLUE_REAR));
+    }
+
+    @Test
+    public void theSpotFollowsItsCellAndTheSameCellOnTheOtherAlliance() {
+        TeleOpSettings s = TeleOpSettings.parse("spot_range_in=36.0\nspot_speed=1440\nspot_ref=floor\nspot_cell=BLUE_REAR\n");
+        assertTrue(s.spotIsFor(HiveVision.Cell.BLUE_REAR));
+        assertFalse(s.spotIsFor(HiveVision.Cell.BLUE_AUDIENCE));      // the other CELL of the same HIVE (6 Nov: 35 in further)
+        assertTrue(s.spotIsFor(HiveVision.Cell.RED_AUDIENCE));        // point-symmetric twin: also starts upward
+        assertFalse(s.spotIsFor(HiveVision.Cell.RED_REAR));
+        assertFalse(s.spotIsFor(null));
+        for (HiveVision.Cell c : HiveVision.Cell.values()) {
+            assertEquals(c, c.otherAlliance().otherAlliance());
+            assertTrue(c.belongsTo(HiveVision.Alliance.RED) != c.otherAlliance().belongsTo(HiveVision.Alliance.RED));
+        }
+        assertEquals(HiveVision.startingUpCell(HiveVision.Alliance.BLUE),
+                HiveVision.startingUpCell(HiveVision.Alliance.RED).otherAlliance());
     }
 
     @Test
