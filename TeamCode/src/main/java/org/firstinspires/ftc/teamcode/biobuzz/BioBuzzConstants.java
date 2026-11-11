@@ -69,10 +69,11 @@ public final class BioBuzzConstants {
     public static final double STRAFE_MULTIPLIER = 1.10;                         // CALIBRATE (strafe 48 in)
     public static final double SLOW_DRIVE_SCALE = 0.35;
     public static final double ARM_DEPLOYED_DRIVE_SCALE = 0.30;
-    // Field-centric TeleOp driving (FieldHeading): stick up = away from the drivers whichever way the robot faces. ON by
-    // default; LB / L1 in TeleOp INIT switches it off (kept until the robot app restarts). Heading from the Pinpoint,
-    // the IMU when the Pinpoint has none. Options = "the intake points away from me now".
-    public static final boolean FIELD_CENTRIC_DEFAULT = true;
+    // Field-centric TeleOp driving (FieldHeading): stick up = away from the drivers whichever way the robot faces. OFF by
+    // default since 10 Nov night (the drivers prefer robot-centric); LB / L1 in TeleOp INIT or holding Options 1 s in
+    // the match turns it on (kept until the robot app restarts). Heading from the Pinpoint, the IMU when the Pinpoint
+    // has none. Options tap = "the intake points away from me now".
+    public static final boolean FIELD_CENTRIC_DEFAULT = false;
     public static final double AUTO_HEADING_HANDOFF_SEC = 60;                    // TeleOp INIT takes AUTO's heading if this fresh
     public static final double HEADING_MAX_RATE_DPS = 450;                       // the robot turns <= ~300 deg/s (312 rpm,
                                                                                  // 104 mm mecanum); faster = a sensor glitch

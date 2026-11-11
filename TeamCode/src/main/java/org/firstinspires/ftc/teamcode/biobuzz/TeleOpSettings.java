@@ -23,6 +23,11 @@ public final class TeleOpSettings {
     /** Camera floor distance to the HIVE CELL opening at the saved spot (NaN = no spot saved). */
     public double spotRangeIn = Double.NaN;
     public double spotSpeed = Double.NaN;
+    /**
+     * The CELL that distance was measured to (null = saved before 10 Nov night: TeleOp doesn't drive to it until Share
+     * saves it again). With two of our CELLs in view, the SHOT SPOT drive only runs on this one.
+     */
+    public HiveVision.Cell spotCell = null;
     /** Aim trim, degrees: + moves the shots LEFT, - moves them RIGHT (camera vs launcher). */
     public double aimTrimDeg = 0;
     /** Windmill power while turning one pocket. */
@@ -49,6 +54,14 @@ public final class TeleOpSettings {
         return !Double.isNaN(spotRangeIn) && !Double.isNaN(spotSpeed);
     }
 
+    /**
+     * True when the saved SHOT SPOT distance was measured to this CELL, or to the same CELL on the other alliance's HIVE
+     * (so a spot saved on one alliance works on both). False for a spot saved without its CELL.
+     */
+    public boolean spotIsFor(HiveVision.Cell cell) {
+        return hasSpot() && spotCell != null && cell != null && (cell == spotCell || cell == spotCell.otherAlliance());
+    }
+
     static TeleOpSettings parse(String text) {
         TeleOpSettings s = new TeleOpSettings();
         String spotRef = "";
@@ -66,6 +79,8 @@ public final class TeleOpSettings {
                     s.spotRangeIn = Double.parseDouble(v);
                 } else if (k.equals("spot_speed")) {
                     s.spotSpeed = Double.parseDouble(v);
+                } else if (k.equals("spot_cell")) {
+                    s.spotCell = HiveVision.Cell.valueOf(v);
                 } else if (k.equals("spot_ref")) {
                     spotRef = v;
                 } else if (k.equals("aim_trim_deg")) {
@@ -92,6 +107,7 @@ public final class TeleOpSettings {
                 || !(s.spotSpeed > 0 && s.spotSpeed <= BioBuzzConstants.LAUNCHER_MAX_VELOCITY)) {
             s.spotRangeIn = Double.NaN;
             s.spotSpeed = Double.NaN;
+            s.spotCell = null;
         }
         if (!SPOT_REF.equals(spotRef)) {
             // taught with the polycarbonate hood (and its speeds): AUTO must be taught again (LB + Share)
@@ -119,6 +135,9 @@ public final class TeleOpSettings {
         StringBuilder sb = new StringBuilder("alliance=" + alliance + "\nspot_ref=" + SPOT_REF + "\n");
         if (hasSpot()) {
             sb.append(String.format(Locale.US, "spot_range_in=%.1f\nspot_speed=%.0f\n", spotRangeIn, spotSpeed));
+            if (spotCell != null) {
+                sb.append("spot_cell=").append(spotCell.name()).append('\n');
+            }
         }
         sb.append(String.format(Locale.US, "aim_trim_deg=%.1f\nfeed_power=%.2f\nfeed_pause_sec=%.2f\nfeed_empty_wait_sec=%.2f\n",
                 aimTrimDeg, feedPower, feedPauseSec, feedEmptyWaitSec));

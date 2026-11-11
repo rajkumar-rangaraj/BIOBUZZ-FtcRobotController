@@ -10,21 +10,26 @@ import com.qualcomm.robotcore.util.Range;
 /*
  * BIOBUZZ competition TeleOp - ONE gamepad (Xbox name / PlayStation symbol).
  *
- *   Left stick            drive + strafe. FIELD-CENTRIC by default: stick up = AWAY FROM THE DRIVERS, whichever way the
- *                         robot faces (FieldHeading: Pinpoint heading, IMU backup). While X aims at a CELL in view the
- *                         stick is robot-centric (sideways = sideways to the CELL). Robot-centric (L1 in INIT): stick
- *                         up = intake side (FRONT)
- *   Options               field-centric reset: point the INTAKE away from you and press (after a big hit or a hub
- *                         restart; the start heading comes from AUTO when it ran just before, else "as placed")
+ *   Left stick            drive + strafe. ROBOT-CENTRIC by default: stick up = intake side (FRONT). FIELD-CENTRIC is
+ *                         optional (L1 in INIT, or hold Options 1 s in the match): stick up = AWAY FROM THE DRIVERS,
+ *                         whichever way the robot faces (FieldHeading: Pinpoint heading, IMU backup). While X or FIRE
+ *                         aims at a CELL in view the stick is robot-centric (sideways = sideways to the CELL)
+ *   Options               field-centric only: tap = point the INTAKE away from you and tap (after a big hit or a hub
+ *                         restart; the start heading comes from AUTO when it ran just before, else "as placed");
+ *                         hold 1 s = field-centric on / off
  *   Right stick X         turn
  *   Left bumper  (hold)   precision drive
  *   Right trigger         intake IN (analog)
  *   Left trigger          intake OUT (analog) - half pull = the flower "back-out" reverse
- *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed, and (with the CELL in
- *                         view) aimed, not turning and - while X drives to a SHOT SPOT - at its distance; a held ball
- *                         goes anyway 1.5 s after the hold starts (AimGate)
- *   X / Square   (hold)   HIVE auto-aim: camera turns the robot; with a saved SHOT SPOT it also drives to that
- *                         distance (push the left stick to take over). Also switches the shot speed back to AUTO
+ *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed. With our CELL in view it
+ *                         also aims like X: the camera turns the robot onto the CELL and, with a saved SHOT SPOT,
+ *                         drives to that distance (push the left stick to take over); the shot speed is the camera's
+ *                         unless the driver chose one with the D-pad. A ball goes when aimed, not turning and at the
+ *                         distance; a held ball goes anyway 1.5 s after the hold starts (AimGate). The speed follows
+ *                         the distance until the first ball of the burst goes, then stays until FIRE is let go, and
+ *                         the robot stops driving to the spot (it stays where the speed fits)
+ *   X / Square   (hold)   HIVE auto-aim without firing (the same turn and SHOT SPOT drive as FIRE). Also switches the
+ *                         shot speed back to AUTO (clears a D-pad preset and the trim)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
  *   LB + Back / Share     same, AND teach AUTO this exact position (TeleOp must be INIT-ed at the AUTO start)
  *   Y / Triangle          launcher pre-spin ON/OFF
@@ -38,13 +43,13 @@ import com.qualcomm.robotcore.util.Range;
  *                         tools/shot_results.py turns the labels into speed-table corrections.
  *
  * Shot speed AUTO (default): set from the camera's floor distance to our CELL (ShotSpeed, AUTO_SPEED_* table), kept
- * 3 s after the CELL drops out of view, then the NEAR / FAR preset; it doesn't change while FIRE is held.
+ * 3 s after the CELL drops out of view, then the NEAR / FAR preset; frozen once the first ball of a FIRE burst goes.
  *
  * During INIT: B / Circle = RED, A / Cross = BLUE (defaults to the alliance the last AUTO ran),
  *               Back / Share = diagnostics log on/off (files in /sdcard/BioBuzzLogs, see README_2),
  *               X / Square = aim gate on/off (off = FIRE never waits for the camera),
  *               Y / Triangle = auto shot speed on/off (off = NEAR / FAR presets only, as before 7 Nov),
- *               LB / L1 = field-centric driving on/off (ON by default; kept until the robot app restarts),
+ *               LB / L1 = field-centric driving on/off (OFF by default; kept until the robot app restarts),
  *               Options = the intake points away from you now (field-centric start heading).
  * While the arm is DEPLOYED, driving is limited to precision speed.
  */
@@ -87,6 +92,8 @@ public class BioBuzzTeleOp extends OpMode {
     private double lastSeenTargetT = -1e9;                                 // just after it drops out of view)
     private boolean lastFire = false;
     private boolean lastAim = false;
+    private boolean lastAimX = false;
+    private boolean burstStarted = false;                       // FIRE held and a ball fed since: shot speed frozen
     private boolean lastAimHadTarget = false;
     private double aimCellSeenT = Double.NaN;                   // X held: when our CELL was last in view
     private boolean lastUnjam = false;
@@ -171,7 +178,9 @@ public class BioBuzzTeleOp extends OpMode {
                 !shotSpeed.autoEnabled() ? "presets only" : (vision == null ? "AUTO - camera missing, presets"
                         : "AUTO from the camera distance"));
         telemetry.addData("Shot spot", settings.hasSpot()
-                ? String.format("%.0f in @ %.0f t/s (hold X to go there)", settings.spotRangeIn, settings.spotSpeed)
+                ? String.format("%.0f in to %s @ %.0f t/s (RB or X drives there with that CELL in view)",
+                        settings.spotRangeIn, settings.spotCell == null ? "? - press Share again" : settings.spotCell,
+                        settings.spotSpeed)
                 : "none saved (press Share at a spot that scores)");
         telemetry.addData("Diagnostics log", "%s   (Back/Share toggles)", BioBuzzMatchState.diagnostics ? "ON" : "off");
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? "calibrated" : "NOT CALIBRATED - arm disabled");
@@ -193,7 +202,8 @@ public class BioBuzzTeleOp extends OpMode {
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
                 settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
                 SHOT_SKIP_EMPTY_PAUSE ? String.format("%.2f", settings.feedEmptyWaitSec) : "off",
-                settings.hasSpot() ? String.format("%.1fin@%.0f", settings.spotRangeIn, settings.spotSpeed) : "none",
+                settings.hasSpot() ? String.format("%.1fin@%.0f/%s", settings.spotRangeIn, settings.spotSpeed,
+                        settings.spotCell) : "none",
                 aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off",
                 BioBuzzMatchState.fieldCentric ? "on" : "off", headingFrom, pinpointRecalibrations));
         robot.stowArm();
@@ -211,7 +221,9 @@ public class BioBuzzTeleOp extends OpMode {
         // compares them); the value is reused by the drive and telemetry below. Read even while robot-centric: holding
         // Options can turn field-centric on at any time (review 10 Nov).
         double imuNow = robot.headingDeg();
-        HiveVision.Target target = vision == null ? null : vision.target(alliance, null);   // every loop: logged + shown
+        Object lockedCell = shotSpeed.cell();                   // the CELL the auto speed follows wins a tie in view
+        HiveVision.Target target = vision == null ? null       // every loop: logged + shown
+                : vision.target(alliance, lockedCell instanceof HiveVision.Cell ? (HiveVision.Cell) lockedCell : null);
         double floorIn = target == null ? Double.NaN : target.horizontalIn();
 
         // ---------------- Launcher ----------------
@@ -247,8 +259,19 @@ public class BioBuzzTeleOp extends OpMode {
             diag.event("TRIM", String.format("%+.0f", launcherTrim));
         }
         boolean fire = gamepad1.right_bumper;
-        double baseSpeed = shotSpeed.update(matchTimer.seconds(), target == null ? null : target.cell, floorIn, fire,
-                launcherPreset);
+        if (!fire) {
+            burstStarted = false;
+        }
+        // FIRE with our CELL in view aims like X (turns, drives to the SHOT SPOT distance), so the auto speed keeps
+        // following the distance until the first ball of the burst goes; then it is frozen so the flywheel doesn't
+        // settle again mid-burst. With no CELL in view it is frozen at once, as before (review 10 Nov: else the kept
+        // camera speed could run out during spin-up and drop to the preset)
+        double baseSpeed = shotSpeed.update(matchTimer.seconds(), target == null ? null : target.cell, floorIn,
+                fire && (burstStarted || target == null), launcherPreset);
+        // Aiming (turn, SHOT SPOT drive, aim gate) only on the CELL the speed follows: with two of our CELLs in view
+        // the "best" one can flip every few frames (6 Nov: 31 and 66 in), which would drive the robot back and forth
+        HiveVision.Target aimTarget = target != null && (shotSpeed.cell() == null || target.cell == shotSpeed.cell())
+                ? target : null;
         boolean speedAuto = shotSpeed.source() == ShotSpeed.Source.AUTO || shotSpeed.source() == ShotSpeed.Source.AUTO_KEPT;
         if (baseSpeed != lastBaseSpeed || speedAuto != lastSpeedAuto) {
             diag.event("SPEED", String.format("%s %.0f%s", shotSpeed.source(), baseSpeed,
@@ -307,7 +330,8 @@ public class BioBuzzTeleOp extends OpMode {
         double forward = -gamepad1.left_stick_y * scale;
         double strafe = gamepad1.left_stick_x * scale;
         double turn = gamepad1.right_stick_x * scale;
-        boolean aim = gamepad1.x;
+        boolean aimX = gamepad1.x;
+        boolean aim = aimX || fire;                             // FIRE aims too when the CELL is in view (10 Nov)
         // Field-centric: the heading relative to the drivers, every loop (ready even while robot-centric). The Pinpoint
         // and the IMU were read at the top of the loop.
         double driverHeading = fieldHeading.update(matchTimer.seconds(),
@@ -333,11 +357,11 @@ public class BioBuzzTeleOp extends OpMode {
             setStatus("Field-centric reset: the way the intake points now = away from you");
             diag.event("DRIVE_HEADING", String.format("reset by the driver (was %.0f deg)", before));
         }
-        // While X aims at our CELL the stick is robot-centric (sideways = sideways to the CELL), and stays so for a
-        // moment when the CELL drops out of view (review 10 Nov: the frame flipped back and forth with the camera)
+        // While aiming (X or FIRE) at our CELL the stick is robot-centric (sideways = sideways to the CELL), and stays
+        // so for a moment when the CELL drops out of view (review 10 Nov: the frame flipped back and forth with the camera)
         if (!aim) {
             aimCellSeenT = Double.NaN;
-        } else if (target != null) {
+        } else if (aimTarget != null) {
             aimCellSeenT = matchTimer.seconds();
         }
         boolean aimFrame = !Double.isNaN(aimCellSeenT) && matchTimer.seconds() - aimCellSeenT < AIM_FRAME_HOLD_SEC;
@@ -349,7 +373,7 @@ public class BioBuzzTeleOp extends OpMode {
         }
         robot.lastDriveHeadingDeg = driverHeading;
         robot.lastFieldDrive = fieldDrive;
-        if (aim && !lastAim) {
+        if (aimX && !lastAimX) {                                // X (not FIRE: it keeps the driver's speed choice)
             if (shotSpeed.autoEnabled() && vision != null) {
                 if (shotSpeed.manual()) {                       // aiming with the camera = the camera's shot speed again
                     shotSpeed.setManual(false);
@@ -363,11 +387,16 @@ public class BioBuzzTeleOp extends OpMode {
                 diag.event("PRESET", "SPOT " + settings.spotSpeed);
             }
         }
+        lastAimX = aimX;
         boolean onSpot = false;
-        boolean spotHold = false;                               // X is still driving to the saved distance
-        if (aim && target != null) {
-            turn = HiveVision.aimTurnCw(target.bearingDeg);
-            if (settings.hasSpot()) {
+        boolean spotHold = false;                               // X or FIRE is still driving to the saved distance
+        if (aim && aimTarget != null) {
+            turn = HiveVision.aimTurnCw(aimTarget.bearingDeg);
+            // Once a FIRE burst has started the robot stays where it is: the shot speed is frozen for this distance
+            // (review 10 Nov: after a give-way or a stick take-over the drive went on, and later balls flew too fast).
+            // Only on the CELL the spot was saved to, or its twin on the other alliance's HIVE (review 10 Nov: with two of
+            // our CELLs in view, the far one's distance would drive the robot under the near one, into the HIVE)
+            if (settings.spotIsFor(aimTarget.cell) && !burstStarted) {
                 double toSpot = MotionController.spotForward(floorIn, settings.spotRangeIn);
                 if (Math.abs(gamepad1.left_stick_y) < 0.1 && !armDeployed) {
                     forward = toSpot;
@@ -378,17 +407,18 @@ public class BioBuzzTeleOp extends OpMode {
         }
         if (onSpot && !lastOnSpot) {
             gamepad1.rumble(400);
-            diag.event("ON_SPOT", String.format("floor %.1f bearing %.1f", floorIn, target.bearingDeg));
+            diag.event("ON_SPOT", String.format("floor %.1f bearing %.1f", floorIn, aimTarget.bearingDeg));
         }
         lastOnSpot = onSpot;
         if (gamepad1.backWasPressed()) {
-            if (target == null) {
-                setStatus("Can't save the spot: no " + alliance + " HIVE tags in view");
+            if (aimTarget == null) {                            // the CELL the speed follows: its distance and name
+                setStatus("Can't save the spot: no " + alliance + " HIVE tags in view (or the camera is switching CELLs)");
                 gamepad1.rumbleBlips(2);
             } else {
                 settings.alliance = alliance;
                 settings.spotRangeIn = floorIn;
                 settings.spotSpeed = launcherTarget;
+                settings.spotCell = aimTarget.cell;
                 String poseNote = "";
                 if (gamepad1.left_bumper) {                     // LB + SHARE: also teach AUTO this exact position
                     double imuHeading = MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit);
@@ -405,33 +435,35 @@ public class BioBuzzTeleOp extends OpMode {
                     }
                 }
                 boolean saved = settings.trySave();
-                setStatus(saved ? String.format("SHOT SPOT saved: %.0f in @ %.0f t/s%s", floorIn, launcherTarget, poseNote)
-                        : "SHOT SPOT save FAILED");
-                diag.event("SPOT_SAVED", String.format("floor %.1f range %.1f speed %.0f saved=%s%s", floorIn, target.rangeIn,
-                        launcherTarget, saved, poseNote));
+                setStatus(saved ? String.format("SHOT SPOT saved: %.0f in to %s @ %.0f t/s%s", floorIn, aimTarget.cell,
+                        launcherTarget, poseNote) : "SHOT SPOT save FAILED");
+                diag.event("SPOT_SAVED", String.format("floor %.1f range %.1f cell %s speed %.0f saved=%s%s", floorIn,
+                        aimTarget.rangeIn, aimTarget.cell, launcherTarget, saved, poseNote));
                 gamepad1.rumble(600);
             }
         }
         if (aim != lastAim) {
-            diag.event(aim ? "AIM_PRESS" : "AIM_RELEASE", vision == null ? "camera missing" : "");
+            diag.event(aim ? "AIM_PRESS" : "AIM_RELEASE", (aim ? (aimX ? "X" : "FIRE") : "")
+                    + (vision == null ? " camera missing" : ""));
             lastAim = aim;
         }
-        if (aim && (target != null) != lastAimHadTarget) {
-            diag.event(target != null ? "AIM_TARGET_FOUND" : "AIM_TARGET_LOST",
-                    target != null ? String.format("%s %d tags bearing %.1f", target.cell, target.tagCount, target.bearingDeg) : "");
+        if (aim && (aimTarget != null) != lastAimHadTarget) {
+            diag.event(aimTarget != null ? "AIM_TARGET_FOUND" : "AIM_TARGET_LOST", aimTarget != null
+                    ? String.format("%s %d tags bearing %.1f", aimTarget.cell, aimTarget.tagCount, aimTarget.bearingDeg) : "");
         }
-        lastAimHadTarget = aim && target != null;
+        lastAimHadTarget = aim && aimTarget != null;
         robot.drive(forward, strafe, turn, 1.0);
 
         // ---------------- Intake + windmill (one ball per shot, see ShotFeeder) ----------------
-        // Aim gate (AimGate): with our CELL in view the next ball waits for a good, steady aim and, while X drives to a
-        // saved spot, for the right distance. Every hold gives way after AIM_GATE_GIVEWAY_SEC; X in INIT turns it off.
-        boolean aimOk = aimGate.update(matchTimer.seconds(), fire, ready, target != null,
-                target != null ? target.bearingDeg : 0, turn, spotHold);
+        // Aim gate (AimGate): with our CELL in view the next ball waits for a good, steady aim and, while X or FIRE
+        // drives to a saved spot, for the right distance. Every hold gives way after AIM_GATE_GIVEWAY_SEC; X in INIT
+        // turns it off.
+        boolean aimOk = aimGate.update(matchTimer.seconds(), fire, ready, aimTarget != null,
+                aimTarget != null ? aimTarget.bearingDeg : 0, turn, spotHold);
         boolean aimHold = fire && ready && !aimOk;
         if (aimHold != lastAimHold) {
             diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END", aimGate.state() + " "
-                    + (target != null ? String.format("bearing %.1f floor %.1f", target.bearingDeg, floorIn) : "no target"));
+                    + (aimTarget != null ? String.format("bearing %.1f floor %.1f", aimTarget.bearingDeg, floorIn) : "no target"));
             if (aimHold && !aimHoldBlipped) {                   // one blip per FIRE press, not per hold
                 gamepad1.rumbleBlips(1);
                 aimHoldBlipped = true;
@@ -443,7 +475,7 @@ public class BioBuzzTeleOp extends OpMode {
         }
         boolean giveWay = aimGate.gaveWay();
         if (giveWay && !lastGiveWay) {
-            diag.event("AIM_GIVEWAY", target != null ? String.format("bearing %.1f", target.bearingDeg) : "CELL lost");
+            diag.event("AIM_GIVEWAY", aimTarget != null ? String.format("bearing %.1f", aimTarget.bearingDeg) : "CELL lost");
         }
         lastGiveWay = giveWay;
         double intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
@@ -458,6 +490,7 @@ public class BioBuzzTeleOp extends OpMode {
                 diag.event("FEED", feedEvent + String.format(" | launcher %.0f t/s", robot.launcherVelocity()));
                 if (feedEvent.startsWith("SHOT")) {
                     aimGate.ballFed();                          // the next ball earns its own give-way time
+                    burstStarted = fire;                        // the shot speed is frozen from here to FIRE's release
                 }
                 if (feedEvent.startsWith("JAM")) {
                     setStatus("Windmill " + feedEvent + " - hold B to unjam");
@@ -569,9 +602,9 @@ public class BioBuzzTeleOp extends OpMode {
             String why;
             if (aimGate.state() == AimGate.State.HOLD_SPOT) {
                 why = String.format("driving to the SHOT SPOT (%+.0f in)", floorIn - settings.spotRangeIn);
-            } else if (aimGate.state() == AimGate.State.HOLD_AIM) {
-                why = String.format("aim %.1f deg off: hold X, or turn %s", target.bearingDeg,
-                        target.bearingDeg > 0 ? "LEFT" : "RIGHT");
+            } else if (aimGate.state() == AimGate.State.HOLD_AIM && aimTarget != null) {
+                why = String.format("aiming: %.1f deg off (%s)", aimTarget.bearingDeg,
+                        aimTarget.bearingDeg > 0 ? "turning left" : "turning right");
             } else if (aimGate.state() == AimGate.State.HOLD_TURNING) {
                 why = "robot still turning";
             } else {
@@ -599,13 +632,15 @@ public class BioBuzzTeleOp extends OpMode {
             telemetry.addData("HIVE aim", "camera not found");
         } else if (target != null) {
             telemetry.addData("HIVE aim", "%s  %d tags  bearing %.1f  floor %.0f in%s",
-                    target.cell, target.tagCount, target.bearingDeg, floorIn, gamepad1.x ? "" : "  (hold X to aim)");
+                    target.cell, target.tagCount, target.bearingDeg, floorIn, gamepad1.x || gamepad1.right_bumper ? ""
+                            : "  (RB fires aimed; X aims only)");
         } else {
             telemetry.addData("HIVE aim", "no %s CELL tags in view (any tags: %d)", alliance, vision.visibleTagCount());
         }
         if (settings.hasSpot()) {
-            telemetry.addData("Shot spot", "%.0f in @ %.0f t/s%s", settings.spotRangeIn, settings.spotSpeed,
-                    onSpot ? "  ** ON SPOT - FIRE **" : (target != null
+            telemetry.addData("Shot spot", "%.0f in to %s @ %.0f t/s%s", settings.spotRangeIn,
+                    settings.spotCell == null ? "? (press Share again so RB / X drive there)" : settings.spotCell,
+                    settings.spotSpeed, onSpot ? "  ** ON SPOT - FIRE **" : (aimTarget != null && settings.spotIsFor(aimTarget.cell)
                             ? String.format("  now %.0f in (%+.0f)", floorIn, floorIn - settings.spotRangeIn) : ""));
         } else {
             telemetry.addData("Shot spot", "none - press Share where shots score");
