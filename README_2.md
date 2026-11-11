@@ -252,6 +252,7 @@ git merge upstream/master
 ## Shooting guide
 
 **Students / drivers:** `BioBuzz_Driver_Card.pdf` – 2-page visual card (gamepad picture, 5 scoring steps, pit-crew SHOT SPOT setup, fix-it table, logging shots with L1 + D-pad). Source `tools/driver_card.html`; rebuild with `msedge --headless --print-to-pdf=BioBuzz_Driver_Card.pdf tools/driver_card.html`.
+`BioBuzz_Driver_Quiz.pdf` – 33-question quiz on the card (2 pages, ★ = must know) + an answer key page for the coach (pass: 28/33 and every ★). Source `tools/driver_quiz.html`, rebuilt the same way; keep it in step with the card.
 
 **Coaches (full detail):**
 Printable driver guide (one shooting spot, speed tuning with Shot Log, camera/AIM check, driver rule, TeleOp button card): `BioBuzz_Shooting_Guide.pdf`, rebuilt with `node tools/make_shooting_guide.js`.
