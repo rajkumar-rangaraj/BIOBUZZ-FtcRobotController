@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<!-- BIOBUZZ Driver Quiz: 2 pages of questions for drivers / pit crew + 1 page answer key for the coach.
+     Every answer is on the BIOBUZZ Driver Card (tools/driver_card.html): keep the two in step with BioBuzzTeleOp.java.
+     Rebuild the PDF:  msedge --headless --no-pdf-header-footer --print-to-pdf=BioBuzz_Driver_Quiz.pdf tools/driver_quiz.html -->
+<html><head><meta charset="utf-8"><title>BIOBUZZ Driver Quiz</title>
+<style>
+  @page { size: letter portrait; margin: 0.45in; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; color: #1a1a1a; font-size: 13px; }
+  .page { height: 10.05in; page-break-after: always; position: relative; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  .top { display: flex; justify-content: space-between; align-items: center; background: #111; color: #FFD000;
+         padding: 7px 14px; border-radius: 10px; }
+  .top h1 { margin: 0; font-size: 25px; letter-spacing: .5px; }
+  .top small { color: #fff; font-size: 12.5px; }
+  .who { display: flex; gap: 16px; margin: 9px 2px 3px; font-size: 14px; }
+  .who span { border-bottom: 1.5px solid #333; padding-bottom: 2px; }
+  .hint { font-size: 12px; color: #444; margin: 4px 2px 6px; }
+  .cols { column-count: 2; column-gap: 24px; }
+  h2 { font-size: 14.5px; margin: 6px 0 5px; padding: 3px 9px; border-radius: 6px; color: #fff; break-after: avoid; }
+  .q { break-inside: avoid; margin: 0 0 9px; }
+  .n { display: inline-block; min-width: 24px; font-weight: 800; }
+  .star { color: #C00000; font-weight: 800; }
+  .opts { margin: 3px 0 0 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
+  .opts.one { grid-template-columns: 1fr; }
+  .line { margin: 7px 0 0 24px; border-bottom: 1px solid #999; height: 15px; }
+  .order { margin: 3px 0 0 24px; }
+  .order div { margin: 2px 0; }
+  .order div::before { content: "____  "; color: #555; }
+  .mono { font-family: Consolas, monospace; background: #eee; padding: 0 4px; border-radius: 4px; font-size: 12px; }
+  .foot { position: absolute; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #888; }
+  .a { background: #2E7D32; } .b { background: #1565C0; } .c { background: #C00000; } .d { background: #6A1B9A; }
+  .e { background: #E65100; } .f { background: #8E24AA; } .g { background: #B8860B; }
+  table.key { border-collapse: collapse; width: 100%; font-size: 11.5px; margin-top: 6px; }
+  table.key td { border-bottom: 1px solid #ddd; padding: 2.5px 6px; vertical-align: top; }
+  table.key td:first-child { font-weight: 800; width: 34px; }
+  table.key td:nth-child(2) { width: 46%; }
+  table.key td:last-child { color: #555; }
+  .pass { background: #EAF5E4; border-left: 8px solid #2E7D32; border-radius: 10px; padding: 7px 12px; margin-top: 8px; font-size: 13px; }
+</style></head><body>
+
+<!-- ======================= PAGE 1 ======================= -->
+<div class="page">
+  <div class="top"><h1>🐝 BIOBUZZ DRIVER QUIZ</h1><small>Team 37102 · all answers are on the Driver Card</small></div>
+  <div class="who"><span style="flex:2">Name:</span><span style="flex:1">Date:</span><span style="flex:1">Score: &nbsp; &nbsp; &nbsp; / 33</span></div>
+  <div class="hint">Circle one letter, or write the answer on the line. <span class="star">★</span> = must know: a driver gets every ★ right.</div>
+
+  <div class="cols">
+    <h2 class="a">A · BEFORE THE MATCH</h2>
+    <div class="q"><span class="n">1.</span>To connect gamepad 1 to the Driver Hub you press:
+      <div class="opts"><div>A) SHARE + ✕</div><div>B) OPTIONS + ✕</div><div>C) OPTIONS + ○</div><div>D) hold R1</div></div></div>
+    <div class="q"><span class="n">2.</span><span class="star">★</span> The battery must read at least:
+      <div class="opts"><div>A) 11.5 V</div><div>B) 12.0 V</div><div>C) 12.5 V</div><div>D) 14 V</div></div></div>
+    <div class="q"><span class="n">3.</span>For AUTO you load:
+      <div class="opts"><div>A) 3 balls, anywhere</div><div>B) 4 balls, one per pocket</div><div>C) 5 balls</div><div>D) as many as fit</div></div></div>
+    <div class="q"><span class="n">4.</span><span class="star">★</span> TeleOp INIT says <span class="mono">Alliance RED</span>, but our bumpers are BLUE. Which button do you press?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">5.</span>True or false: it's fine to push the robot into place while TeleOp is in INIT.
+      <div class="line"></div></div>
+    <div class="q"><span class="n">6.</span>What must the INIT screen say about the diagnostics log?
+      <div class="line"></div></div>
+
+    <h2 class="b">B · BUTTONS</h2>
+    <div class="q"><span class="n">7.</span><span class="star">★</span> To aim AND shoot, you:
+      <div class="opts"><div>A) tap R1</div><div>B) hold R1</div><div>C) hold □</div><div>D) press △</div></div></div>
+    <div class="q"><span class="n">8.</span>Holding □ (square):
+      <div class="opts one"><div>A) fires the balls</div><div>B) aims and drives to the SHOT SPOT, no firing</div><div>C) saves the SHOT SPOT</div><div>D) unjams the windmill</div></div></div>
+    <div class="q"><span class="n">9.</span>Which button spins the flywheel up early, so it's ready when you get there?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">10.</span>The windmill is jammed. What do you do?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">11.</span>R2 and L2 are:
+      <div class="opts"><div>A) intake IN / OUT</div><div>B) fire / aim</div><div>C) fast / slow</div><div>D) flywheel up / down</div></div></div>
+    <div class="q"><span class="n">12.</span>In the normal drive mode, pushing the left stick UP drives the robot:
+      <div class="opts"><div>A) away from you</div><div>B) toward its intake side</div><div>C) toward the goal</div><div>D) it turns</div></div></div>
+    <div class="q"><span class="n">13.</span>How do you switch field-centric on or off in the middle of a match?
+      <div class="line"></div></div>
+
+    <h2 class="c">C · SCORING</h2>
+    <div class="q"><span class="n">14.</span><span class="star">★</span> Number the scoring steps 1 – 5:
+      <div class="order">
+        <div>Keep holding R1: it fires one ball at a time</div>
+        <div>Let go, drive off</div>
+        <div>Drive close, launcher toward our goal, tap △</div>
+        <div>Feel the buzz: screen says ON SPOT - FIRE</div>
+        <div>Hold R1: the robot aims and drives to the spot</div>
+      </div></div>
+    <div class="q"><span class="n">15.</span><span class="star">★</span> Fill in: "NO BUZZ = NO ________. &nbsp;Never shoot while ________."</div>
+    <div class="q"><span class="n">16.</span>You hold R1 and the screen says <span class="mono">FIRE HELD</span>. That means:
+      <div class="opts one"><div>A) the robot is broken</div><div>B) it's aiming / driving to the spot; it fires anyway after 1.5 s</div><div>C) let go and press again</div><div>D) the battery is low</div></div></div>
+    <div class="q"><span class="n">17.</span><span class="star">★</span> The gamepad buzzes 3 times in TeleOp. What does it mean, and what do you do?
+      <div class="line"></div></div>
+  </div>
+  <div class="foot">BIOBUZZ Driver Quiz · page 1 · 11 Nov 2026 · matches BioBuzz_Driver_Card.pdf</div>
+</div>
+
+<!-- ======================= PAGE 2 ======================= -->
+<div class="page">
+  <div class="cols">
+    <h2 class="d">D · READ THE SCREEN</h2>
+    <div class="q"><span class="n">18.</span>The screen says <span class="mono">Shot speed AUTO 41 in 1445 +0</span>. Who picked 1445 t/s?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">19.</span><span class="mono">Shot spot … now 58 in (+6)</span> means:
+      <div class="opts"><div>A) 6 in too close</div><div>B) 6 in too far</div><div>C) 6 balls left</div><div>D) speed +6</div></div></div>
+    <div class="q"><span class="n">20.</span>You pressed D-pad ↑ and the screen says MANUAL. How do you get the camera's speed back?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">21.</span>What does <span class="mono">Balls 12 out, results 10</span> mean?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">22.</span><span class="mono">Launcher READY</span> means:
+      <div class="opts"><div>A) ok to fire</div><div>B) the windmill is full</div><div>C) the camera sees the goal</div><div>D) AUTO is done</div></div></div>
+
+    <h2 class="e">E · FIX IT FAST</h2>
+    <div class="q"><span class="n">23.</span><span class="star">★</span> Balls land SHORT (in front of the goal). You press:
+      <div class="opts"><div>A) D-pad → once (+10)</div><div>B) D-pad ← once</div><div>C) D-pad ↓</div><div>D) △</div></div></div>
+    <div class="q"><span class="n">24.</span>Balls go LONG (over the goal). You press:
+      <div class="opts"><div>A) D-pad →</div><div>B) D-pad ← once (−10)</div><div>C) L1</div><div>D) ○</div></div></div>
+    <div class="q"><span class="n">25.</span><span class="star">★</span> Balls miss to the LEFT or RIGHT. The fix:
+      <div class="opts one"><div>A) D-pad ← / →</div><div>B) it's aim, not speed: let R1 aim (our goal's tags in view)</div><div>C) press ✕</div><div>D) drive faster</div></div></div>
+    <div class="q"><span class="n">26.</span>R1 doesn't aim, and the screen says <span class="mono">no BLUE CELL tags</span>, but we are RED. How do you fix it?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">27.</span>SHARE says "Can't save". How do you fix it?
+      <div class="line"></div></div>
+
+    <h2 class="f">F · LOG EVERY SHOT (practice)</h2>
+    <div class="q"><span class="n">28.</span>The ball went IN. What do you press?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">29.</span>Fill in: L1 + D-pad ↓ = ________ · L1 + D-pad → = ________ · L1 + D-pad ← = ________</div>
+    <div class="q"><span class="n">30.</span>You logged a ball and felt 2 blips. That means:
+      <div class="opts one"><div>A) saved</div><div>B) NOT saved: no ball waiting (already logged, or more than 10 s ago)</div><div>C) the flywheel is off</div><div>D) the log is full</div></div></div>
+    <div class="q"><span class="n">31.</span><span class="star">★</span> Why must you hold L1 while you press the D-pad to log?
+      <div class="line"></div></div>
+    <div class="q"><span class="n">32.</span>You fired 3 balls in a row. In what order do you log them?
+      <div class="line"></div></div>
+
+    <h2 class="g">G · PIT CREW: SHOT SPOT</h2>
+    <div class="q"><span class="n">33.</span>Number the steps 1 – 4 to save the SHOT SPOT:
+      <div class="order">
+        <div>Press SHARE (buzz + <span class="mono">SHOT SPOT saved</span>)</div>
+        <div>Park on the best spot, launcher facing the goal</div>
+        <div>Hold □, then let go (the robot squares up)</div>
+        <div>Check the speed: → / ← until balls land IN</div>
+      </div></div>
+    <div class="q" style="margin-top:14px;font-size:12px;color:#555">Bonus (no points): the screen says <span class="mono">? - press Share again</span>. What do you do?
+      <div class="line"></div></div>
+  </div>
+  <div class="foot">BIOBUZZ Driver Quiz · page 2 · questions 18 – 33</div>
+</div>
+
+<!-- ======================= PAGE 3: ANSWER KEY ======================= -->
+<div class="page">
+  <div class="top"><h1>🔑 ANSWER KEY (coach)</h1><small>fold back or keep away from the drivers</small></div>
+  <table class="key">
+    <tr><td>1</td><td>B · OPTIONS + ✕</td><td>Card p1, Before the match 1</td></tr>
+    <tr><td>2 ★</td><td>C · 12.5 V</td><td>Before the match 5: a weak battery makes the flywheel slow and shots short</td></tr>
+    <tr><td>3</td><td>B · 4 balls, one per pocket</td><td>Before the match 3</td></tr>
+    <tr><td>4 ★</td><td>✕ (= BLUE; ○ = RED)</td><td>Before the match 4: the alliance picks which goal's tags the camera aims at</td></tr>
+    <tr><td>5</td><td>False: keep the robot still in INIT</td><td>Before the match 4 (the heading sensor calibrates in INIT)</td></tr>
+    <tr><td>6</td><td><span class="mono">Diagnostics log ON</span> (SHARE in INIT switches it)</td><td>Before the match 4</td></tr>
+    <tr><td>7 ★</td><td>B · hold R1</td><td>Gamepad picture: R1 hold = AIM + FIRE</td></tr>
+    <tr><td>8</td><td>B · aims and drives to the SHOT SPOT, no firing</td><td>Gamepad picture</td></tr>
+    <tr><td>9</td><td>△ (flywheel on/off)</td><td>Step 1: tap △ to spin up</td></tr>
+    <tr><td>10</td><td>Hold ○ (unjam) about 1 s, then R1 again</td><td>Fix it fast: Windmill stuck</td></tr>
+    <tr><td>11</td><td>A · intake IN / OUT</td><td>Gamepad picture</td></tr>
+    <tr><td>12</td><td>B · toward its intake side (robot-centric is the default)</td><td>Left stick callout</td></tr>
+    <tr><td>13</td><td>Hold OPTIONS 1 s (1 blip = on, 2 = off). In INIT: L1</td><td>OPTIONS callout</td></tr>
+    <tr><td>14 ★</td><td>4 · 5 · 1 · 3 · 2 (drive close → hold R1 → buzz → keep holding → let go)</td><td>How we score. 1 point only if all 5 are right</td></tr>
+    <tr><td>15 ★</td><td>SHOT · moving</td><td>The red rule bar</td></tr>
+    <tr><td>16</td><td>B · aiming / driving to the spot; fires anyway after 1.5 s</td><td>Fix it fast: R1 waits</td></tr>
+    <tr><td>17 ★</td><td>20 s left: go PARK (in the loading zone)</td><td>The red rule bar</td></tr>
+    <tr><td>18</td><td>The camera, from the distance (41 in)</td><td>Read the screen: Shot speed</td></tr>
+    <tr><td>19</td><td>B · 6 in too far</td><td>Read the screen: Shot spot</td></tr>
+    <tr><td>20</td><td>Press □</td><td>Read the screen: MANUAL → □ = AUTO again</td></tr>
+    <tr><td>21</td><td>12 balls fired, only 10 logged: 2 results missing</td><td>Read the screen: Balls · Log every shot</td></tr>
+    <tr><td>22</td><td>A · ok to fire</td><td>Read the screen: Launcher</td></tr>
+    <tr><td>23 ★</td><td>A · D-pad → once (+10)</td><td>Fix it fast: Balls land SHORT (one press at a time)</td></tr>
+    <tr><td>24</td><td>B · D-pad ← once (−10)</td><td>Fix it fast: Balls go LONG</td></tr>
+    <tr><td>25 ★</td><td>B · it's aim, not speed: let R1 aim</td><td>Fix it fast: Left / right misses. The D-pad only changes speed</td></tr>
+    <tr><td>26</td><td>Restart TeleOp and press ○ (RED) in INIT</td><td>Fix it fast: R1 doesn't aim</td></tr>
+    <tr><td>27</td><td>Turn the launcher toward our goal's tags, then SHARE again</td><td>Fix it fast: SHARE "Can't save"</td></tr>
+    <tr><td>28</td><td>Hold L1 + D-pad ↑</td><td>Log every shot</td></tr>
+    <tr><td>29</td><td>SHORT · LONG · SIDE</td><td>Log every shot. 1 point only if all 3 are right</td></tr>
+    <tr><td>30</td><td>B · NOT saved: no ball waiting</td><td>Log every shot: short buzz = saved, 2 blips = not saved</td></tr>
+    <tr><td>31 ★</td><td>The D-pad alone changes the shot speed (trim / presets)</td><td>Log every shot (red line)</td></tr>
+    <tr><td>32</td><td>In the order they flew (first ball first)</td><td>Log every shot</td></tr>
+    <tr><td>33</td><td>4 · 1 · 3 · 2 (park → check speed → hold □ → SHARE)</td><td>Card p2, Pit crew. 1 point only if all 4 are right</td></tr>
+    <tr><td>Bonus</td><td>Save the spot again: at the spot, press SHARE</td><td>Card p2, Test it (an old spot from before 10 Nov night)</td></tr>
+  </table>
+  <div class="pass"><b>Pass:</b> 28 / 33 or better <b>and every ★ right</b> (2, 4, 7, 14, 15, 17, 23, 25, 31).
+    Below that: go through the Driver Card together, then practise on the field: 10 balls with R1 from the SHOT SPOT,
+    logging each one with L1 + D-pad.</div>
+  <div class="foot">BIOBUZZ Driver Quiz · answer key · the card describes the robot code from 10 Nov night (R1 aims by itself)</div>
+</div>
+</body></html>
