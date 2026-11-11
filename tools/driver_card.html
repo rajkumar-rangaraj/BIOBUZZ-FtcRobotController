@@ -22,6 +22,8 @@
   .step .big { font-size: 40px; line-height: 1.1; margin: 4px 0; }
   .step b { display: block; font-size: 17px; }
   .step span { font-size: 13px; }
+  .compact .step { padding: 5px 8px; }
+  .compact .step .big { font-size: 30px; margin: 0; }
   .rule { background: #C00000; color: #fff; font-weight: 800; font-size: 18px; text-align: center; padding: 8px; border-radius: 10px; margin-top: 10px; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   td { padding: 6px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
@@ -90,7 +92,7 @@
         <tr><td>1</td><td>Gamepad on: <b>OPTIONS + ✕</b></td></tr>
         <tr><td>2</td><td>AUTO: pick <span class="tag red">AUTO RED</span> or <span class="tag blue">AUTO BLUE</span></td></tr>
         <tr><td>3</td><td>4 balls, <b>one per pocket</b></td></tr>
-        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b><br><b>Drive: robot-centric</b> (L1 = field-centric) · don't move the robot in INIT</td></tr>
+        <tr><td>4</td><td>TeleOp → INIT → read <b>Alliance</b> line.<br>Wrong? <b>○ = RED</b> &nbsp; <b>✕ = BLUE</b><br><b>Drive: robot-centric</b> (L1 = field-centric) · don't move the robot in INIT<br>📝 <b>Diagnostics log: ON</b> (SHARE in INIT switches it)</td></tr>
         <tr><td>5</td><td>Battery ≥ <b>12.5 V</b></td></tr>
       </table>
     </div>
@@ -112,7 +114,7 @@
 <div class="page">
   <div class="top"><h1>🔧 PIT CREW: SET THE SHOT SPOT (5 min)</h1><small>do this once per event – the robot remembers it</small></div>
 
-  <div class="steps" style="grid-template-columns: repeat(4, 1fr)">
+  <div class="steps compact" style="grid-template-columns: repeat(4, 1fr)">
     <div class="step"><div class="n">1</div><div class="big">📍</div><b>PARK ON YOUR BEST SPOT</b><span>where shots go in<br>launcher facing the goal</span></div>
     <div class="step"><div class="n">2</div><div class="big">⚡</div><b>CHECK THE SPEED</b><span>camera sets it (AUTO)<br>→ / ← until balls land IN</span></div>
     <div class="step"><div class="n">3</div><div class="big">□</div><b>HOLD □, LET GO</b><span>robot squares up<br>to the goal</span></div>
@@ -125,22 +127,27 @@
   </div>
 
   <div class="row">
-    <div class="card warn" style="flex:1.2">
+    <div style="flex:1.2;display:flex;flex-direction:column;gap:8px">
+    <div class="card warn">
       <div style="font-size:20px;font-weight:800">🛠️ FIX IT FAST</div>
       <table class="fix">
         <tr><td>Balls land SHORT</td><td>D-pad → (+10) one press at a time</td></tr>
         <tr><td>Balls go LONG</td><td>D-pad ← (−10)</td></tr>
-        <tr><td>Left / right misses</td><td>That's aim, not speed → R1 aims by itself (needs the tags in view)</td></tr>
-        <tr><td>R1 doesn't aim</td><td>Wrong alliance (<span class="mono">no BLUE CELL tags</span>): restart TeleOp, ○ / ✕</td></tr>
+        <tr><td>Left / right misses</td><td>That's aim, not speed: R1 aims by itself (tags in view)</td></tr>
+        <tr><td>R1 doesn't aim</td><td>Wrong alliance? Restart TeleOp, pick ○ / ✕ in INIT</td></tr>
         <tr><td>SHARE: "Can't save"</td><td>Turn the launcher toward our goal's tags</td></tr>
         <tr><td>Always the same side</td><td><b>BioBuzz Tune</b>: D-pad ← / →, SHARE saves</td></tr>
         <tr><td>Balls stay in robot</td><td><b>BioBuzz Tune</b>: D-pad ↑ = longer pause, SHARE saves</td></tr>
         <tr><td>Windmill stuck</td><td>Hold ○ (unjam) 1 s, then R1 again</td></tr>
-        <tr><td>R1 waits: <span class="mono">FIRE HELD</span></td><td>It is aiming / driving to the spot; fires anyway after 1.5 s</td></tr>
-        <tr><td>Buttons don't work</td><td>Gamepad not connected → OPTIONS + ✕</td></tr>
-        <tr><td>Want field-centric</td><td><b>L1 in INIT</b>, or <b>hold OPTIONS 1 s</b> (stick ↑ = away from you)</td></tr>
-        <tr><td>Practice: teach speeds</td><td><b>L1 + D-pad</b> after each ball: ↑ IN · ↓ short · → long · ← side</td></tr>
+        <tr><td>R1 waits: <span class="mono">FIRE HELD</span></td><td>Aiming / driving to the spot; fires anyway after 1.5 s</td></tr>
       </table>
+    </div>
+    <div class="card" style="background:#F3ECFA;border-left:8px solid #6A1B9A;font-size:13px;padding:6px 14px">
+      <div style="font-size:18px;font-weight:800">📝 PRACTICE: LOG EVERY SHOT</div>
+      <div>After each ball lands: <b>hold L1 + D-pad</b> &nbsp;<b>↑ IN</b> · <b>↓ SHORT</b> · <b>→ LONG</b> · <b>← SIDE</b></div>
+      <div>Within 10 s · <b>short buzz</b> = saved · <b>2 blips</b> = not saved · volley: in the order they flew</div>
+      <div style="color:#C00000"><b>D-pad without L1 changes the shot speed!</b> · INIT: <b>Diagnostics log ON</b></div>
+    </div>
     </div>
     <div class="card" style="flex:1;background:#EEF3FB;border-left:8px solid #1565C0">
       <div style="font-size:20px;font-weight:800">📺 READ THE SCREEN</div>
@@ -151,6 +158,7 @@
         <tr><td>HIVE aim</td><td>tags seen + distance to the goal</td></tr>
         <tr><td>Shot spot</td><td><span class="mono">now 58 in (+6)</span> = 6 in too far<br><b>ON SPOT - FIRE</b> = go!</td></tr>
         <tr><td>Drive</td><td><span class="mono">robot-centric</span> = default<br><span class="mono">FIELD-CENTRIC, intake +35 deg</span> = after L1 / OPTIONS hold</td></tr>
+        <tr><td>Balls</td><td><span class="mono">12 out, results 12 (IN 9 …)</span> = fired / logged: should match</td></tr>
       </table>
     </div>
   </div>
