@@ -161,7 +161,8 @@ public class BioBuzzTune extends OpMode {
         if (gamepad1.x && target != null) {
             turn = HiveVision.aimTurnCw(target.bearingDeg);
             double toSpot = 0;
-            if (settings.hasSpot() && Math.abs(gamepad1.left_stick_y) < 0.1) {
+            // only to the CELL the spot was saved to (or its twin on the other alliance): not the far CELL behind it
+            if (settings.spotIsFor(target.cell) && Math.abs(gamepad1.left_stick_y) < 0.1) {
                 toSpot = MotionController.spotForward(target.horizontalIn(), settings.spotRangeIn);
                 forward = toSpot;
             }
