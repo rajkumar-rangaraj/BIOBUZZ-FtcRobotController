@@ -284,14 +284,15 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   - One wheel throws the ball slower at the same motor speed.
   - In the 7 Nov diag logs (78 shots, good battery), the drivers trimmed to about 1440 t/s at 30–36 in, 1480 at 36–44 in and 1585–1600 at 52–60 in. With two wheels it was 1150–1240.
 - **Presets:** NEAR **1450 t/s** (was 1150), FAR **1570 t/s** (was 1240). AUTO uses NEAR when no SHOT SPOT is saved.
-- **Auto shot speed (TeleOp, ON by default).** The camera's floor distance to our CELL picks the speed from `AUTO_SPEED_DIST_IN` / `AUTO_SPEED_TPS` in `BioBuzzConstants`: 1440 t/s at 30 in, 1525 at 48 in, 1640 at 64 in (`ShotSpeed.java`).
+- **Auto shot speed (TeleOp, ON by default).** The camera's floor distance to our CELL picks the speed from `AUTO_SPEED_DIST_IN` / `AUTO_SPEED_TPS` in `BioBuzzConstants`: 1440 t/s from 30 to 40 in, 1465 at 44 in, 1525 at 48 in, 1640 at 64 in (`ShotSpeed.java`). The Pedro AUTO uses the same table when it sees the CELL.
+  - **10 Nov: 36–44 in lowered** (36 in 1450 → 1440, 40 in 1465 → 1440, 44 in 1490 → 1465) from 51 shots the drivers labelled with LB + D-pad (`tools/shot_results.py`): the IN balls were 10–26 t/s under the table there, and 1450 at ~40 in went IN 8 of 10. 48 in and up are unchanged: nearly all shots there were at MANUAL NEAR 1450 (IN 5, SHORT 4 of 14), so label some at auto speed first.
   - The speed moves only when the table speed is more than 10 t/s away, so camera jitter can't make the flywheel hunt.
   - It doesn't change while RB (FIRE) is held. A new target would make the flywheel settle again in the middle of a burst.
   - It follows one CELL. With two of our CELLs in view, it switches to the other one only after the first has been out of view for 0.5 s. In the 6 Nov logs the camera's best CELL flipped between 31 in and 66 in every few frames, which would have changed the speed 75–140 times a minute.
   - When the CELL drops out of view, the speed stays for 3 s, then falls back to the NEAR / FAR preset (NEAR unless FAR was picked last).
-  - The D-pad trim (→ / ←) stays on top of the auto speed for the whole match. It is **5 t/s per press since 9 Nov** (was 15); the auto speed was off by about ±10.
+  - The D-pad trim (→ / ←) stays on top of the auto speed for the whole match. It is **10 t/s per press since 10 Nov** (15 until 9 Nov; 5 on 10 Nov was too small: the drivers' usual one press then left the shots ~10 t/s faster than before).
 - **D-pad ↑ / ↓ = MANUAL FAR / NEAR.** The camera is ignored until **X** is pressed (aiming with the camera = the camera's speed again; it also clears the trim).
-- **Screen:** the `Shot speed` line shows `AUTO 41 in 1465 +0 = 1465 t/s`, `AUTO 41 in (CELL lost)`, `MANUAL NEAR` or `NEAR (no CELL)`. The log has a `SPEED` event at every change.
+- **Screen:** the `Shot speed` line shows `AUTO 41 in 1445 +0 = 1445 t/s`, `AUTO 41 in (CELL lost)`, `MANUAL NEAR` or `NEAR (no CELL)`. The log has a `SPEED` event at every change.
 - **Switch:** in INIT, **Y / Triangle** turns it off (NEAR / FAR presets only, and X sets the SHOT SPOT speed as before). `CONFIG` shows `auto_speed=on/off`.
 - **To check:** above about 57 in the table has only 2 logged shots.
   - Fire 5 balls at about 50 in and 5 at about 60 in, trim until they score, and put those speeds in the table, or let `tools/shot_results.py` do it (below).
@@ -332,7 +333,7 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
 **Shooting with the printed hood (5 Nov 2026):**
 - **Speeds (two flywheel wheels, until 7 Nov; see above for one wheel):** NEAR **1150 t/s** scores from about 28 to 42 in (ball exit to the CELL opening, horizontal), FAR **1240 t/s** from about 46 to 54 in.
   - They come from `tools/shot_model.py`: upward CELL lips 53.5 / 65.1 in from the field CAD, 74° exit 9 in above the tiles, drag and topspin included.
-  - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press then; 5 since 9 Nov).
+  - The ball-speed factor (0.85–0.93) is still a guess, so start at NEAR and trim with the D-pad (15 t/s per press then; 10 since 10 Nov).
 - **FIRE waits** until the flywheel has held within ±30 t/s of the target for 0.1 s.
   - The old rule (at least target − 100) was much looser.
   - The ball would score within about ±4.7 % of the right speed.
@@ -343,7 +344,7 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
   - It never holds forever: 1.5 s after it first holds back a ready ball, that ball goes anyway (log `AIM_GIVEWAY`). Every ball gets its own 1.5 s; a READY flicker doesn't restart the clock. The flywheel speed rule still applies. If the SHOT SPOT can't be reached, the distance gives way first (until FIRE is let go), and the aim and turning checks still get their own 1.5 s, so a ball never leaves while the robot is turning.
   - Turn it off in INIT with **X / Square** (e.g. camera knocked). The INIT screen shows `Aim gate ON/OFF` and the `CONFIG` log shows `aim_gate=on/off`.
 - **Flywheel P is 100 (was 40),** so it recovers from a shot in about 0.2 s instead of about 0.6 s. If READY flickers with no balls, step P back toward 40 in `BioBuzzConstants`.
-- **Ball counting** (AUTO, Tune) now counts a dip of 35 t/s (was 60), because the faster flywheel dips less. The dip is measured from the speed the flywheel really holds, must last 60 ms (one odd reading is never a ball) and must start while a pocket turns or up to 0.6 s after it (AUTO: one ball per pocket). Spin-up, speed changes and reading noise are never balls. AUTO logs the real-looking dips it ignored in `FIRE done`; if that number is high, the window or the dip size needs tuning (Shot Log shows the dips).
+- **Ball counting** (AUTO, Tune) now counts a dip of 35 t/s (was 60), because the faster flywheel dips less. The dip is measured from the speed the flywheel really holds, must last 60 ms (one odd reading is never a ball) and must start while a pocket turns or up to 0.6 s after it (AUTO: one ball per pocket). Spin-up, speed changes and reading noise are never balls. AUTO logs the real-looking dips it ignored in `FIRE done`; if that number is high, the window or the dip size needs tuning (Shot Log shows the dips). **TeleOp and Tune (10 Nov)** also count two *different* low readings at least 45 ms apart: TeleOp's loop is ~55–60 ms while firing, so a ball's dip often gives only two low readings, and 6 of 34 shots on 10 Nov weren't counted (their LB + D-pad labels were lost: "no ball waits for a result"). Replaying the 10 Nov logs: 17 more balls found (all real dips of 250–360 t/s), 14 more labels kept. AUTO keeps the 60 ms rule.
 - **Old spots are dropped.** Spots saved before this change (SDK camera range, polycarbonate-hood speeds) are ignored, and so is AUTO's taught position. After fitting the printed hood:
   1. Save the SHOT SPOT again (Share).
   2. Teach AUTO again (LB + Share, below).

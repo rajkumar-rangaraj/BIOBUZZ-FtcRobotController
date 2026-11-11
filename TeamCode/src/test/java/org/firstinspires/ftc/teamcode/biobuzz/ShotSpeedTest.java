@@ -36,7 +36,7 @@ public class ShotSpeedTest {
     public void standardTableMatchesTheDriversOneWheelShots() {
         ShotSpeed s = ShotSpeed.standard();
         assertEquals(1445, s.tableSpeed(33), 5);                // 7 Nov logs: 1435-1450 at 32-33 in
-        assertEquals(1465, s.tableSpeed(40), 5);                // 1450-1480 at 38-41 in
+        assertEquals(1440, s.tableSpeed(40), 5);                // 10 Nov labels: IN balls 10-26 under the old 1465
         assertEquals(1590, s.tableSpeed(57), 10);               // 1585 at 57 in
         double prev = 0;
         for (int d = 20; d <= 80; d++) {                         // never goes down with distance
