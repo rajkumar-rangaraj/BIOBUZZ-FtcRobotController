@@ -436,6 +436,23 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
       - **Job** `bambu_p2s/Electronics_v3_PPE5_Hub_Plate_P2S_PETG`: 1 h 50 min, 81.8 g, v2.2 settings, no warnings. Shots in `shots/ppe5_v3/`; guide in `stl_electronics/README.md` (top section).
       - **Cables:** every Expansion Hub connection is ~6.5 cm higher (motors and encoders, XT30, RS485, servos 0/1). The team must check their reach.
       - The moved-back test strip (`make_ppe5_v3_test.py`, `940e18e`/`5e302e3`) is removed; it was printed 11 Nov and the user measured 15 mm on it.
+    - **PPE5 v4 + PPE7 cover (12 Nov morning; goBildaStarter `9628108`, pushed): a guard around the raised hub.** The user started printing v3, then: "vulnerable to defence as it's on the top; v4 with a cover on the sides".
+      - **Built by** `electronics_v4_ppe5_build.py`, which redoes v3's as-built moves and hub move, hides `Electronics_Mounts_v3` and builds `Electronics_Mounts_v4` (the Fusion doc is not saved).
+      - **Unchanged from v3:** tower holes, hub position and nut pockets, so v3 can be fitted now and swapped later.
+      - **Plate PPE5 v4** (4 h 02 min, 180 g):
+        - Upper body y 55.7..191, z 150..295.5 (top = the hub's top).
+        - 4 mm walls at y 60.7..64.7 and 185..189, full depth x −92.05..−140, z 150..303.5, with 45° root fillets (front outside 5, back inside 5 / outside 2).
+        - 4 screw columns at (61.2, 168/280) and (185.5, 168/280): Ø9, Ø11 outboard of x −127, with M3 nut press slots AF 5.6 at x −128..−130.6 that open into the tray.
+      - **Cover PPE7** (2 h 49 min, 91 g; prints on its outside face, no bridges):
+        - Side panel x −140..−143.5, y 55.7..191, z 155..307, with 32 slots 8 × 28 mm (~36 % open).
+        - Solid roof z 303.5..307 spanning x −85..−143.5: a hood 7 mm past the plate's tower face. The top cables leave through the 8 mm gap over the plate's top edge into the robot, so the cover slides off without unplugging.
+        - 3 roof ribs at y 79/123/166, z 299.5..303.5.
+        - 4 × M3 × 16 into the column nuts. Bottom open.
+      - **Fit and checks:**
+        - Envelope: back y 191, top z 307 (+37 mm); the robot's right side is the wheel at x −225.9.
+        - Exact Fusion checks and an independent STL pass are clean: hub to roof 8 mm, to the ribs 4 mm, to the panel 13 mm; the cable zones are free.
+      - **Review (rubber-duck):** v4 had 30 × 27 windows plus roof slots 2 mm above the hub. Its blockers: direct paths to the plugs, a captive cover, PETG threads, weak wall roots. All fixed in v4.1. Re-review: **print as is** (route the XT30 flat between the roof ribs).
+      - Both jobs were opened and sliced in Bambu Studio (Print plate ready). Guide: `stl_electronics/README.md` (top section). Fusion captures need a warm-up `saveAsImageFile`: the first capture keeps the old zoom.
 
 ## 8. Branch `field-tour`: Pedro Pathing "Field Tour" (test, later AUTO base)
 
@@ -561,7 +578,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - [ ] **Backup PPR1 (user preparing it 11 Nov):** PPR1 now has PPR4's 3 pilot holes built in (goBildaStarter `862d626`, `PPR4_PILOTS` in `make_floor_parts.py`: Ø2.6 at x 40/72/104, y −94.85 = PPR4's holes with its back face against PPR1; 0.95 mm behind the front flange). Job `bambu_p2s/Floor_PPR1_P2S_PETG(.gcode).3mf` re-sliced: 2.9 h, 122.7 g, no floating islands. On that PPR1: no drilling, cut the threads with a screw on the bench, then screw PPR4 on. Floor check report unchanged; PPR2/3/4 STLs unchanged.
 - [ ] **Flywheel inertia disc (user decision): order** the Ø73 × 1/4" steel disc (DXF in goBildaStarter `stl_launcher/`) + 8 × 2815-0004-0016 + 8 × M4 washers; fit per `stl_launcher/README.md` (centre it, hand-turn test with the largest ball, then 500 → 1450 t/s); then check READY settling and the logged dips (expect ~10–15 %), and re-label shots (the speed table will shift: η changes).
 - [x] **Installed `auto-work` `c5edfc1` on 11 Nov 16:36** (MD5 `1a85f757…`, 208 tests; was `2c38ba9` / `094f36b0…`): last night's code (R1 aims + drives to the SHOT SPOT + camera speed, robot-centric default, SHOT SPOT tied to its CELL, Tune guard) + doc-only commits (physics doc, PPR1/PPR4 notes, driver card with shot logging, driver quiz). 14 team op modes registered, Robot Status running. The laptop's Wi-Fi 5 was already on 37102-RC when I started (robot powered; profile auto-connects); disconnected after. Robot settings file then: `alliance=BLUE`, `spot_ref=floor`, aim trim 0, feed 0.40 / pause 0.25 / empty wait 0.10, **no SHOT SPOT** → save one (Share at 36–42 in with the CELL in view) before relying on R1's drive.
-- [ ] **PPE5 v3 (Expansion Hub raised): print `bambu_p2s/Electronics_v3_PPE5_Hub_Plate_P2S_PETG.gcode.3mf`** (1 h 50 min, 82 g; opened in Bambu Studio 12 Nov night). While it prints, check every Expansion Hub cable reaches ~6.5 cm higher. Fit per `stl_electronics/README.md` (PPE5 v3 section): nuts first, 4 × M4 × 12 before the hub, RS485 back along the hub and above the motor. No code change.
+- [ ] **PPE5 v3 (Expansion Hub raised): printing 12 Nov 07:20** (`Electronics_v3_PPE5_Hub_Plate_P2S_PETG`, 1 h 50 min). While it prints, check that every Expansion Hub cable reaches ~6.5 cm higher. Fit per `stl_electronics/README.md` (PPE5 v3 section): nuts first, 4 × M4 × 12 before the hub, RS485 back along the hub and above the motor. No code change.
+- [ ] **PPE5 v4 + PPE7 cover (guard), reviewed "print as is"; both jobs are open and sliced in Bambu Studio:** `Electronics_v4_PPE5_Hub_Plate_P2S_PETG` (4 h 02 min) and `Electronics_v4_PPE7_Hub_Cover_P2S_PETG` (2 h 49 min). Swap from v3 per the README (v4 section); extra hardware: 4 × M3 × 16 + 4 M3 nuts for the cover.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
 - [ ] Fusion trial: the window title said "Trial ends in 6 days" on 9 Nov. Make sure the team keeps a working Fusion licence (CAD is in Fusion v26; the v2.1 save on 9 Nov ~16:55 hadn't shown up as v27 in the cloud by 17:10: check Fusion's Job Status, or re-run `electronics_v2_build.py` and save).
 - [ ] Straight-on check for the SHOT SPOT (cluster yaw), if aiming from the side keeps missing.
