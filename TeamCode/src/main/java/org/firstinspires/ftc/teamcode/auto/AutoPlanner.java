@@ -41,6 +41,8 @@ public final class AutoPlanner {
     /** GARDEN: quick to just before the first POLLEN, then slow through the line so the intake grabs them. */
     public static final double SPEED_SWEEP_APPROACH = 0.40;
     public static final double SPEED_SWEEP = 0.15;
+    /** Back and forth at the GARDEN corner (GARDEN_WIGGLE_IN), intake on. */
+    public static final double SPEED_WIGGLE = 0.25;
     public static final double SPEED_PARK = 0.70;
     /** Slot A only: speed while passing beside slot B, where the partner may already be parked. */
     public static final double SPEED_PASS = 0.30;
@@ -120,6 +122,18 @@ public final class AutoPlanner {
                         SPEED_SWEEP_APPROACH, Action.INTAKE),
                 new Leg("GARDEN SWEEP", new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL), SPEED_SWEEP,
                         Action.INTAKE));
+    }
+
+    /**
+     * At the GARDEN corner: back GARDEN_WIGGLE_IN along the wall, then in to the sweep end again. The op mode repeats it
+     * while the intake runs at the corner, so a POLLEN pressed against the wall gets room to roll into the intake.
+     */
+    public static List<Leg> gardenWiggle() {
+        Pose corner = new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL);
+        return Arrays.asList(
+                new Leg("GARDEN WIGGLE OUT", new Pose(corner.x + GARDEN_WIGGLE_IN, corner.y, corner.headingDeg),
+                        SPEED_WIGGLE, Action.INTAKE),
+                new Leg("GARDEN WIGGLE IN", corner, SPEED_WIGGLE, Action.INTAKE));
     }
 
     /** End of the GARDEN sweep back to the shot spot (stretch); the intake keeps pulling the POLLEN in on the way. */

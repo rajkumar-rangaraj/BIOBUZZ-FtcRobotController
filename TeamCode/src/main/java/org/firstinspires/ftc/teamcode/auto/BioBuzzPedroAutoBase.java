@@ -29,7 +29,8 @@ import java.util.List;
  * BIOBUZZ AUTO with Pedro Pathing (plan and field places: AutoPlanner / AutoField, AUTO.md).
  *
  *   1. SHOT     drive to the straight-on spot in front of our up CELL, camera aim, fire the 4 pre-loads
- *   2. GARDEN   only when the pre-loads are gone (G407: max 4 balls): sweep our 4 GARDEN POLLEN with the intake
+ *   2. GARDEN   only when the pre-loads are gone (G407: max 4 balls): sweep our 4 GARDEN POLLEN with the intake, then
+ *               2 in back and forth at the corner while the intake keeps running
  *   3. STRETCH  back to the spot, fire the GARDEN POLLEN (only if the camera sees our CELL still UP)
  *   4. PARK     in LOADING ZONE slot A (corner end) or B (middle end), intake 2 in off the wall: LEAVE 3 + PARK 5
  *
@@ -55,10 +56,13 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double GARDEN_INTAKE_POWER = 1.0;
     /**
      * Intake keeps running at the end of the GARDEN sweep, up to this long (9 Nov: 1 s at the corner did not take 4
-     * POLLEN). Cut short at the park start; the GARDEN is only started when at least GARDEN_MIN_DWELL_SEC fits.
+     * POLLEN), the robot going AutoField.GARDEN_WIGGLE_IN back and forth meanwhile (12 Nov). Cut short at the park
+     * start; the GARDEN is only started when at least GARDEN_MIN_DWELL_SEC fits.
      */
     static final double GARDEN_DWELL_SEC = 4.0;
     static final double GARDEN_MIN_DWELL_SEC = 1.0;
+    /** One move of the GARDEN back-and-forth ends after this long even when it can't finish (POLLEN or the wall). */
+    static final double GARDEN_WIGGLE_MOVE_SEC = 1.0;
     /** Stretch only when at least this much time is left for aim + settle + a few pockets at the spot. */
     static final double STRETCH_MIN_FIRE_SEC = 4.0;
     /** CELL opening height when UP is ~59 in, when tipped down ~30-35 in. CALIBRATE: logged as height_in. */
@@ -189,11 +193,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             step = "GARDEN";
             collected = drive(AutoPlanner.toGarden(), false);
             if (collected) {
-                double end = Math.min(now() + GARDEN_DWELL_SEC, parkStart());
-                while (opModeIsActive() && now() < end) {
-                    follower.update();
-                    loopTick();
-                }
+                gardenWiggle(Math.min(now() + GARDEN_DWELL_SEC, parkStart()));
             }
             robot.setIntake(0);
         } else if (garden) {
@@ -291,6 +291,40 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             }
         }
         return true;
+    }
+
+    /**
+     * At the GARDEN corner until {@code endSec}: GARDEN_WIGGLE_IN back along the wall and in again, over and over, with
+     * the intake on. A move that can't finish (POLLEN or the wall in the way) ends after GARDEN_WIGGLE_MOVE_SEC: no
+     * BLOCKED here, the corner is the end of the sweep anyway.
+     */
+    private void gardenWiggle(double endSec) {
+        log.row(now(), "EVENT", String.format("GARDEN WIGGLE %.1f in until %.1f s", AutoField.GARDEN_WIGGLE_IN, endSec));
+        int moves = 0;
+        while (opModeIsActive() && now() < endSec) {
+            for (AutoPlanner.Leg leg : AutoPlanner.gardenWiggle()) {
+                follower.follow(path(leg.to.forAlliance(alliance()), leg.speed));
+                ElapsedTime move = new ElapsedTime();
+                step = leg.label;
+                while (opModeIsActive() && now() < endSec && move.seconds() < GARDEN_WIGGLE_MOVE_SEC
+                        && (move.seconds() < 0.2 || follower.isBusy())) {
+                    follower.update();
+                    robot.setIntake(GARDEN_INTAKE_POWER);
+                    if (poseLost()) {
+                        log.row(now(), "EVENT", "POSE LOST " + here());
+                        halt();
+                        return;
+                    }
+                    loopTick();
+                }
+                moves++;
+                if (!opModeIsActive() || now() >= endSec) {
+                    break;
+                }
+            }
+        }
+        halt();
+        log.row(now(), "EVENT", "GARDEN WIGGLE done: " + moves + " moves, at " + here());
     }
 
     /** Camera aim (Pedro holds the spot and turns), CELL-up check, then fire. Sets preloadsGone after the first one. */
@@ -562,7 +596,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             t += AutoPlanner.estimateSec(at, AutoPlanner.toGarden());
             at = AutoPlanner.end(at, AutoPlanner.toGarden());
             t = Math.min(t + GARDEN_DWELL_SEC, AutoPlanner.parkStartSec(at, slot, parkBySec));
-            telemetry.addData("Plan", "GARDEN done ~%.0f s (intake at the corner until then)", t);
+            telemetry.addData("Plan", "GARDEN done ~%.0f s (intake on, %.0f in back and forth at the corner until then)",
+                    t, AutoField.GARDEN_WIGGLE_IN);
         }
         double parkAt = Math.max(t, Math.min(AutoPlanner.parkStartSec(at, slot, parkBySec), parkBySec));
         telemetry.addData("Plan", "PARK %s starts by %.0f s, takes ~%.0f s", slot,

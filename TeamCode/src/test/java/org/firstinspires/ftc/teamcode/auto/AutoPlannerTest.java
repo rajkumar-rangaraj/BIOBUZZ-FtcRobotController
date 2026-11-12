@@ -73,6 +73,26 @@ public class AutoPlannerTest {
         assertNull(AutoPlanner.routeProblem(gardenEnd, AutoPlanner.gardenToShot(), null));
     }
 
+    /** Team, 12 Nov: at the GARDEN corner the robot comes 1-2 in back and forth along the wall, intake on. */
+    @Test
+    public void gardenWiggleIsShortStraightAndClear() {
+        Pose corner = AutoPlanner.end(SHOT, AutoPlanner.toGarden());
+        List<AutoPlanner.Leg> wiggle = AutoPlanner.gardenWiggle();
+        assertTrue("1-2 in", GARDEN_WIGGLE_IN >= 1.0 && GARDEN_WIGGLE_IN <= 2.0);
+        Pose out = wiggle.get(0).to;
+        assertEquals("straight back, away from the RED wall", corner.x + GARDEN_WIGGLE_IN, out.x, 1e-9);
+        assertEquals(corner.y, out.y, 1e-9);
+        assertEquals(corner.headingDeg, out.headingDeg, 1e-9);
+        assertTrue("on the part of the lane the sweep already crossed", out.x <= GARDEN_SWEEP_SLOW_X);
+        Pose back = AutoPlanner.end(corner, wiggle);
+        assertEquals("in to the sweep end again", corner.x, back.x, 1e-9);
+        assertEquals(corner.y, back.y, 1e-9);
+        for (AutoPlanner.Leg l : wiggle) {
+            assertEquals(l.label, AutoPlanner.Action.INTAKE, l.action);
+        }
+        assertNull(AutoPlanner.routeProblem(corner, wiggle, null));
+    }
+
     /** Parking must work from wherever a step is cut short, without touching the partner in the other slot. */
     @Test
     public void parkIsClearFromAnywhereOnTheRoutes() {
@@ -81,6 +101,7 @@ public class AutoPlannerTest {
             from.addAll(samples(start(s), AutoPlanner.toShot(s)));
         }
         from.addAll(samples(SHOT, AutoPlanner.toGarden()));
+        from.addAll(samples(AutoPlanner.end(SHOT, AutoPlanner.toGarden()), AutoPlanner.gardenWiggle()));
         from.addAll(samples(AutoPlanner.end(SHOT, AutoPlanner.toGarden()), AutoPlanner.gardenToShot()));
         assertTrue(from.size() > 100);
         for (Slot slot : Slot.values()) {

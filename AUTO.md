@@ -9,7 +9,7 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 | 0–1 | Leave the wall, spin up the flywheel | LEAVE +3 (counted at the end) |
 | 1–7 | Camera aim at our up CELL, fire the 4 pre-loads | HIVE TIP +20 if it tips |
 | 7–14 | Drive to our GARDEN, sweep slowly along the wall into the corner with the intake on | (POLLEN for TeleOp) |
-| 14–18 | Intake keeps running at the corner for up to 4 s (cut short only when it must park) | |
+| 14–18 | At the corner the intake keeps running for up to 4 s while the robot goes **2 in back and forth** along the wall, so the last POLLEN rolls in (cut short only when it must park) | |
 | ~18 | **PARK** in our LOADING ZONE: slot **B** (default) is parked by ~24 s, slot A by ~28 s | PARK +5 |
 | (off) | **Stretch** (○ in INIT, off by default): back to the spot and fire the GARDEN POLLEN; it fires only if the camera sees our CELL still **up** | another TIP? |
 
@@ -73,7 +73,7 @@ The screen shows the plan times and **Route check: OK**. It also shows **Pedro: 
 
 1. **Robot size:** measure from the robot centre to the intake bumper, and from the centre to the side. Set `HALF_LENGTH_IN` / `HALF_WIDTH_IN` in `auto/AutoField.java` (now 9 / 9).
 2. **Shot spot:** from S1, do the 4 pre-loads score? If they land short or long, check the camera floor distance in the log and the `AUTO_SPEED_*` table.
-3. **GARDEN sweep:** does the intake catch the POLLEN against the wall? If it misses, change `GARDEN_SIDE_GAP_IN` (smaller = closer to the wall).
+3. **GARDEN sweep:** does the intake catch the POLLEN against the wall? If it misses, change `GARDEN_SIDE_GAP_IN` (smaller = closer to the wall). At the corner the robot goes back and forth `GARDEN_WIGGLE_IN` (2 in; 1–2 in works) along the wall, in `auto/AutoField.java`. Change it there if the last POLLEN still stays out.
 4. **CELL up/down:** the log column `height_in` should read about 59 for an up CELL. The code fires only above 45 (`CELL_UP_MIN_HEIGHT_IN`).
 5. **Parking:** run with slot A and with slot B while a partner (or a box) sits in the other slot. The robot must not touch it.
 

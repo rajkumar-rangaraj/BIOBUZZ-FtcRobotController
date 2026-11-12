@@ -152,6 +152,12 @@ public final class AutoField {
     public static final double GARDEN_SWEEP_SLOW_X = GARDEN_BALL_X[GARDEN_BALL_X.length - 1] + HALF_LENGTH_IN + 5.0;
     /** Intake bumper 1 in from the RED wall at the end of the sweep (the corner POLLEN is against that wall). */
     public static final double GARDEN_SWEEP_END_X = -WALL_IN + HALF_LENGTH_IN + 1.0;
+    /**
+     * At the GARDEN corner (team, 12 Nov: the intake takes the POLLEN when the robot comes 1-2 in back and forth): the
+     * robot backs off this far along the wall and drives in to the sweep end again, over and over while the intake runs.
+     * CALIBRATE: 1-2 in.
+     */
+    public static final double GARDEN_WIGGLE_IN = 2.0;
     /** Back-off point between the shot spot and the GARDEN, where the robot turns. */
     public static final Pose GARDEN_TURN = new Pose(-28.0, -52.0, FACE_ALLIANCE_WALL);
 
