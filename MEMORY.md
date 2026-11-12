@@ -412,6 +412,30 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
         - **Opened in Bambu Studio** (three windows; `single_instance` is false): it shows Bambu Lab P2S, 0.4 nozzle, Textured PEI, `* Bambu PETG Basic` and `* 0.20mm Standard @BBL P2S` (`*` = our changes kept).
         - Fusion: saved again (v28 intended), but the cloud still lists v26 and `isComplete` is False. Check Job Status.
       - **Robot code `master` `ca1cbcf` (local, 107 tests):** `BioBuzzConstants.HUBS_ON_EDGE = false` → BACKWARD/LEFT; true → LEFT/FORWARD. Flip it ONLY after the rebuild, then check the heading in BioBuzz Calibration (CCW turn → heading increases). No install is needed until then.
+    - **PPE5 v3 (12 Nov overnight; goBildaStarter `21317a4`, pushed): Expansion Hub raised above the windmill channel.** The user: "Expansion hub side is not fitting, flywheel channel blocking"; "update geometry in Fusion, prepare the 3D model, get it reviewed, open Bambu Studio".
+      - **As built:** the windmill motor's horizontal channel `1121-0005-0144:1` (x −108..−96, z 96..144) and its 2 × M4 × 8 `2800-0004-0008:33/:36` sit 2 holes (+16 mm y) behind the CAD.
+        - Team measurements: tower face back→front 30 mm free | 17 mm channel; aluminium 15 mm in front of the y 104 M4 holes (y ≈ 89); channel top ~118 mm above the v2 plate's bottom (z 144); stick-out 15–16 mm; front strip free above the channel.
+        - `electronics_v3_ppe5_build.py` moves those 3 occurrences +16 y (set `transform2` on the root **proxy**: Fusion refuses it on nested natives). It keeps the world originals in attribute `ElectronicsV3/orig_transform`; `:33`/`:36` already had the windmill build's −16 x override, so store the proxy's matrix, not the native one.
+        - It adds the measured keep-out x −108..−92, y 64..89, z 92..148 as a hidden body (`AsBuilt_Reference_v1`), hides v2's PPE5 body, moves `REV_Expansion_Hub` and builds `Electronics_Mounts_v3`.
+        - The Fusion doc was **not saved**: re-run `electronics_v2_build.py`, then `electronics_v3_ppe5_build.py`, to rebuild.
+      - **Options (Fusion scan):**
+        - Hub 18 mm back: servo plugs 15 mm outside y 192 ✗.
+        - Hub outward past the channel: hits the Yellow Jacket `5203-2402-0019` at x −182..−129.8, y 94..146, z 67..148.6 ✗.
+        - **Raised: free ✓.**
+        - A raised plate that kept the rear foot would be 266 mm tall, over the 256 mm bed, so the foot is dropped.
+      - **Geometry:**
+        - Hub y 66.7..169.7, z 152.5..295.5, same orientation as v2: 8.5 mm above the channel, servo room 22.3 mm, top 26 mm above the robot's old top (z 269.6).
+        - Hub M3 holes: (74.2, 160) over the tower's 8.5 × 4 slot, so the nut is trapped and the M3 × 16 tip goes into the slot. (74.2, 288), (162.2, 160) and (162.2, 288) are press pockets AF 5.6.
+        - Plate 5 mm (x −97.05..−92.05): upper body y 65.2..172, z 150..297; lower tab y 94..124, z 98..150 (5 mm behind y 89, per the review); window y 118..152, z 172..270.
+        - 4 M4 × 12 button heads at y 104, z 112 (slot)/152/192/240; the z 240 nyloc space inside the tower is free.
+        - Tower outer-face hole map (repeats every 24 mm): Ø14 at y 88, z 88/112/…/232; slots 8.5 × 4 at y 74.2/101.8, same z; Ø4 at y 72/104, z = big ± 8; Ø4.5 at y 79.8/96.2, z = big ± 8.2.
+      - **Checks:**
+        - Exact Fusion booleans: plate and hub touch nothing. Clear: motor plugs above, servo room behind, front, the bottom-port cable zone (x ≤ −110: REV's JST ports are top-entry from the logo face), the RS485 route under the plate behind the tower, and the camera FOV cone.
+        - Independent manifold check on the STL: tower 0.05, channel 6, channel screws 7.5, measured line 5 (tab).
+        - Rubber-duck review: print as is after moving the tab back 4 mm and proving the RS485 route. Fitting caution: keep the RS485 cable above the motor until y > 149.
+      - **Job** `bambu_p2s/Electronics_v3_PPE5_Hub_Plate_P2S_PETG`: 1 h 50 min, 81.8 g, v2.2 settings, no warnings. Shots in `shots/ppe5_v3/`; guide in `stl_electronics/README.md` (top section).
+      - **Cables:** every Expansion Hub connection is ~6.5 cm higher (motors and encoders, XT30, RS485, servos 0/1). The team must check their reach.
+      - The moved-back test strip (`make_ppe5_v3_test.py`, `940e18e`/`5e302e3`) is removed; it was printed 11 Nov and the user measured 15 mm on it.
 
 ## 8. Branch `field-tour`: Pedro Pathing "Field Tour" (test, later AUTO base)
 
@@ -537,6 +561,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - [ ] **Backup PPR1 (user preparing it 11 Nov):** PPR1 now has PPR4's 3 pilot holes built in (goBildaStarter `862d626`, `PPR4_PILOTS` in `make_floor_parts.py`: Ø2.6 at x 40/72/104, y −94.85 = PPR4's holes with its back face against PPR1; 0.95 mm behind the front flange). Job `bambu_p2s/Floor_PPR1_P2S_PETG(.gcode).3mf` re-sliced: 2.9 h, 122.7 g, no floating islands. On that PPR1: no drilling, cut the threads with a screw on the bench, then screw PPR4 on. Floor check report unchanged; PPR2/3/4 STLs unchanged.
 - [ ] **Flywheel inertia disc (user decision): order** the Ø73 × 1/4" steel disc (DXF in goBildaStarter `stl_launcher/`) + 8 × 2815-0004-0016 + 8 × M4 washers; fit per `stl_launcher/README.md` (centre it, hand-turn test with the largest ball, then 500 → 1450 t/s); then check READY settling and the logged dips (expect ~10–15 %), and re-label shots (the speed table will shift: η changes).
 - [x] **Installed `auto-work` `c5edfc1` on 11 Nov 16:36** (MD5 `1a85f757…`, 208 tests; was `2c38ba9` / `094f36b0…`): last night's code (R1 aims + drives to the SHOT SPOT + camera speed, robot-centric default, SHOT SPOT tied to its CELL, Tune guard) + doc-only commits (physics doc, PPR1/PPR4 notes, driver card with shot logging, driver quiz). 14 team op modes registered, Robot Status running. The laptop's Wi-Fi 5 was already on 37102-RC when I started (robot powered; profile auto-connects); disconnected after. Robot settings file then: `alliance=BLUE`, `spot_ref=floor`, aim trim 0, feed 0.40 / pause 0.25 / empty wait 0.10, **no SHOT SPOT** → save one (Share at 36–42 in with the CELL in view) before relying on R1's drive.
+- [ ] **PPE5 v3 (Expansion Hub raised): print `bambu_p2s/Electronics_v3_PPE5_Hub_Plate_P2S_PETG.gcode.3mf`** (1 h 50 min, 82 g; opened in Bambu Studio 12 Nov night). While it prints, check every Expansion Hub cable reaches ~6.5 cm higher. Fit per `stl_electronics/README.md` (PPE5 v3 section): nuts first, 4 × M4 × 12 before the hub, RS485 back along the hub and above the motor. No code change.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
 - [ ] Fusion trial: the window title said "Trial ends in 6 days" on 9 Nov. Make sure the team keeps a working Fusion licence (CAD is in Fusion v26; the v2.1 save on 9 Nov ~16:55 hadn't shown up as v27 in the cloud by 17:10: check Fusion's Job Status, or re-run `electronics_v2_build.py` and save).
 - [ ] Straight-on check for the SHOT SPOT (cluster yaw), if aiming from the side keeps missing.
