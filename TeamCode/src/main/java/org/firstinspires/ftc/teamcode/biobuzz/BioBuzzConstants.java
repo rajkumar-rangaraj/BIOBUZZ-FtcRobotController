@@ -49,12 +49,14 @@ public final class BioBuzzConstants {
     public static final double PINPOINT_MAX_HEADING_ERROR_DEG = 15;             // AUTO drops the Pinpoint if its heading drifts from the IMU
 
     // ---------------- Control Hub IMU mounting ----------------
-    // Old mounting (until the hubs are moved): hub upright on the back; logo faces the launcher side (BACKWARD), its USB
-    // ports face outward (LEFT). Electronics v2 (goBildaStarter stl_electronics/README.md, Nov 2026): hub on edge behind
-    // the left launcher tower; logo faces outward (LEFT), USB ports face the intake (FORWARD). Set HUBS_ON_EDGE = true
-    // when the hubs have been moved, then check in BioBuzz Calibration: turn the robot counter-clockwise by hand, the
-    // heading must INCREASE.
-    public static final boolean HUBS_ON_EDGE = false;
+    // Old mounting (until 12 Nov 2026): hub upright on the back; logo faces the launcher side (BACKWARD), its USB
+    // ports face outward (LEFT). Electronics v2 (goBildaStarter stl_electronics/README.md, Nov 2026; the team moved the
+    // Control Hub 12 Nov): hub on edge behind the left launcher tower; logo faces outward (LEFT), USB ports face the
+    // intake (FORWARD), battery/motor connectors up. Check in BioBuzz Calibration: turn the robot counter-clockwise by
+    // hand, the heading must INCREASE (if it decreases, the hub is upside down: USB BACKWARD).
+    // Both mountings stand the hub upright with the same hub axis pointing up, so they differ only by a fixed yaw offset;
+    // the code only uses heading changes (and no pitch/roll), so the old setting wasn't wrong for driving.
+    public static final boolean HUBS_ON_EDGE = true;
     public static final RevHubOrientationOnRobot.LogoFacingDirection HUB_LOGO = HUBS_ON_EDGE
             ? RevHubOrientationOnRobot.LogoFacingDirection.LEFT
             : RevHubOrientationOnRobot.LogoFacingDirection.BACKWARD;
