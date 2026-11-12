@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<!-- BIOBUZZ Field-Centric Driving Guide: what changes for the driver, how to switch, how to recover. 2 pages.
+     Rebuild the PDF:  msedge --headless --no-pdf-header-footer --print-to-pdf=BioBuzz_Field_Centric_Guide.pdf tools/field_centric_guide.html
+     Keep in step with BioBuzzTeleOp.java (L1 in INIT, Options tap / hold FIELD_CENTRIC_HOLD_SEC, aim frame
+     AIM_FRAME_HOLD_SEC), BioBuzzMatchState (AUTO heading handoff AUTO_HEADING_HANDOFF_SEC) and the Driver Card. -->
+<html><head><meta charset="utf-8"><title>BIOBUZZ Field-Centric Driving Guide</title>
+<style>
+  @page { size: letter landscape; margin: 0.35in; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; color: #1a1a1a; }
+  .page { height: 7.75in; page-break-after: always; position: relative; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  h1 { margin: 0; font-size: 27px; letter-spacing: .5px; }
+  h2 { margin: 6px 0 4px; font-size: 18px; }
+  .top { display: flex; justify-content: space-between; align-items: center; background: #111; color: #FFD000;
+         padding: 7px 16px; border-radius: 10px; }
+  .top small { color: #fff; font-size: 14px; }
+  .banner { margin-top: 8px; background: #EAF5E4; border-left: 8px solid #2E7D32; border-radius: 10px; padding: 6px 12px;
+            font-size: 15px; }
+  .row { display: flex; gap: 12px; margin-top: 8px; }
+  .grid { display: grid; grid-template-columns: 92px 222px 222px; gap: 4px 8px; align-items: center; }
+  .colhead { text-align: center; font-weight: 800; font-size: 15px; padding: 4px; border-radius: 8px; color: #fff; }
+  .rc { background: #546E7A; } .fc { background: #2E7D32; }
+  .rowhead { font-weight: 800; font-size: 14px; text-align: center; background: #FFF4CC; border: 3px solid #FFD000;
+             border-radius: 10px; padding: 6px 2px; line-height: 1.25; }
+  .rowhead .stick { font-size: 26px; display: block; }
+  .cell { text-align: center; font-size: 12.5px; line-height: 1.2; }
+  .cell svg { display: block; margin: 0 auto; }
+  .bad { color: #C00000; font-weight: 700; } .good { color: #2E7D32; font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th { background: #111; color: #FFD000; padding: 5px 7px; text-align: left; font-size: 13.5px; }
+  td { padding: 5px 7px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  .same td { color: #555; }
+  .card { border-radius: 12px; padding: 8px 12px; }
+  .ok { background: #EAF5E4; border-left: 8px solid #2E7D32; }
+  .warn { background: #FDECEC; border-left: 8px solid #C00000; }
+  .tip { background: #FFF4CC; border-left: 8px solid #FFD000; }
+  .mono { font-family: Consolas, monospace; background: #eee; padding: 0 4px; border-radius: 4px; font-size: 12.5px; }
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
+  .step { background: #FFF4CC; border: 3px solid #FFD000; border-radius: 14px; padding: 4px 6px; text-align: center; font-size: 12px; line-height: 1.2; }
+  .step .n { display: inline-block; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; background: #111; color: #FFD000;
+             font-weight: 800; font-size: 16px; }
+  .step .big { font-size: 22px; line-height: 1; vertical-align: middle; }
+  .step .h { display: block; font-weight: 800; font-size: 14.5px; margin-bottom: 2px; }
+  .cols3 { display: grid; grid-template-columns: 1.05fr 1fr 1.15fr; gap: 12px; margin-top: 6px; }
+  .scr div { margin-bottom: 5px; font-size: 12.5px; line-height: 1.25; }
+  .scr .mono { display: inline-block; margin-bottom: 1px; font-size: 11.5px; }
+  .opt { display: flex; gap: 10px; margin-top: 8px; }
+  .opt > div { flex: 1; border-radius: 12px; padding: 8px 12px; font-size: 13.5px; line-height: 1.3; }
+  .opt .t { font-size: 20px; font-weight: 800; }
+  .tap { background: #E3F2FD; border: 3px solid #1565C0; }
+  .hold { background: #F3E5F5; border: 3px solid #6A1B9A; }
+  ul { margin: 3px 0 0 0; padding-left: 18px; } li { margin: 2px 0; }
+  .small { font-size: 12.5px; line-height: 1.3; }
+  .foot { position: absolute; bottom: 0; width: 100%; text-align: center; font-size: 11px; color: #888; }
+  .ans { color: #777; font-size: 11.5px; }
+</style></head><body>
+
+<!-- ======================= PAGE 1: WHAT CHANGES ======================= -->
+<div class="page">
+  <div class="top"><h1>🐝 FIELD-CENTRIC DRIVING: what changes</h1><small>Team 37102 · BioBuzz TeleOp · read with the Driver Card</small></div>
+
+  <div class="banner"><b>Robot-centric is the default</b> when the robot app starts: the stick works from the <b>robot's</b> point of view.
+    <b>FIELD-CENTRIC</b> (optional) makes the stick work from <b>YOUR</b> point of view, whichever way the robot faces.
+    <b>Check the INIT screen's Drive line every match</b>: the choice is kept until the robot app restarts.</div>
+
+  <div class="row">
+    <!-- 3 x 2 comparison: same robot pose in both columns -->
+    <div class="grid">
+      <div></div><div class="colhead rc">ROBOT-CENTRIC (default)</div><div class="colhead fc">FIELD-CENTRIC (optional)</div>
+
+      <!-- Row 1: stick up, robot facing right -->
+      <div class="rowhead"><span class="stick">⬆</span>Left stick UP<br><span style="font-weight:400">robot faces right</span></div>
+      <div class="cell">
+        <svg width="200" height="138" viewBox="0 0 200 138"><defs><marker id="a1" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="#546E7A"/></marker></defs>
+          <rect x="4" y="4" width="192" height="112" rx="6" fill="#EEF3EA" stroke="#9a9a9a"/>
+          <text x="100" y="132" text-anchor="middle" font-size="12" font-weight="700">YOU (drivers) ▼ here</text>
+          <g transform="translate(100,60)"><rect x="-19" y="-19" width="38" height="38" rx="5" fill="#555"/><rect x="15" y="-19" width="7" height="38" fill="#FFD000"/><text x="-2" y="5" text-anchor="middle" font-size="13">🐝</text></g>
+          <text x="128" y="36" font-size="10" fill="#8a6d00">intake</text>
+          <line x1="125" y1="60" x2="178" y2="60" stroke="#546E7A" stroke-width="7" marker-end="url(#a1)"/>
+        </svg>
+        toward its <b>intake</b> (to the right here)</div>
+      <div class="cell">
+        <svg width="200" height="138" viewBox="0 0 200 138"><defs><marker id="a2" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="#2E7D32"/></marker></defs>
+          <rect x="4" y="4" width="192" height="112" rx="6" fill="#EEF3EA" stroke="#9a9a9a"/>
+          <text x="100" y="132" text-anchor="middle" font-size="12" font-weight="700">YOU (drivers) ▼ here</text>
+          <g transform="translate(100,72)"><rect x="-19" y="-19" width="38" height="38" rx="5" fill="#555"/><rect x="15" y="-19" width="7" height="38" fill="#FFD000"/><text x="-2" y="5" text-anchor="middle" font-size="13">🐝</text></g>
+          <line x1="100" y1="50" x2="100" y2="12" stroke="#2E7D32" stroke-width="7" marker-end="url(#a2)"/>
+        </svg>
+        <b>away from you</b> ⬆, whichever way it faces</div>
+
+      <!-- Row 2: stick right, robot facing right -->
+      <div class="rowhead"><span class="stick">➡</span>Left stick RIGHT<br><span style="font-weight:400">robot faces right</span></div>
+      <div class="cell">
+        <svg width="200" height="138" viewBox="0 0 200 138"><defs><marker id="a3" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="#C00000"/></marker></defs>
+          <rect x="4" y="4" width="192" height="112" rx="6" fill="#EEF3EA" stroke="#9a9a9a"/>
+          <text x="100" y="132" text-anchor="middle" font-size="12" font-weight="700">YOU (drivers) ▼ here</text>
+          <g transform="translate(100,42)"><rect x="-19" y="-19" width="38" height="38" rx="5" fill="#555"/><rect x="15" y="-19" width="7" height="38" fill="#FFD000"/><text x="-2" y="5" text-anchor="middle" font-size="13">🐝</text></g>
+          <line x1="100" y1="64" x2="100" y2="104" stroke="#C00000" stroke-width="7" marker-end="url(#a3)"/>
+        </svg>
+        the <b>robot's</b> right = <span class="bad">toward you</span> ⬇</div>
+      <div class="cell">
+        <svg width="200" height="138" viewBox="0 0 200 138"><defs><marker id="a4" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="#2E7D32"/></marker></defs>
+          <rect x="4" y="4" width="192" height="112" rx="6" fill="#EEF3EA" stroke="#9a9a9a"/>
+          <text x="100" y="132" text-anchor="middle" font-size="12" font-weight="700">YOU (drivers) ▼ here</text>
+          <g transform="translate(76,60)"><rect x="-19" y="-19" width="38" height="38" rx="5" fill="#555"/><rect x="15" y="-19" width="7" height="38" fill="#FFD000"/><text x="-2" y="5" text-anchor="middle" font-size="13">🐝</text></g>
+          <line x1="102" y1="60" x2="178" y2="60" stroke="#2E7D32" stroke-width="7" marker-end="url(#a4)"/>
+        </svg>
+        <b>your</b> right ➡</div>
+
+      <!-- Row 3: stick up, intake toward the drivers -->
+      <div class="rowhead"><span class="stick">⬆</span>Left stick UP<br><span style="font-weight:400">intake faces YOU</span></div>
+      <div class="cell">
+        <svg width="200" height="138" viewBox="0 0 200 138"><defs><marker id="a5" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="#C00000"/></marker></defs>
+          <rect x="4" y="4" width="192" height="112" rx="6" fill="#EEF3EA" stroke="#9a9a9a"/>
+          <text x="100" y="132" text-anchor="middle" font-size="12" font-weight="700">YOU (drivers) ▼ here</text>
+          <g transform="translate(100,40)"><rect x="-19" y="-19" width="38" height="38" rx="5" fill="#555"/><rect x="-19" y="15" width="38" height="7" fill="#FFD000"/><text x="0" y="3" text-anchor="middle" font-size="13">🐝</text></g>
+          <line x1="100" y1="64" x2="100" y2="104" stroke="#C00000" stroke-width="7" marker-end="url(#a5)"/>
+        </svg>
+        toward its intake = <span class="bad">toward you</span> ⬇</div>
+      <div class="cell">
+        <svg width="200" height="138" viewBox="0 0 200 138"><defs><marker id="a6" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="#2E7D32"/></marker></defs>
+          <rect x="4" y="4" width="192" height="112" rx="6" fill="#EEF3EA" stroke="#9a9a9a"/>
+          <text x="100" y="132" text-anchor="middle" font-size="12" font-weight="700">YOU (drivers) ▼ here</text>
+          <g transform="translate(100,80)"><rect x="-19" y="-19" width="38" height="38" rx="5" fill="#555"/><rect x="-19" y="15" width="38" height="7" fill="#FFD000"/><text x="0" y="3" text-anchor="middle" font-size="13">🐝</text></g>
+          <line x1="100" y1="56" x2="100" y2="14" stroke="#2E7D32" stroke-width="7" marker-end="url(#a6)"/>
+        </svg>
+        <span class="good">still away from you</span> ⬆</div>
+    </div>
+
+    <!-- right column: same / different -->
+    <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+      <table>
+        <tr><th></th><th>Robot-centric</th><th>Field-centric</th></tr>
+        <tr><td>Left stick ⬆</td><td>toward the <b>intake</b></td><td><b>away from you</b></td></tr>
+        <tr><td>Left stick ➡</td><td>the <b>robot's</b> right</td><td><b>your</b> right</td></tr>
+        <tr class="same"><td>Right stick</td><td colspan="2">turns the robot: <b>the same</b></td></tr>
+        <tr class="same"><td>Hold L1</td><td colspan="2">precision (slow) drive: <b>the same</b></td></tr>
+        <tr><td>Aiming</td><td colspan="2">While you <b>hold ✕ or R1</b> and our CELL is in view, the stick is <b>robot-centric in both</b> (sideways = sideways to the CELL). Let go and field-centric is back at once. (If the CELL drops out of view while you still hold, it waits 0.5 s.)</td></tr>
+        <tr class="same"><td>Every other button</td><td colspan="2">unchanged (Driver Card)</td></tr>
+      </table>
+      <div class="card ok"><b>The key idea</b><br>With the <b>intake pointing away from you</b>, both modes drive <b>exactly the same</b>.
+        The difference shows when the robot is <b>turned</b>: sideways, or intake toward you. Then robot-centric makes you
+        think "where is the intake?", and field-centric doesn't.</div>
+      <div class="card tip small"><b>When is it worth it?</b> Coming back from the GARDEN or the LOADING ZONE with the robot turned,
+        dodging a defender while spinning, lining up sideways. Pick <b>one mode per match</b> with the coach, and only use
+        field-centric after the practice drills (page 2).</div>
+      <div class="card warn small"><b>"Away from you"</b> = straight across the field from where <b>you</b> stand at the alliance
+        station, not "toward the HIVE" and not "the robot's front".</div>
+    </div>
+  </div>
+  <div class="foot">BioBuzz Field-Centric Guide · page 1 of 2 · robot code master 81c1f31 (BioBuzzTeleOp)</div>
+</div>
+
+<!-- ======================= PAGE 2: HOW TO USE IT ======================= -->
+<div class="page">
+  <div class="top"><h1>🐝 FIELD-CENTRIC: how to use it</h1><small>turn on · set "away" · recover · turn off</small></div>
+
+  <div class="steps">
+    <div class="step"><span class="n">1</span> <span class="big">🎮</span><span class="h">Turn it ON in INIT</span>Read the <span class="mono">Drive</span> line. <b>L1 switches</b> it (it's not "on" every press): press until it says <span class="mono">FIELD-CENTRIC</span>.</div>
+    <div class="step"><span class="n">2</span> <span class="big">🧭</span><span class="h">"Away" is set</span><b>After our AUTO</b> (less than 60 s before): automatic, the screen says <span class="mono">Start heading: from AUTO</span>. Don't press OPTIONS.<br><b>Practice:</b> start with the <b>intake pointing away</b> from you.</div>
+    <div class="step"><span class="n">3</span> <span class="big">✋</span><span class="h">Hands off in INIT</span>The gyro calibrates. Screen: <span class="mono">Pinpoint gyro: ok</span></div>
+    <div class="step"><span class="n">4</span> <span class="big">⬆</span><span class="h">Drive</span>Stick ⬆ = <b>away from you</b>, whichever way the robot faces. Turn with the right stick as usual.</div>
+    <div class="step"><span class="n">5</span> <span class="big">🔄</span><span class="h">Feels wrong?</span>Point the <b>intake away</b> from you, then <b>TAP OPTIONS</b> (one buzz). Fixed.</div>
+  </div>
+
+  <div class="opt">
+    <div class="tap"><div class="t">TAP OPTIONS <span style="font-size:14px">(in the match: let go before 1 s)</span></div>
+      "The intake points <b>away from me NOW</b>": one buzz when you let go. Use it after a big hit, a hub restart, or
+      whenever ⬆ doesn't go away from you. <b>Only tap with the intake really pointing away from you.</b>
+      <b>In INIT</b> a press sets "away" at once (no buzz) and replaces AUTO's heading.</div>
+    <div class="hold"><div class="t">HOLD OPTIONS 1 s <span style="font-size:14px">(in the match)</span></div>
+      Field-centric <b>ON</b> = <b>1 blip</b> · <b>OFF</b> (robot-centric) = <b>2 blips</b>. It doesn't change "away".
+      (In INIT, use L1 instead.) <b>Panic button:</b> if field-centric ever confuses you, hold OPTIONS 1 s and drive robot-centric.</div>
+  </div>
+
+  <div class="cols3">
+    <div class="scr">
+      <h2>The Driver Hub screen</h2>
+      <div><span class="mono">robot-centric (hold Options 1 s: field-centric)</span><br>off (the default)</div>
+      <div><span class="mono">FIELD-CENTRIC, intake +35 deg from away (PINPOINT)</span><br>on and working (the robot is turned 35° left of "away")</div>
+      <div><span class="mono">…, robot-centric while aiming</span><br>✕ / R1 is aiming at the CELL: normal</div>
+      <div><span class="mono">robot-centric: NO HEADING</span><br>no gyro reading: it drives robot-centric by itself and goes back to field-centric when the reading returns. Only tap OPTIONS if ⬆ is wrong after that.</div>
+    </div>
+    <div>
+      <h2>Don't</h2>
+      <div class="card warn small"><ul>
+        <li><b>Move the robot in INIT.</b> The gyro then drifts all match and ⬆ slowly turns.</li>
+        <li><b>Press OPTIONS in INIT after AUTO</b>, unless the intake points away from you: it replaces AUTO's heading.</li>
+        <li><b>Hold</b> OPTIONS when you mean to tap: holding switches the mode (count the blips).</li>
+        <li><b>Forget to check INIT.</b> The mode stays from the last TeleOp; after a power cycle it's robot-centric.</li>
+      </ul></div>
+      <h2>Self-check</h2>
+      <div class="small">
+        <b>1.</b> Field-centric, intake facing you: stick ⬆ goes… <span class="ans">(away from you)</span><br>
+        <b>2.</b> Tapped OPTIONS with the intake pointing left: ⬆ goes… <span class="ans">(left; point it away, tap again)</span><br>
+        <b>3.</b> Quick way back to robot-centric? <span class="ans">(hold OPTIONS 1 s: 2 blips)</span><br>
+        <b>4.</b> Our AUTO just ran: how do you set "away"? <span class="ans">(nothing: it comes from AUTO)</span>
+      </div>
+    </div>
+    <div>
+      <h2>Practice drills (10 min)</h2>
+      <div class="card tip small"><ol style="margin:0; padding-left:18px">
+        <li><b>Square:</b> robot sideways (intake right). Stick ⬆ ➡ ⬇ ⬅ without turning: the robot goes up, right, down, left on the field.</li>
+        <li><b>Spin and go:</b> hold stick ⬆ and turn with the right stick. The robot keeps moving away from you while it spins.</li>
+        <li><b>Break it, fix it:</b> intake pointing left, <b>tap</b> OPTIONS (wrong on purpose): ⬆ now goes left. Point the intake away, tap again: fixed.</li>
+        <li><b>Panic button:</b> while driving, hold OPTIONS 1 s (2 blips: robot-centric), then again (1 blip: field-centric).</li>
+        <li><b>Aim:</b> hold ✕ with the CELL in view and push the stick sideways: the robot slides sideways to the CELL.</li>
+      </ol></div>
+    </div>
+  </div>
+  <div class="foot">BioBuzz Field-Centric Guide · page 2 of 2 · heading from the Pinpoint, backed up by the hub IMU · details: README_2.md "Field-centric driving"</div>
+</div>
+</body></html>
