@@ -60,10 +60,11 @@ public final class HiveAutoField {
     // ---------------- Route under the HIVE ----------------
 
     /**
-     * Lane under our HIVE: robot centre line. -10.2 balances the low body 2.0 in from the legs (model; 3.0 in at wheel
-     * height), FLOWER 1's ring 1.3 in (at the far spot) and our side's line (x 0, G402) 1.2 in.
+     * Lane under our HIVE: robot centre line. -10.4: the low body 1.8 in from the legs (model; 2.8 in at wheel height),
+     * our side's line (x 0, G402) 1.4 in; at the far spot the as-built robot can turn 4 deg from FAR_AIM_HEADING toward
+     * the middle line and 7 deg the other way and stay 0.4 in clear of it, the REAR wall and FLOWER 1 (HivePlannerTest).
      */
-    public static final double HIVE_LANE_X = -10.2;
+    public static final double HIVE_LANE_X = -10.4;
     /** Robot centre this far from the middle (y 0) = fully out of the frame's legs (19.5 + 9 + 3.5). */
     public static final double HIVE_CLEAR_Y = 32.0;
     /** Heading under the HIVE: intake toward the REAR wall (launcher + camera look back at the HIVE). */
@@ -73,12 +74,14 @@ public final class HiveAutoField {
 
     /**
      * Pedro's pose = the drivetrain centre (mecanum wheel centres at CAD y -144 / +120 mm: 12 mm ahead of the CAD
-     * origin). From there the intake front is 9.76 in, the launcher back 8.03 in, the camera lens 4.63 in back (12.2 in
-     * high, tilted up 30 deg). The planner uses 9.0 / 9.0, so with the S1 start (intake against the audience wall) the
-     * real robot is START_OFFSET_IN further toward the REAR wall than Pedro thinks, all AUTO long.
+     * origin). From there the intake front is 9.76 in, the launcher back 8.03 in, the sides 8.9 in, the camera lens
+     * 4.63 in back on the centre line (12.2 in high, tilted up 30 deg). The planner uses 9.0 / 9.0, so with the S1 start
+     * (intake against the audience wall) the real robot is START_OFFSET_IN further toward the REAR wall than Pedro
+     * thinks, all AUTO long.
      */
     public static final double ROBOT_FRONT_IN = 9.76;
     public static final double ROBOT_BACK_IN = 8.03;
+    public static final double ROBOT_HALF_WIDTH_IN = 8.9;
     public static final double CAMERA_BACK_IN = 4.63;
     public static final double START_OFFSET_IN = ROBOT_FRONT_IN - HALF_LENGTH_IN;
 
@@ -101,15 +104,25 @@ public final class HiveAutoField {
     public static final double FAR_CELL_X = CELL_X;
     public static final double FAR_CELL_Y = 10.85;
     /**
-     * Far shot spot, in the HIVE lane, facing straight back at the far CELL (exactly the lane heading: turning even 3 deg
-     * on the way puts a corner within 1.5 in of a leg); the shot line passes 2.5 in from the CELL centre (opening 20 in).
-     * The real mirror of the near shot spot: with the as-built robot (START_OFFSET_IN, ROBOT_FRONT_IN) the intake ends
-     * 2 in off the REAR wall and the camera sees the far CELL's sticker from 41.2 in, exactly as the near spot sees the
-     * near one (9 Nov run 212355: seen, 46.3 in high). Closer and the sticker leaves the top of the picture. FLOWER 1
-     * (rear wall, ring x -26.4..-20.4) stays 1.3 in to the side.
+     * Far shot spot, in the HIVE lane. The real mirror of the near shot spot: with the as-built robot
+     * (START_OFFSET_IN, ROBOT_FRONT_IN) the intake ends ~2 in off the REAR wall and the camera sees the far CELL's
+     * sticker from 41.3 in, as the near spot sees the near one (9 Nov run 212355: seen, 46.3 in high); closer and the
+     * sticker leaves the top of the picture. The robot arrives straight down the lane, heading 90 (turning under the
+     * HIVE puts a corner within 1.5 in of a leg); the far aim then turns it on the spot to FAR_AIM_HEADING (FAR_AIM):
+     * its centre line (camera and launcher are on it) through the far CELL's opening, where the camera aim ends
+     * (HiveVision's bearing is to the opening's centre). FLOWER 1 (rear wall, ring x -26.4..-20.4) stays 1.4 in away.
      */
     public static final double FAR_SHOT_Y = 58.0;
     public static final Pose FAR_SHOT = new Pose(HIVE_LANE_X, FAR_SHOT_Y, FACE_REAR);
+    public static final double FAR_AIM_HEADING = Math.toDegrees(Math.atan2(FAR_SHOT_Y + START_OFFSET_IN - FAR_CELL_Y,
+            HIVE_LANE_X - FAR_CELL_X));
+    public static final Pose FAR_AIM = new Pose(HIVE_LANE_X, FAR_SHOT_Y, FAR_AIM_HEADING);
+    /**
+     * The camera aim at the far spot may turn the robot this far either way from FAR_AIM_HEADING (aim trim, the CELL's
+     * real place); with 1 deg of Pedro heading error on top the as-built robot stays 0.4 in off the REAR wall, FLOWER 1
+     * and our side's line (HivePlannerTest). An aim trim bigger than this is cut there.
+     */
+    public static final double FAR_AIM_MAX_TURN_DEG = 2.5;
     /** Camera floor distance to the far CELL at the far spot when the camera can't see it (for the shot speed). */
     public static final double FAR_SHOT_PLANNED_FLOOR_IN = 39.0;
 

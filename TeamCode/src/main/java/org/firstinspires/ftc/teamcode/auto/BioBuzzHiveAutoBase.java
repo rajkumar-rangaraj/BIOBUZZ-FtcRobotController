@@ -42,18 +42,20 @@ import java.util.List;
  * or its other end coming up, is confirmed. Both tag stickers face the end that is up (CAD), so the near spot sees our
  * CELLs only before TIP 1 and the far spot only after it. NOT TIPPED (the near CELL still up or the far one down 1 s
  * after the last pre-load) -> the GARDEN POLLEN go back to the near CELL instead (camera must confirm it up). The far
- * CELL is fired at when the camera confirms it up (or confirms the TIP from there); when it sees nothing, only with
- * "blind far shot" (Circle/B, OFF by default: in good light nothing in view from the far spot means not tipped) and all
- * 4 pre-loads counted. The pre-loads always go all 4 (coach: "shoot all 4 balls first", as BioBuzz AUTO); every other
- * volley stops at once when its CELL is confirmed going down or, once confirmed up, drops out of view (it tipped).
+ * CELL is fired at while the camera sees it up (or, from there, the near CELL down); when it sees nothing, only with
+ * "blind far shot" (Circle/B, PRACTICE ONLY, OFF by default: in good light nothing in view from the far spot means not
+ * tipped) and all 4 pre-loads counted. The pre-loads always go all 4 (coach, 13 Nov: "Its fine to aim 4 at first
+ * shot. Later we will enhance"; if the HIVE tips mid-volley the rest still go: G417 risk, a verbal warning first). Every
+ * other volley fires only while its camera evidence is fresh: the windmill waits at once (even mid-pocket) when it is
+ * missing for 0.3 s, and the volley stops when it is missing for 0.6 s or the CELL is confirmed going down.
  *
  * PARK ALWAYS WINS, as in BioBuzz AUTO: every step is cut short at the park start (the INIT "park by" time, earlier
  * when the drive to the slot is long). Blocked for 1 s: before the park the step is dropped; while parking it waits
  * and tries again until the end of AUTO.
  *
- * INIT (gamepad 1): D-pad L/R = start, Square/X = slot A/B, Cross/A = pre-loads, Triangle/Y = GARDEN,
- *                   Circle/B = blind far shot (without the camera), R3 = FLOWER (3.5), D-pad U/D = start delay,
- *                   LB/RB = park-by time.
+ * Start S1 only (intake against the CELL wall, centred on our up CELL): the as-built robot offsets are worked out for it.
+ * INIT (gamepad 1): Square/X = slot A/B, Cross/A = pre-loads, Triangle/Y = GARDEN, Circle/B = blind far shot
+ *                   (practice only), R3 = FLOWER (3.5), D-pad U/D = start delay, LB/RB = park-by time.
  * Log: /sdcard/BioBuzzLogs/hiveauto_*.csv
  */
 public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
@@ -106,9 +108,12 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     /** While feeding, a CELL confirmed DOWN this recently stops the feed at once. */
     static final double CELL_STOP_FRESH_SEC = 0.3;
     /**
-     * While feeding at a CELL the camera confirmed UP: not seen at all for this long = it tipped (both tag stickers turn
-     * to face the other end of the field when a HIVE tips); stop. Longer than a launched ball crossing the picture.
+     * Every volley but the pre-loads fires only while its camera evidence (Evidence) is fresh: last seen more than
+     * EVIDENCE_FRESH_SEC ago = the windmill waits at once, even mid-pocket (a ball crossing the picture hides the tags
+     * for ~0.1 s), and goes on when the camera sees it again; more than CELL_LOST_STOP_SEC = the volley stops (when a
+     * HIVE tips, both its tag stickers turn to face the other end of the field).
      */
+    static final double EVIDENCE_FRESH_SEC = 0.3;
     static final double CELL_LOST_STOP_SEC = 0.6;
     static final double FALLBACK_LEAVE_IN = 8.0;
     /** FLOWER: arm down and settled before the intake goes in. */
@@ -122,6 +127,13 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
 
     enum Tip { UNKNOWN, TIPPED, NOT_TIPPED }
 
+    /**
+     * What a volley other than the pre-loads fires on (checked on every frame while it fires): its CELL seen UP; its
+     * other end seen DOWN (from the far spot after TIP 1 the near CELL's sticker faces this way); nothing (blind far
+     * shot: practice only, never in a match).
+     */
+    enum Evidence { NONE, TARGET_UP, OTHER_END_DOWN }
+
     /** What the camera last said about one CELL. */
     private static final class CellSeen {
         int verdict;                                            // +1 UP, -1 DOWN, 0 not sure
@@ -132,7 +144,8 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
 
     private final java.util.Map<HiveVision.Cell, CellSeen> cells = new java.util.EnumMap<>(HiveVision.Cell.class);
 
-    private Start start = Start.CELL_WALL;
+    /** S1 only: the as-built robot offsets (HiveAutoField.START_OFFSET_IN) and the far spot are worked out for it. */
+    private final Start start = Start.CELL_WALL;
     private Slot slot = Slot.A;                                 // A: straight across from the far spot (never passes B)
     private boolean shoot = true, garden = true, blindFar = false, flower = true;
     private int delaySec = 0;
@@ -157,7 +170,6 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     private boolean poseSet = false;                            // Pedro runs from the known start pose
     private Tip tip = Tip.UNKNOWN;
     private String tipWhy = "no CELL seen";
-    private double tipSec = -1;                                 // last time the camera confirmed TIPPED
     private double lastSeenAnySec = -1;                         // last fresh frame with one of our CELLs in it
 
     @Override
@@ -374,7 +386,7 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
             log.row(now(), "EVENT", "near CELL not confirmed in view: firing on the planned heading");
         }
         nearVolleyRunning = true;
-        fire(true, near);
+        fire(true, near, Evidence.NONE);
         nearVolleyRunning = false;
         watchForTip();
     }
@@ -398,19 +410,22 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     }
 
     /**
-     * Far CELL: camera aim. UP (confirmed, not contradicted by the near CELL): fire (camera speed). DOWN (or the near CELL
-     * confirmed up), or seen but not sure: POLLEN kept. Not seen: fire on the planned heading only if {@code allowBlind}
-     * and either the camera confirmed the TIP during this aim (e.g. the near CELL seen down from here: its sticker faces
-     * this end after a TIP), or "blind far shot" is ON (default OFF: from here, in good light, no tag in view most likely
-     * means NOT tipped) with all 4 pre-loads counted and NOT TIPPED never seen. Returns true when the robot is empty after.
+     * Far CELL: camera aim (at most FAR_AIM_MAX_TURN_DEG from the planned heading). UP (confirmed, not contradicted by
+     * the near CELL): fire (camera speed) while it stays UP. DOWN (or the near CELL confirmed up), or seen but not sure:
+     * POLLEN kept. Not seen: fire on the planned heading while the camera sees the near CELL DOWN from here (after TIP 1
+     * its sticker faces this end), or, only with {@code allowBlind}, with "blind far shot" ON (practice only, default
+     * OFF: in good light, no tag in view from here means not tipped), all 4 pre-loads counted and NOT TIPPED never seen.
+     * Returns true when the robot is empty after.
      */
     private boolean volleyFar(boolean allowBlind) {
         HiveVision.Cell far = farCell();
         step = "AIM (far CELL)";
         double aimStart = now();
-        aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far);
+        aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far,
+                pedro(HiveAutoField.FAR_AIM.forAlliance(alliance())).heading(), HiveAutoField.FAR_AIM_MAX_TURN_DEG);
         CellSeen s = cells.get(far);
         int v = cellState(far, CELL_FRESH_SEC);
+        Evidence ev;
         if (v != 0) {
             log.row(now(), "EVENT", "FAR CELL " + far + (v > 0 ? " UP" : " DOWN") + (s != null && s.target != null
                     ? String.format(": height %.1f in, floor %.1f in, bearing %.1f", s.target.heightIn(),
@@ -420,23 +435,25 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
             }
             launchTps = ShotSpeed.standard().tableSpeed(s.target.horizontalIn());
             robot.setLauncherVelocity(launchTps);
+            ev = Evidence.TARGET_UP;
         } else if (s != null && s.atSec >= aimStart) {
             log.row(now(), "EVENT", String.format("far CELL seen but not sure (height %.1f in, %d frames): POLLEN kept",
                     s.target.heightIn(), s.run));
             return false;
         } else {
-            boolean tippedNow = tip == Tip.TIPPED && tipSec >= aimStart;
-            boolean blind = allowBlind && (tippedNow
-                    || (blindFar && tip != Tip.NOT_TIPPED && preloadBalls >= AUTO_PRELOADS));
-            log.row(now(), "EVENT", "far CELL not in view: " + (blind ? "firing on the planned heading" : "POLLEN kept")
-                    + " (tip=" + tip + (tippedNow ? " seen from here" : "") + ", pre-loads counted " + preloadBalls
-                    + ", blind far shot=" + blindFar + (allowBlind ? "" : ", 2nd far volley needs the camera") + ")");
-            if (!blind) {
+            boolean nearDown = confirmed(HiveCells.otherEnd(far), CELL_FRESH_SEC) < 0;
+            boolean blind = allowBlind && blindFar && tip != Tip.NOT_TIPPED && preloadBalls >= AUTO_PRELOADS;
+            log.row(now(), "EVENT", "far CELL not in view: " + (nearDown ? "near CELL DOWN, firing on the planned heading"
+                    : blind ? "BLIND far shot (practice), firing on the planned heading" : "POLLEN kept")
+                    + " (tip=" + tip + ", pre-loads counted " + preloadBalls + ", blind far shot=" + blindFar
+                    + (allowBlind ? "" : ", 2nd far volley needs the camera") + ")");
+            if (!nearDown && !blind) {
                 return false;
             }
+            ev = nearDown ? Evidence.OTHER_END_DOWN : Evidence.NONE;
         }
         farFired = true;
-        return fire(false, far);
+        return fire(false, far, ev);
     }
 
     /** Plan B at the near CELL: fires only when the camera confirms it UP (and its other end does not say otherwise). */
@@ -449,23 +466,33 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         if (v > 0) {
             launchTps = ShotSpeed.standard().tableSpeed(cells.get(cell).target.horizontalIn());
             robot.setLauncherVelocity(launchTps);
-            fire(false, cell);
+            fire(false, cell, Evidence.TARGET_UP);
         }
     }
 
     /** Turns on the spot (Pedro hold) until the camera bearing to {@code cell} is within AIM_TOLERANCE_DEG on 3 frames. */
     private HiveVision.Target aim(double endSec, HiveVision.Cell cell) {
-        if (vision == null) {
+        return aim(endSec, cell, Double.NaN, 0);
+    }
+
+    /**
+     * As {@link #aim(double, HiveVision.Cell)}, but first turns on the spot to {@code centre} (Pedro heading, radians;
+     * NaN = stay as it is, no limit) and never further than {@code maxTurnDeg} from it: the far spot is close to the
+     * REAR wall, FLOWER 1 and our side's line. Not seen: the robot ends at {@code centre} (the planned aim).
+     */
+    private HiveVision.Target aim(double endSec, HiveVision.Cell cell, double centre, double maxTurnDeg) {
+        if (vision == null && Double.isNaN(centre)) {
             return null;
         }
         com.pedropathing.math.Pose spot = follower.pose();
-        double targetHeading = spot.heading();
-        follower.hold(spot);
+        double targetHeading = Double.isNaN(centre) ? spot.heading() : centre;
+        follower.hold(spot.withHeading(targetHeading));
         HiveVision.Target last = null;
         int settled = 0;
+        boolean limitLogged = false;
         while (opModeIsActive() && now() < endSec) {
             follower.update();
-            if (pollVision()) {
+            if (vision != null && pollVision()) {
                 HiveVision.Target t = null;
                 for (HiveVision.Target c : HiveCells.visible(vision, hiveAlliance())) {
                     if (c.cell == cell && (t == null || c.tagCount > t.tagCount)) {
@@ -483,7 +510,14 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                     } else {
                         settled = 0;
                         if (Math.abs(headingErr) < AIM_TOLERANCE_DEG) {   // only re-aim on frames taken after the last turn
-                            targetHeading = follower.pose().heading() + Math.toRadians(t.bearingDeg);
+                            double want = follower.pose().heading() + Math.toRadians(t.bearingDeg);
+                            targetHeading = limitHeading(want, centre, maxTurnDeg);
+                            if (targetHeading != want && !limitLogged) {
+                                limitLogged = true;
+                                log.row(now(), "EVENT", String.format("AIM LIMIT: wanted %.1f deg, held at %.1f (max %.1f"
+                                        + " from %.1f)", Math.toDegrees(want), Math.toDegrees(targetHeading), maxTurnDeg,
+                                        Math.toDegrees(centre)));
+                            }
                             follower.hold(spot.withHeading(targetHeading));
                         }
                     }
@@ -494,43 +528,67 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         return last;
     }
 
+    /** {@code heading} limited to {@code centre} +- {@code maxTurnDeg} (radians; NaN centre = no limit). */
+    private static double limitHeading(double heading, double centre, double maxTurnDeg) {
+        if (Double.isNaN(centre)) {
+            return heading;
+        }
+        double deg = Math.toDegrees(heading);
+        double limited = HivePlanner.limitHeadingDeg(deg, Math.toDegrees(centre), maxTurnDeg);
+        return limited == deg ? heading : Math.toRadians(limited);
+    }
+
     /**
-     * The TeleOp pocket-by-pocket feed (ShotFeeder) while Pedro holds the aimed pose, until the park start. Every volley
-     * but the pre-loads stops at once when the camera sees its CELL going down (G417; launching at a tipping HIVE may
-     * also undo the TIP). Returns true when the windmill is empty (4 balls counted or 3 full turns).
+     * The TeleOp pocket-by-pocket feed (ShotFeeder) while Pedro holds the aimed pose, until the park start. Pre-loads
+     * ({@code preloads}): all 4, nothing stops them (coach, 13 Nov). Every other volley needs its camera evidence
+     * ({@code ev}) the whole time (G417; launching at a tipping HIVE may also undo the TIP): older than
+     * EVIDENCE_FRESH_SEC = the windmill stops at once, even mid-pocket, and goes on when the camera sees it again;
+     * older than CELL_LOST_STOP_SEC (the CELL tipped: both stickers turn to the other end), or the CELL confirmed going
+     * down = the volley stops. Returns true when the windmill is empty (4 balls counted or 3 full turns).
      */
-    private boolean fire(boolean preloads, HiveVision.Cell target) {
+    private boolean fire(boolean preloads, HiveVision.Cell target, Evidence ev) {
+        VolleyGate gate = !preloads && ev != Evidence.NONE
+                ? new VolleyGate(evidenceSec(ev, target), EVIDENCE_FRESH_SEC, CELL_LOST_STOP_SEC) : null;
+        String stopWhy = null;
         follower.hold(follower.pose());
         double settleEnd = Math.min(now() + AUTO_FIRE_SETTLE_SEC, parkStart());
         while (opModeIsActive() && now() < settleEnd) {
             follower.update();
             pollVision();
+            if (!preloads && gateCheck(gate, target, ev) == VolleyGate.Verdict.STOP) {
+                stopWhy = stopReason(gate, target);
+                break;
+            }
             step = "FIRE settle";
             loopTick();
         }
         ShotFeeder feeder = ShotFeeder.fromSettings(settings);
         BallCounter counter = BallCounter.forAuto();
-        robot.setIntake(FEED_INTAKE_BOOST);
+        if (stopWhy == null) {
+            robot.setIntake(FEED_INTAKE_BOOST);
+        }
         double feedEnd = now() + AUTO_FEED_TIMEOUT_SEC;
-        boolean stoppedForTip = false;
-        // a CELL the camera confirmed UP when the feed starts: losing it completely means it tipped (stickers turn away)
-        boolean watchLoss = !preloads && cellState(target, CELL_FRESH_SEC) > 0;
-        while (opModeIsActive() && now() < Math.min(feedEnd, parkStart()) && feeder.shots() < AUTO_FEED_POCKETS
-                && feeder.state() != ShotFeeder.State.JAMMED
+        while (stopWhy == null && opModeIsActive() && now() < Math.min(feedEnd, parkStart())
+                && feeder.shots() < AUTO_FEED_POCKETS && feeder.state() != ShotFeeder.State.JAMMED
                 && !(counter.balls() >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
             follower.update();
             pollVision();
-            // G417: the CELL we fire at is going down: stop at once, even mid-pocket. Not for the pre-loads: the coach
-            // wants all 4 in the CELL that starts up (as BioBuzz AUTO); its sticker turns away from this spot when it tips.
-            if (!preloads && (cellState(target, CELL_STOP_FRESH_SEC) < 0
-                    || (watchLoss && now() - cells.get(target).atSec > CELL_LOST_STOP_SEC))) {
+            double t = now();
+            VolleyGate.Verdict g = preloads ? VolleyGate.Verdict.GO : gateCheck(gate, target, ev);
+            if (g == VolleyGate.Verdict.STOP) {
                 robot.setIndexerPower(0);
-                stoppedForTip = true;
+                stopWhy = stopReason(gate, target);
                 break;
             }
-            double t = now();
-            int ticks = robot.indexerTicks();
-            robot.setIndexerPower(feeder.update(t, ticks, robot.updateLauncherReady(), true));
+            if (g == VolleyGate.Verdict.WAIT) {
+                robot.setIndexerPower(0);                       // at once, even mid-pocket
+            } else {
+                robot.setIndexerPower(feeder.update(gate == null ? t : gate.feederTime(t), robot.indexerTicks(),
+                        robot.updateLauncherReady(), true));
+                if (feeder.event() != null) {
+                    log.row(t, "EVENT", feeder.event(), "ticks", robot.indexerTicks());
+                }
+            }
             double velocity = robot.launcherVelocity();
             if (counter.update(t, feeder.state() == ShotFeeder.State.FEEDING, launchTps, velocity)) {
                 log.row(t, "EVENT", "BALL " + counter.balls(), "launcher", velocity);
@@ -542,26 +600,69 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                     lastBallSec = t;
                 }
             }
-            if (feeder.event() != null) {
-                log.row(t, "EVENT", feeder.event(), "ticks", robot.indexerTicks());
-            }
-            step = String.format("FIRE %d balls, pocket %d/%d %s", counter.balls(), feeder.shots(), AUTO_FEED_POCKETS,
-                    feeder.state());
+            step = String.format("FIRE %d balls, pocket %d/%d %s%s", counter.balls(), feeder.shots(),
+                    AUTO_FEED_POCKETS, feeder.state(), g == VolleyGate.Verdict.WAIT ? " WAIT camera" : "");
             loopTick();
         }
         robot.setIndexerPower(0);
         robot.setIntake(0);
+        boolean stopped = stopWhy != null;
         boolean empty = counter.balls() >= AUTO_PRELOADS || feeder.shots() >= AUTO_FEED_POCKETS;
         if (preloads) {
             // G407: only collect more once the windmill is empty (4 balls counted, or 3 full turns of the windmill)
-            preloadsGone = !stoppedForTip && empty;
+            preloadsGone = empty;
             preloadBalls = counter.balls();
         }
-        log.row(now(), "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %s%s%s", counter.balls(),
+        log.row(now(), "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %s%s%s%s", counter.balls(),
                 feeder.shots(), feeder.jams(), feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED" : "ok",
-                stoppedForTip ? ", STOPPED: " + target + " going down or lost from view" : "",
+                gate != null && gate.waits() > 0 ? String.format(", waited for the camera %d x %.2f s", gate.waits(),
+                        gate.waitedSec()) : "",
+                stopped ? ", STOPPED: " + stopWhy : "",
                 preloads ? (preloadsGone ? ", windmill empty" : ", balls may be left (no GARDEN)") : ""));
-        return empty && !stoppedForTip;
+        return empty && !stopped;
+    }
+
+    /**
+     * A volley other than the pre-loads: STOP when its CELL is confirmed going down (or its other end up); with camera
+     * evidence ({@code gate}), WAIT / STOP as the evidence ages (VolleyGate). Blind (no gate): only the CELL going down
+     * stops it.
+     */
+    private VolleyGate.Verdict gateCheck(VolleyGate gate, HiveVision.Cell target, Evidence ev) {
+        boolean down = cellState(target, CELL_STOP_FRESH_SEC) < 0;
+        if (gate == null) {
+            return down ? VolleyGate.Verdict.STOP : VolleyGate.Verdict.GO;
+        }
+        boolean wasWaiting = gate.waiting();
+        double t = now();
+        VolleyGate.Verdict g = gate.update(t, evidenceSec(ev, target), down);
+        if (g == VolleyGate.Verdict.WAIT && !wasWaiting) {
+            log.row(t, "EVENT", String.format("WAIT: %s not seen for %.2f s", ev == Evidence.TARGET_UP ? target + " UP"
+                    : HiveCells.otherEnd(target) + " DOWN", gate.evidenceAgeSec(t)));
+        } else if (g == VolleyGate.Verdict.GO && wasWaiting) {
+            log.row(t, "EVENT", String.format("GO ON: the camera sees it again (%.2f s waited so far)",
+                    gate.waitedSec()));
+        }
+        return g;
+    }
+
+    private String stopReason(VolleyGate gate, HiveVision.Cell target) {
+        if (cellState(target, CELL_STOP_FRESH_SEC) < 0) {
+            return target + " going down";
+        }
+        return String.format("camera evidence lost for %.2f s", gate == null ? 0 : gate.evidenceAgeSec(now()));
+    }
+
+    /**
+     * When the camera's latest frame of the CELL {@code ev} is about was taken, if that frame agrees with it
+     * ({@code target} UP, or its other end DOWN); else -1. Checked after every pollVision, so no frame it takes is
+     * missed.
+     */
+    private double evidenceSec(Evidence ev, HiveVision.Cell target) {
+        CellSeen s = cells.get(ev == Evidence.TARGET_UP ? target : HiveCells.otherEnd(target));
+        if (s == null || s.atSec < 0) {
+            return -1;
+        }
+        return (ev == Evidence.TARGET_UP ? s.verdict > 0 : s.verdict < 0) ? s.atSec : -1;
     }
 
     // ---------------- TIP watch ----------------
@@ -615,7 +716,6 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                     now());
             if (!startState) {
                 setTip(Tip.TIPPED, what);
-                tipSec = now();
             } else if (preloadsGone && !nearVolleyRunning && lastBallSec >= 0
                     && now() - lastBallSec >= TIP_SETTLE_SEC) {
                 setTip(Tip.NOT_TIPPED, what);
@@ -945,9 +1045,6 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     // ---------------- INIT ----------------
 
     private void readInitButtons() {
-        if (gamepad1.dpadLeftWasPressed() || gamepad1.dpadRightWasPressed()) {
-            start = start.next();
-        }
         if (gamepad1.xWasPressed()) {
             slot = slot.other();
         }
@@ -978,15 +1075,18 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     private void showInit(String visionError, String pedroError) {
         Pose s = AutoField.start(start);
         telemetry.addLine("BIOBUZZ HIVE AUTO " + alliance() + " - near CELL, GARDEN, under the HIVE, far CELL");
-        telemetry.addData("Start (D-pad L/R)", start.label);
+        if (blindFar) {
+            telemetry.addLine("!!! BLIND FAR SHOT IS ON: PRACTICE ONLY. Turn it OFF (Circle/B) for a match (G417) !!!");
+        }
+        telemetry.addData("Start", start.label + " only");
         telemetry.addData("Park slot (Square/X)", slot.label);
         telemetry.addLine(">> Tell your partner: we park in slot " + slot + ", they take slot " + slot.other()
                 + "; we drive UNDER our HIVE and shoot from the REAR end");
         telemetry.addData("Shoot pre-loads (Cross/A)", shoot ? "ON" : "OFF");
         telemetry.addData("GARDEN POLLEN (Triangle/Y)", !garden ? "OFF" : shoot ? "ON" : "ON but needs shooting (G407)");
         telemetry.addData("Blind far shot (Circle/B)", blindFar
-                ? "ON: far CELL fired at without the camera after 4 counted pre-loads (G417 risk if the HIVE did not tip)"
-                : "OFF: far CELL only when the camera confirms it (normal in a lit field)");
+                ? "ON - PRACTICE ONLY (dark garage): far CELL fired at without the camera after 4 counted pre-loads"
+                : "OFF: far CELL only while the camera sees it up (match setting)");
         telemetry.addData("FLOWER 1 if time (R3)", !flower ? "OFF"
                 : BioBuzzRobot.armCalibrated() ? "ON (only when the robot is empty)" : "ON but arm NOT CALIBRATED");
         telemetry.addData("Start delay (D-pad U/D)", "%d s", delaySec);
@@ -1036,10 +1136,8 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
             telemetry.addData("Camera", tg == null ? "no CELL in view (normal at the wall)" : String.format(
                     "%s %d tags, height %.0f in", tg.cell, tg.tagCount, tg.heightIn()));
         }
-        telemetry.addLine("Place: " + (start == Start.CELL_WALL
-                ? "intake against the " + (alliance() == Alliance.RED ? "AUDIENCE" : "REAR")
-                + " wall, centred on our up CELL, square to the wall"
-                : "intake against our ALLIANCE wall, centred on the middle line, square to the wall"));
+        telemetry.addLine("Place: intake against the " + (alliance() == Alliance.RED ? "AUDIENCE" : "REAR")
+                + " wall, centred on our up CELL, square to the wall (S1; HIVE AUTO has no S2)");
         telemetry.update();
     }
 }

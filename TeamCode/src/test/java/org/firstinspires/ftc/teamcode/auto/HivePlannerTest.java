@@ -62,18 +62,53 @@ public class HivePlannerTest {
     @Test
     public void farShotSpotIsLegalAndAimedAtTheFarCell() {
         assertNull(HivePlanner.footprintProblem(FAR_SHOT, null, false));
-        // as built (robot not centred on Pedro's pose): intake 2 in off the REAR wall, 1.3 in beside FLOWER 1's ring
-        double realFront = FAR_SHOT.y + START_OFFSET_IN + ROBOT_FRONT_IN;
-        double flowerSide = (FAR_SHOT.x - 8.9) - (FLOWER_X + FLOWER_HALF_WIDTH_IN);
-        System.out.printf("far spot %s: intake %.2f in off the REAR wall, %.2f in beside FLOWER 1%n", FAR_SHOT,
-                WALL_IN - realFront, flowerSide);
-        assertTrue(WALL_IN - realFront >= 1.5 && WALL_IN - realFront <= 3.0);
-        assertTrue(flowerSide >= 1.0);
-        // straight back down the lane: the shot line passes within 3 in of the far CELL's centre (opening 20 in wide)
-        assertEquals(FACE_REAR, FAR_SHOT.headingDeg, 1e-9);
+        assertNull(HivePlanner.footprintProblem(FAR_AIM, null, false));
+        // as built (robot not centred on Pedro's pose): intake ~2 in off the REAR wall, FLOWER 1's ring 1+ in away
+        double h = Math.toRadians(FAR_AIM.headingDeg);
+        double intakeY = FAR_AIM.y + START_OFFSET_IN + ROBOT_FRONT_IN * Math.sin(h);
+        double[] arrive = clearances(FAR_SHOT), aimed = clearances(FAR_AIM);
+        System.out.printf("far spot %s, aimed %s: intake %.2f in off the REAR wall; corners arriving / aimed: wall %.2f /"
+                + " %.2f, middle line %.2f / %.2f, FLOWER 1 %.2f / %.2f in%n", FAR_SHOT, FAR_AIM, WALL_IN - intakeY,
+                arrive[0], aimed[0], arrive[1], aimed[1], arrive[2], aimed[2]);
+        assertTrue(WALL_IN - intakeY >= 1.5 && WALL_IN - intakeY <= 3.0);
+        assertTrue(arrive[2] >= 1.0 && aimed[2] >= 1.0);
+        // the camera (on the centre line, 4.63 in behind the centre) looks straight at the far CELL's opening
+        double camX = FAR_AIM.x - CAMERA_BACK_IN * Math.cos(h);
+        double camY = FAR_AIM.y + START_OFFSET_IN - CAMERA_BACK_IN * Math.sin(h);
+        double toCell = Math.toDegrees(Math.atan2(FAR_CELL_Y - camY, FAR_CELL_X - camX));
+        assertEquals(0, normalizeDeg(toCell - (FAR_AIM.headingDeg + 180)), 0.01);
+        assertTrue("a small turn on the spot", Math.abs(FAR_AIM_HEADING - FACE_REAR) < 4);
         assertTrue(Math.abs(FAR_SHOT.x - FAR_CELL_X) <= 3.0);
         // the plain mirror of the near spot (x -12.7) would hit FLOWER 1
         assertNotNull(HivePlanner.footprintProblem(new Pose(CELL_X, -SHOT.y, FACE_REAR), null, false));
+    }
+
+    /**
+     * The far spot as built (START_OFFSET_IN; 9.76 / 8.03 / 8.9 in), with 1 deg of Pedro heading error: arriving down
+     * the lane (heading 90), turning on the spot to FAR_AIM_HEADING and the whole camera-aim range around it
+     * (+- FAR_AIM_MAX_TURN_DEG), the robot stays 0.4 in off the REAR wall, our side's line (x 0) and FLOWER 1's CAD box.
+     */
+    @Test
+    public void farSpotAimRangeIsClearAsBuilt() {
+        double lo = Double.NaN, hi = Double.NaN;
+        for (double hd = 70; hd <= 110; hd += 0.05) {
+            if (clear(new Pose(FAR_SHOT.x, FAR_SHOT.y, hd), 0.4)) {
+                lo = Double.isNaN(lo) ? hd : lo;
+                hi = hd;
+            }
+        }
+        System.out.printf("far spot: 0.4 in clear as built from %.2f to %.2f deg; arrive 90, aim %.2f +- %.1f (+1 Pedro)%n",
+                lo, hi, FAR_AIM_HEADING, FAR_AIM_MAX_TURN_DEG);
+        double from = Math.min(FACE_REAR, FAR_AIM_HEADING - FAR_AIM_MAX_TURN_DEG) - 1.0;
+        double to = Math.max(FACE_REAR, FAR_AIM_HEADING + FAR_AIM_MAX_TURN_DEG) + 1.0;
+        for (double hd = from; hd <= to + 1e-9; hd += 0.1) {
+            Pose p = new Pose(FAR_SHOT.x, FAR_SHOT.y, hd);
+            assertTrue("heading " + hd + ": " + java.util.Arrays.toString(clearances(p)), clear(p, 0.4));
+        }
+        List<AutoPlanner.Leg> legs = HivePlanner.underHive(GARDEN_END);
+        AutoPlanner.Leg under = legs.get(legs.size() - 1);
+        assertEquals("straight down the lane to the far spot", FAR_SHOT, under.to);
+        assertEquals(FACE_REAR, under.to.headingDeg, 1e-9);
     }
 
     /**
@@ -291,6 +326,19 @@ public class HivePlannerTest {
         assertEquals(-FAR_SHOT.y, blue.y, 1e-9);
     }
 
+    @Test
+    public void farAimHeadingLimitWorksTheShortWayRound() {
+        double c = FAR_AIM_HEADING, m = FAR_AIM_MAX_TURN_DEG;
+        assertEquals(c + 1.0, HivePlanner.limitHeadingDeg(c + 1.0, c, m), 1e-12);
+        assertEquals(c + m, HivePlanner.limitHeadingDeg(c + 7.0, c, m), 1e-12);
+        assertEquals(c - m, HivePlanner.limitHeadingDeg(c - 7.0, c, m), 1e-12);
+        assertEquals(c - m, HivePlanner.limitHeadingDeg(c - 7.0 + 360, c, m), 1e-12);  // Pedro may report 0..360
+        Pose blue = FAR_AIM.forAlliance(Alliance.BLUE);
+        double b = blue.headingDeg;
+        assertEquals(b + m, HivePlanner.limitHeadingDeg(b + 20 - 360, b, m), 1e-12);
+        assertEquals(179.0, HivePlanner.limitHeadingDeg(-179.0, 178.0, 1.0), 1e-12);   // across +-180
+    }
+
     private static List<Pose> samples(Pose from, List<AutoPlanner.Leg> legs) {
         List<Pose> out = new ArrayList<>();
         Pose p = from;
@@ -303,5 +351,47 @@ public class HivePlannerTest {
             p = l.to;
         }
         return out;
+    }
+
+    /** The as-built robot's corners at a Pedro pose (RED frame): really START_OFFSET_IN further toward the REAR wall. */
+    private static double[][] asBuiltCorners(Pose p) {
+        double h = Math.toRadians(p.headingDeg), c = Math.cos(h), s = Math.sin(h);
+        double cx = p.x, cy = p.y + START_OFFSET_IN;
+        double[][] local = {{ROBOT_FRONT_IN, ROBOT_HALF_WIDTH_IN}, {ROBOT_FRONT_IN, -ROBOT_HALF_WIDTH_IN},
+                {-ROBOT_BACK_IN, -ROBOT_HALF_WIDTH_IN}, {-ROBOT_BACK_IN, ROBOT_HALF_WIDTH_IN}};
+        double[][] out = new double[4][];
+        for (int i = 0; i < 4; i++) {
+            double f = local[i][0], l = local[i][1];
+            out[i] = new double[]{cx + f * c - l * s, cy + f * s + l * c};
+        }
+        return out;
+    }
+
+    /** As-built clearances (in) at a Pedro pose: {REAR wall, our side's line x 0, FLOWER 1's CAD box}. */
+    private static double[] clearances(Pose p) {
+        double[][] k = asBuiltCorners(p);
+        double fx0 = FLOWER_X - FLOWER_HALF_WIDTH_IN, fx1 = FLOWER_X + FLOWER_HALF_WIDTH_IN;
+        double fy0 = WALL_IN - FLOWER_DEPTH_IN, fy1 = WALL_IN;
+        double wall = Double.MAX_VALUE, middle = Double.MAX_VALUE, flower = Double.MAX_VALUE;
+        for (int i = 0; i < 4; i++) {
+            double[] a = k[i], b = k[(i + 1) % 4];
+            wall = Math.min(wall, WALL_IN - a[1]);
+            middle = Math.min(middle, -a[0]);
+            for (int j = 0; j <= 400; j++) {                    // along the robot's side, every ~0.05 in
+                double x = a[0] + (b[0] - a[0]) * j / 400.0, y = a[1] + (b[1] - a[1]) * j / 400.0;
+                double dx = Math.max(Math.max(fx0 - x, x - fx1), 0), dy = Math.max(Math.max(fy0 - y, y - fy1), 0);
+                flower = Math.min(flower, Math.hypot(dx, dy));
+            }
+        }
+        return new double[]{wall, middle, flower};
+    }
+
+    private static boolean clear(Pose p, double margin) {
+        for (double c : clearances(p)) {
+            if (c < margin) {
+                return false;
+            }
+        }
+        return true;
     }
 }

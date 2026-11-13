@@ -76,8 +76,9 @@ public final class HivePlanner {
 
     /**
      * From anywhere on the audience side (GARDEN, near shot spot): to the front of the HIVE turning to face the REAR
-     * wall, then straight under it in the lane to the far shot spot (one leg: Pedro slows down at its end). Intake off:
-     * spilled POLLEN/NECTAR may lie under the HIVE and the robot may already hold 4 (G407).
+     * wall, then straight under it in the lane at exactly 90 deg to the far shot spot (one leg: Pedro slows down at its
+     * end; the far aim then turns the robot on the spot to FAR_AIM_HEADING). Intake off: spilled POLLEN/NECTAR may lie
+     * under the HIVE and the robot may already hold 4 (G407).
      */
     public static List<Leg> underHive(Pose from) {
         List<Leg> legs = new ArrayList<>();
@@ -96,6 +97,15 @@ public final class HivePlanner {
 
     /** Below the far spot, level with FLOWER 1's approach point: sideways moves near FLOWER 1 happen on this row. */
     static final Pose FAR_SHOT_LOW = new Pose(HIVE_LANE_X, FLOWER_APPROACH_Y, FACE_REAR);
+
+    /**
+     * {@code headingDeg} limited to {@code centreDeg} +- {@code maxTurnDeg}, the short way round (the camera aim at the
+     * far spot: FAR_AIM_HEADING +- FAR_AIM_MAX_TURN_DEG). Returns {@code headingDeg} itself when it is inside.
+     */
+    public static double limitHeadingDeg(double headingDeg, double centreDeg, double maxTurnDeg) {
+        double off = normalizeDeg(headingDeg - centreDeg);
+        return Math.abs(off) <= maxTurnDeg ? headingDeg : centreDeg + Math.copySign(maxTurnDeg, off);
+    }
 
     /** From the far spot to FLOWER 1's approach point (intake facing the FLOWER, centred on it): back, then across. */
     public static List<Leg> toFlower() {
