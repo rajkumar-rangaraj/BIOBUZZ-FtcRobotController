@@ -560,6 +560,84 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - Use short routes (shoot / collect / park), not the full 40 s tour.
 - Allow turning legs, which needs a rotated-footprint keep-out.
 
+## 8c. Branch `auto-hive`: HIVE AUTO (12 Nov night; worktree `C:\repo\FtcRobotController-auto-hive`; NOT installed)
+
+**User (12 Nov ~22:25):** "Clone the current auto. Don't change the current one, update from clone. 1. Shoot to hive, this will flip the hive and we get 20 points. 2. Then go to garden and collect 4 balls. 3. After collecting go underneath the hive to opposite end and shoot the ball. 4. Go and park. 3.5 if we have time, explore collecting balls from flower in this area. This plan is aggressive, want to check if it works."
+- Answers before sleeping:
+  - The robot really fits under the HIVE (also check the manual).
+  - Fewer than 4 balls tip it in practice, but "shoot all 4 balls first, then whatever you collect to the other end of hive. This way we are safe."
+  - FLOWER = flower arm + intake.
+
+**Branch `auto-hive`** from `master` `c29d480`:
+- `9275a15`: the clone.
+- `f5761ce`: rubber-duck review fixes, `AUTO_HIVE.md` and a README_2 op-mode row.
+- `9a0e381`: re-review fixes (seesaw rule, "blind far shot" switch, FLOWER dwell).
+- New files only; **BioBuzz AUTO / AutoPlanner / AutoField / HiveVision are unchanged**.
+- Op modes **BioBuzz HIVE AUTO RED/BLUE**: `auto/BioBuzzHiveAutoBase.java` (a copy of BioBuzzPedroAutoBase with the new plan), `HivePlanner`, `HiveAutoField`, `biobuzz/HiveCells.java`, `HivePlannerTest` (12 tests).
+- 221 tests pass and the APK builds. Log: `hiveauto_*.csv`, with a `tip` column.
+
+**Manual TU09 facts used:**
+- 9.6: the frame is two A-legs anchored under the TILES; pivots 43.95 in up; the HIVE has 2 CELLs 18.8 in apart.
+- 10.3.1: each up CELL starts with **3 NECTAR**; 4 POLLEN in each FLOWER; "the CELL which points at a FLOWER is the one tilted down" (RED's rear CELL points at FLOWER 1).
+- **HIVE TIP = 20 pts** in AUTO.
+- **SWARM RP = 16 pts LEAVE + PARK**: both robots must LEAVE and PARK.
+- **G409 example D: robots driving under the HIVE are allowed.**
+- **G417:** only launching into an UP CELL may move the HIVE.
+- **G418:** FLOWER POLLEN only out of the bottom.
+
+**Field CAD (field-cad-step.step read with OCP 12 Nov; scripts in the session folder `files/hive_auto/`: `field_cad_probe.py` → `field_parts.json`, `frame_slices.py`, `flower_slices.py`):**
+- RED HIVE lowest point **30.65 in**; frame box ±24.75 × ±19.48.
+- **A-frame legs lean in:** a RED leg's inner edge is at x = −23.37 + 0.2733 h, at |y| = 18.26..19.35 − 0.4455 h.
+- Floor feet / foot bars: x −24.75..−22.75, |y| ≤ 19.5, 2.15 in tall. Under-tile bars sit below the tiles. Between the legs it is open.
+- FLOWER 1 at robot heights: x −26.4..−20.4, y 65.6..70.6, lower-ring front face y 65.65.
+
+**Robot height profile (Fusion, box-based):**
+- Wheels 4.3 in at |x| > 7.5 in from the centre; end caps 8.0 in.
+- Control Hub plate 11.5 in; camera cradle 12.8 in; Expansion Hub 13.8 in; **PPE7 cover 14.25 in** (right side, 3.4..5.7 in from the centre).
+- The planner models the robot as two boxes: the full footprint up to 8.0 in, the middle ±5.7 in up to 14.25 in.
+
+**Plan and geometry (RED frame):**
+- **Lane under the HIVE x −10.4.** Low body 1.8 in from the legs (model; 2.8 in at wheel height), 0.9 in from the middle line. Heading exactly 90° under the HIVE: 3° of turn put a corner 1.5 in from a leg.
+- **Far spot (−10.4, 56.5, 90°).** The mirror of the near spot (−12.7, 59.5) would hit FLOWER 1. The shot line is 2.3 in right of the CELL centre. The far CELL centre is assumed at the mirror of the near one (y +10.85).
+- **Park from the far spot:** BACK OFF to y 52, then **PARK A straight across facing the REAR wall** (square robot = same footprint), 2.9 s. Slot B takes 5 s.
+- **HivePlanner.park from anywhere:** OUT FROM UNDER along the lane, FLOWER OUT, BACK OFF near FLOWER 1, AWAY FROM HIVE before AutoPlanner.park's turn.
+
+**Timing:**
+- Near-CELL aim 1.5 s (BioBuzz AUTO 3.5 s). The camera saw the CELL from the wall spot in only 1 of 8 runs on 9 Nov, otherwise it waited out the timeout; on 9 Nov the pre-loads were done at 7.1–9.7 s.
+- Adaptive GARDEN corner time 1–2 s (`gardenDwellEnd`; BioBuzz AUTO 4 s). Park-by default 27 s.
+- **Timeline (model):** slot A typical: pre-loads 6.1 s, GARDEN 14.0, far spot 21.3, **3.3 s feed (~4 balls)**, parked 29.0. Slow: 1.2 s feed. With a 4 s corner: no far shot. Slot B: 1.7 s or none.
+
+**G417 logic:**
+- Per-CELL camera tracking: UP ≥ 45 in, DOWN < 38 in, in between = not sure; 3 fresh frames in a row, ≤ 0.3–0.5 s old.
+- **Seesaw rule:** a CELL is DOWN when it is confirmed down OR its other end is confirmed up (`cellState`).
+- TIPPED = near DOWN or far UP. NOT TIPPED = near UP or far DOWN ≥ 1 s after the last pre-load → plan B: back to the near CELL, camera must confirm UP.
+- Far volley: UP → fire. Not seen → blind only with **"blind far shot"** (INIT Circle, **ON by default per the coach**) and TIPPED or 4 pre-loads counted. Never when NOT TIPPED. OFF = camera only, even after a seen TIP.
+- Every volley stops at once when its CELL is going down. A TIP seen mid pre-loads stops them; the rest go to the far CELL (GARDEN skipped).
+- **Review concern kept on purpose:** 4 counted launches ≠ a TIP. If the pre-loads miss, a blind far volley is a G417 MAJOR FOUL. AUTO_HIVE.md tells the team to decide before matches and to switch it OFF if the partner shoots our HIVE.
+
+**G407:**
+- Any GARDEN attempt counts as "may hold balls".
+- The intake is off under the HIVE and on plan B's way back.
+- The FLOWER only runs when a volley has proved the robot empty (4 counted or 12 pockets).
+
+**FLOWER (3.5):**
+- Line-up on row y 51.4; arm down while stopped; creep at 0.15 with the intake on to the stock stop y 57.44 (`FLOWER_STOP_Y`, CALIBRATE); dwell up to 3 s (ends in time to fire from the far spot when that fits); arm up 0.4 s; back out. Every phase ends 0.4 s before the park start.
+- After the far shot it almost never has time. With the GARDEN OFF (INIT Triangle) FLOWER 1 becomes the ball source.
+
+**Rubber-duck review:**
+- First verdict "not ready" for 5 issues:
+  1. Far volley didn't stop on TIP 2.
+  2. Blind trust 4.
+  3. 46 vs 45 threshold and stale frames.
+  4. G407 after a cut-short GARDEN; plan B intake.
+  5. FLOWER park time; timeline missing the TIP watch.
+- All fixed except the blind shot, which stays the coach's call.
+- Re-review: 3 more issues, all fixed in `9a0e381`:
+  - the seesaw rule;
+  - switch OFF must also disable blind fire after a seen TIP;
+  - FLOWER dwell vs firing time.
+- Final check: see the backlog entry.
+
 ## 9. Driver Hub freezes (REV support case, 2026-11-02)
 
 - **Symptom:** the Driver Hub becomes unresponsive and needs a restart. This happened during the 1 Nov competition match.
@@ -619,6 +697,14 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - `measureMinimumDistance` needs root-context proxies (`body.createForAssemblyContext(occ)`).
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
+- [ ] **HIVE AUTO (branch `auto-hive`, §8c): first field test.** Not installed, robot off overnight.
+  - Pushed `9a0e381`; final rubber-duck verdict: **ready for a controlled live-ball practice test** (accepting the documented blind-shot risk).
+  - APK built at 23:25 in `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `f85c4f7e…`.
+  - **Install `auto-hive`.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
+  - Dry run first, no balls: watch the lane under the HIVE (1.5–2 in to the legs, never past the middle line).
+  - Then 3–5 full runs. Note whether TIP 1 happens, how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
+  - Pull `hiveauto_*.csv`: measure a DOWN CELL's `height_in` to calibrate the 38/45 bands.
+  - **Decide "blind far shot" (INIT Circle) for matches.**
 - [ ] **Install `master` = `auto-work` `81c1f31` and test the GARDEN corner + the IMU** (not installed yet; the robot runs `c5edfc1`).
   - **`81c1f31` (12 Nov, user: "I also moved the control hub to side, there was an env update needed?"):** `BioBuzzConstants.HUBS_ON_EDGE = true` (IMU: logo LEFT, USB FORWARD).
     - Both mountings stand the hub upright with the same hub axis up (logo × USB points down in both), so they differ by a fixed yaw offset only. All code uses heading changes (`imuAtInit`, `imuHeading0`, `resetYaw`, FieldHeading offsets) and nothing reads pitch/roll, so the old setting did not break driving.
