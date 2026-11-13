@@ -586,6 +586,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - **BallCounter runs on the feeder's clock** (`VolleyGate.feederTime`): a dip while the windmill waits for the camera can't count (G407); the pocket's own ball still counts once.
   - `FIRE done` says how the volley ended (incl. "cut by the PARK TIME"); the wait time includes a wait still going on.
   - 236 tests (HivePlannerTest 19, VolleyGateTest 8).
+- `d010203` (13 Nov): fix for the **code-review agent's** finding on `6c947c9` (verdict: **no blocking issues, "ready for a controlled live-ball practice test"**; checked the frozen-feeder hand-off, heading units/wrap, BLUE mirroring, null pointers, log formats). The one should-fix: `aim()` stopped after 3 lined-up frames that need not be in a row, while the decision right after needs the CELL confirmed (3 in a row), so one frame without the CELL left a lined-up UP CELL "seen but not sure" and skipped the far volley/FLOWER/plan B. Now the aim ends only when lined up AND the CELL is confirmed UP (or at its end time); a CELL confirmed DOWN ends it at once. Also applies to the pre-load aim (1.5 s cap).
+- Follow-up reviews of `6c947c9..d010203` by both agents were requested at ~11:05.
 - New files only; **BioBuzz AUTO / AutoPlanner / AutoField / HiveVision are unchanged**.
 - Op modes **BioBuzz HIVE AUTO RED/BLUE**: `auto/BioBuzzHiveAutoBase.java` (a copy of BioBuzzPedroAutoBase with the new plan), `HivePlanner`, `HiveAutoField`, `VolleyGate`, `biobuzz/HiveCells.java`, `HivePlannerTest`, `VolleyGateTest`.
 - Log: `hiveauto_*.csv`, with a `tip` column.
@@ -732,8 +734,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
 - [ ] **HIVE AUTO (branch `auto-hive`, §8c): finish the review round, then the first field test.** Not installed (the robot runs `c5edfc1`).
-  - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Two reviews of `9a0e381..6c947c9` were started: rubber-duck `392ef012…` finished (no blocking issues; its should-fix items are fixed in **`4116bd8`, pushed**, 236 tests); code-review agent `27d9c73e…` was still running (the laptop slept). **Next: read its results, fix, rebuild, push, report to the user.**
-  - APK for `4116bd8`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `1c72baad…`.
+  - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Both reviews of it found no blocking issues; their should-fix items are fixed in **`4116bd8`** (rubber-duck) and **`d010203`** (code-review), both pushed, 236 tests. **Next: the follow-up reviews of `6c947c9..d010203`; fix anything, push, report to the user.**
+  - APK for `d010203`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `e3e12345…`.
   - **Install `auto-hive` after the reviews.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
   - Dry run first, no balls: watch the lane under the HIVE (~1.8 in to the legs, never past the middle line) and the ~3° turn on the spot at the far spot.
   - Then 3–5 full runs in good light. Note whether TIP 1 happens (and whether before the 4th pre-load: G417 risk, user decision A), how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
