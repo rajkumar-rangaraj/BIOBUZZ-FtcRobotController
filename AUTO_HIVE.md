@@ -30,7 +30,7 @@ Op modes **BioBuzz HIVE AUTO RED** and **BioBuzz HIVE AUTO BLUE** (branch `auto-
 **It is very tight.** It only works well with:
 - **slot A**: about 3 s to park from the far spot, against 5 s to slot B.
 - **a short corner time**: at least 1 s, at most 2 s (BioBuzz AUTO uses 4 s). The robot cuts it short by itself when the far CELL needs the time.
-- **a quick pre-load aim**: the aim stops as soon as the robot is lined up. If the camera can't see the CELL, it waits at most 1.5 s, against 3.5 s in BioBuzz AUTO. (On 9 Nov in the dark garage the camera saw the CELL in only 1 of 8 runs; a lit field should be much better.)
+- **a quick pre-load aim**: the aim stops as soon as the robot is lined up and the camera has confirmed the CELL (3 frames in a row). If the camera can't see the CELL, it waits at most 1.5 s, against 3.5 s in BioBuzz AUTO. (On 9 Nov in the dark garage the camera saw the CELL in only 1 of 8 runs; a lit field should be much better.)
 
 ## Is it legal? (Competition Manual TU09, checked)
 

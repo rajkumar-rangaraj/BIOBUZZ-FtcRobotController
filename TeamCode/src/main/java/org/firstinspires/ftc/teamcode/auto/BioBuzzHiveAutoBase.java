@@ -517,7 +517,11 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         return Math.toRadians(new Pose(0, 0, redHeadingDeg).forAlliance(alliance()).headingDeg);
     }
 
-    /** Turns on the spot (Pedro hold) until the camera bearing to {@code cell} is within AIM_TOLERANCE_DEG on 3 frames. */
+    /**
+     * Turns on the spot (Pedro hold) until the camera bearing to {@code cell} is within AIM_TOLERANCE_DEG on 3 frames and
+     * the camera has confirmed the CELL UP (CELL_FRAMES frames in a row), so the decision after the aim never finds a
+     * lined-up CELL "not sure" because one frame in between missed it; a CELL confirmed DOWN ends it at once.
+     */
     private AimResult aim(double endSec, HiveVision.Cell cell) {
         return aim(endSec, cell, Double.NaN, Double.NaN, Double.NaN);
     }
@@ -552,10 +556,7 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                     r.lastSec = now();
                     double headingErr = AutoField.normalizeDeg(Math.toDegrees(follower.pose().heading() - targetHeading));
                     if (Math.abs(t.bearingDeg) <= AIM_TOLERANCE_DEG) {
-                        if (++settled >= 3) {
-                            r.settled = true;
-                            break;
-                        }
+                        settled++;
                     } else {
                         settled = 0;
                         if (Math.abs(headingErr) < AIM_TOLERANCE_DEG) {   // only re-aim on frames taken after the last turn
@@ -571,6 +572,11 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                             follower.hold(spot.withHeading(targetHeading));
                         }
                     }
+                    r.settled = settled >= 3;
+                }
+                int state = cellState(cell, CELL_FRESH_SEC);
+                if (state < 0 || (r.settled && state > 0)) {
+                    break;                                      // DOWN: nothing to aim at; UP: lined up and confirmed
                 }
             }
             loopTick();
