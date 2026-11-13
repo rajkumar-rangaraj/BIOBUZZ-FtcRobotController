@@ -580,6 +580,12 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - S1 only;
   - blind far shot = practice only.
   - 233 tests (HivePlannerTest 17, VolleyGateTest 7).
+- `4116bd8` (13 Nov, while the user was out): fixes for the rubber-duck review of `6c947c9` (verdict: **no blocking issues**, "ready for a controlled live-ball practice test after the documented dry run confirms clearance and no `AIM LIMIT`"; 3 should-fix + 1 minor, all done):
+  - **far aim limits from where Pedro really stopped** (`HivePlanner.farAimLimits`, as-built geometry moved into `HivePlanner.asBuiltClearances`): ±2.5° around 87.25°, cut so every heading on the way, +1° of Pedro error, keeps 0.4 in to the wall / FLOWER 1 / middle line, or never closer than it already is; within 0.1 in already = no turn (`AIM BLOCKED`). Every stop up to 0.75 in sideways, 1 in long/short and 1° turned can still turn, first aim ≤ 1.7° off the plan.
+  - `aim()` returns an `AimResult`; the far volley and plan B fire only when **lined up** (settled, or the last fresh frame within `AIM_FIRE_TOLERANCE_DEG` 2.0 = TeleOp's aim gate). INIT warns when the aim trim is over 2.5°.
+  - **BallCounter runs on the feeder's clock** (`VolleyGate.feederTime`): a dip while the windmill waits for the camera can't count (G407); the pocket's own ball still counts once.
+  - `FIRE done` says how the volley ended (incl. "cut by the PARK TIME"); the wait time includes a wait still going on.
+  - 236 tests (HivePlannerTest 19, VolleyGateTest 8).
 - New files only; **BioBuzz AUTO / AutoPlanner / AutoField / HiveVision are unchanged**.
 - Op modes **BioBuzz HIVE AUTO RED/BLUE**: `auto/BioBuzzHiveAutoBase.java` (a copy of BioBuzzPedroAutoBase with the new plan), `HivePlanner`, `HiveAutoField`, `VolleyGate`, `biobuzz/HiveCells.java`, `HivePlannerTest`, `VolleyGateTest`.
 - Log: `hiveauto_*.csv`, with a `tip` column.
@@ -616,7 +622,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - **Far spot (−10.4, 58.0, arrive at 90°)**, the real mirror of the near spot:
   - The intake is 2 in off the REAR wall as built.
   - The camera is 41.3 in from the far sticker (near spot 41.2 in), so it gets the same view. At 56.5 the sticker would leave the top of the picture.
-  - **The far aim turns on the spot to `FAR_AIM_HEADING` 87.25°**: the centre line (camera + launcher) through the far CELL opening (HiveVision's bearing is to the opening). The camera trim is then limited to **±2.5°** (`FAR_AIM_MAX_TURN_DEG`, log `AIM LIMIT`).
+  - **The far aim turns on the spot to `FAR_AIM_HEADING` 87.25°**: the centre line (camera + launcher) through the far CELL opening (HiveVision's bearing is to the opening). The camera trim is then limited to **±2.5°** (`FAR_AIM_MAX_TURN_DEG`, log `AIM LIMIT`), cut further where Pedro really stopped (`farAimLimits`, `4116bd8`).
   - As built, the robot is 0.4 in clear of the REAR wall, FLOWER 1's CAD box and the middle line from **83.2° to 94.35°**. The test also covers ±1° of Pedro error around 90 and around 87.25 ± 2.5. At 90° / 87.25°: wall 1.98 / 1.56 in, middle 1.50 / 1.04 in, FLOWER 1 1.12 / 1.44 in.
   - A two-leg route that turned on the way (stop at y 32) cost 0.4 s and lost the slow-case far shot, so the turn is done on the spot instead.
 - **Park from the far spot:** BACK OFF to y 52, then **PARK A straight across facing the REAR wall**, 3.0 s. The rear slot A is at y 48.0 (`REAR_SLOT_A_Y`), 4.9 in inside the zone as built (at 49.6 the short back left only 3.3 in). Slot B takes 5 s.
@@ -634,7 +640,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - **Pre-loads: always all 4.** The design review (13 Nov) flagged that the HIVE can tip before the 4th ball and the rest then go into a CELL going down. I offered A (keep all 4) or B (stop on a TIP). The user first said B, then: *"no, in that case we won't be able to get 4 from garden and aim at the hive. Its fine to aim 4 at first shot. Later we will enhance"* → **A**. Documented as a known G417 risk; the near spot can't see a TIP anyway (the stickers turn away). Only a TIP confirmed before the first ball keeps them for the far CELL.
 - TIP watch ≤ 1.2 s: NOT TIPPED (near still UP or far still DOWN ≥ 1 s after the last pre-load) → plan B, back to the near CELL with camera confirmation. Stickers gone → UNKNOWN → far CELL.
 - **Far volley:**
-  - Camera confirms UP → fire (evidence TARGET_UP). Not seen, but the near CELL is confirmed DOWN from the far spot right now → fire on the planned heading (evidence OTHER_END_DOWN).
+  - Camera confirms UP and the robot is lined up → fire (evidence TARGET_UP); UP but not lined up → keep. Not seen, but the near CELL is confirmed DOWN from the far spot right now → fire on the planned heading (evidence OTHER_END_DOWN).
   - DOWN or seen-but-unsure → keep.
   - Nothing in view → keep, unless **"blind far shot"** (INIT Circle, **OFF by default, PRACTICE ONLY**; INIT shows a warning line while ON) with 4 counted pre-loads.
 - **Every volley after the pre-loads is camera-gated** (`VolleyGate`, `6c947c9`; far volleys and plan B):
@@ -726,8 +732,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
 - [ ] **HIVE AUTO (branch `auto-hive`, §8c): finish the review round, then the first field test.** Not installed (the robot runs `c5edfc1`).
-  - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Two reviews of `9a0e381..6c947c9` (code-review agent `27d9c73e…`, rubber-duck `392ef012…`) were still running when the user put the laptop to sleep to go out. **On return: read their results (or rerun both), fix the findings, rebuild, push, then report to the user.**
-  - APK for `6c947c9`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `051843c2…`.
+  - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Two reviews of `9a0e381..6c947c9` were started: rubber-duck `392ef012…` finished (no blocking issues; its should-fix items are fixed in **`4116bd8`, pushed**, 236 tests); code-review agent `27d9c73e…` was still running (the laptop slept). **Next: read its results, fix, rebuild, push, report to the user.**
+  - APK for `4116bd8`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `1c72baad…`.
   - **Install `auto-hive` after the reviews.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
   - Dry run first, no balls: watch the lane under the HIVE (~1.8 in to the legs, never past the middle line) and the ~3° turn on the spot at the far spot.
   - Then 3–5 full runs in good light. Note whether TIP 1 happens (and whether before the 4th pre-load: G417 risk, user decision A), how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
