@@ -42,6 +42,7 @@ Op modes **BioBuzz HIVE AUTO RED** and **BioBuzz HIVE AUTO BLUE** (branch `auto-
 
 The camera watches **both CELLs of our HIVE** whenever it sees one.
 - **Its verdict:** UP at 45 in or higher, DOWN below 38 in, anything in between is "not sure" and decides nothing. A verdict counts only after **3 fresh frames in a row** agree. (An UP CELL read 45.5–46.3 in on 9 Nov; a DOWN one has never been measured: the log's `height_in` column will tell.)
+- **The HIVE is a seesaw:** a CELL counts as down when it reads down *or* its other end reads up.
 - Near CELL confirmed down, or far CELL confirmed up = **TIPPED**.
 - Near CELL still up, or far CELL still down, 1 s after the last pre-load = **NOT TIPPED**.
 
@@ -50,15 +51,15 @@ What the robot does:
 2. **NOT TIPPED** → it takes the GARDEN POLLEN back to the near CELL instead, and fires only if the camera confirms that CELL up.
 3. **Far CELL**:
    - Confirmed **up**: aims and fires.
-   - Confirmed **down**, or seen but not sure: keeps the POLLEN.
-   - Not seen at all: fires straight down the lane only if the TIP was seen, or **"trust 4"** is ON (Circle, ON by default) and all 4 pre-loads were counted leaving the robot. Never when NOT TIPPED was seen.
+   - **Down** (or the near CELL confirmed up), or seen but not sure: keeps the POLLEN.
+   - Not seen at all: fires straight down the lane only if **"blind far shot"** is ON (Circle, ON by default) **and** the TIP was seen or all 4 pre-loads were counted leaving the robot. Never when NOT TIPPED was seen. With the switch OFF, every far shot needs the camera.
 4. **Every volley stops at once** when the camera confirms its CELL going down. That covers TIP 2 in the middle of the far volley.
 5. **After the FLOWER** (if it ever has time): it fires at the far CELL again only if the camera confirms it up.
 
-**"Trust 4" before matches: decide.** 4 counted launches mean 4 balls left the robot, not that they went in. If the pre-loads miss and the HIVE did not tip, the far CELL is down, and a blind far volley is a **G417 MAJOR FOUL**.
-- The camera rarely sees the CELLs from the wall spots, so with trust 4 **OFF** the far shot will mostly not fire.
+**"Blind far shot" before matches: decide.** 4 counted launches mean 4 balls left the robot, not that they went in. If the pre-loads miss and the HIVE did not tip, the far CELL is down, and a blind far volley is a **G417 MAJOR FOUL**.
+- The camera rarely sees the CELLs from the wall spots, so with the switch **OFF** the far shot will mostly not fire.
 - **ON is right for testing the plan.** For matches, keep it ON only if our pre-loads tip the HIVE nearly every time.
-- **Also turn it OFF if our partner shoots into our HIVE in AUTO.** They could tip it back before we get there.
+- **Turn it OFF if our partner shoots into our HIVE in AUTO.** They could tip it back before we get there. OFF means no blind shot at all.
 
 ## Things to know
 
@@ -72,7 +73,7 @@ What the robot does:
 
 1. **Start:** we use S1 (in front of our up CELL).
 2. **Parking:** we park in **A** (corner end), they park in **B**. Tell them to stay close to the wall at their end.
-3. **Our HIVE:** we tip it with the pre-loads and shoot its other end at ~21–26 s. If they also shoot at our HIVE in AUTO, turn **trust 4 OFF**.
+3. **Our HIVE:** we tip it with the pre-loads and shoot its other end at ~21–26 s. If they also shoot at our HIVE in AUTO, turn **blind far shot OFF**.
 4. **Lanes:** we drive under our HIVE (middle of the field) and across the REAR end to slot A at the end of AUTO.
 
 ## INIT buttons (gamepad 1)
@@ -83,7 +84,7 @@ What the robot does:
 | Square / X | Park slot A / B (**A** is the default here) |
 | Cross / A | Shoot the pre-loads ON / OFF |
 | Triangle / Y | GARDEN ON / OFF (OFF + FLOWER ON = balls from FLOWER 1 instead) |
-| Circle / B | **Trust 4**: far shot without the camera when all 4 pre-loads were counted. ON / OFF |
+| Circle / B | **Blind far shot**: the far CELL without the camera, after a seen TIP or 4 counted pre-loads. ON / OFF (OFF = camera only) |
 | R3 (right stick press) | FLOWER 1 (3.5) ON / OFF |
 | D-pad ↑ / ↓ | Start delay |
 | LB / RB | Park by (default **27 s**; BioBuzz AUTO 24 s) |
