@@ -587,7 +587,11 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - `FIRE done` says how the volley ended (incl. "cut by the PARK TIME"); the wait time includes a wait still going on.
   - 236 tests (HivePlannerTest 19, VolleyGateTest 8).
 - `d010203` (13 Nov): fix for the **code-review agent's** finding on `6c947c9` (verdict: **no blocking issues, "ready for a controlled live-ball practice test"**; checked the frozen-feeder hand-off, heading units/wrap, BLUE mirroring, null pointers, log formats). The one should-fix: `aim()` stopped after 3 lined-up frames that need not be in a row, while the decision right after needs the CELL confirmed (3 in a row), so one frame without the CELL left a lined-up UP CELL "seen but not sure" and skipped the far volley/FLOWER/plan B. Now the aim ends only when lined up AND the CELL is confirmed UP (or at its end time); a CELL confirmed DOWN ends it at once. Also applies to the pre-load aim (1.5 s cap).
-- Follow-up reviews of `6c947c9..d010203` by both agents were requested at ~11:05.
+- Follow-up reviews of `6c947c9..d010203` (both agents): **no blocking issues, both "ready for a controlled live-ball practice test"**. Code-review checked the aim break, `linedUp`, limits/wrap/BLUE (`pedroHeading` gives 84.75..89.75 RED, −95.25..−90.25 BLUE), the AIM BLOCKED path, feeder-clock counter and log formats. Expected in practice: Pedro stopping more than ~0.65 in toward the middle line → "not lined up" (POLLEN kept); ~0.9 in → AIM BLOCKED. If frequent, move `HIVE_LANE_X`.
+- `9f6bd46` (13 Nov): follow-up fixes:
+  - rubber-duck should-fix: the far planned heading = `FAR_AIM_HEADING + aim trim` (+ = shots left), clamped to the limits. The not-in-view paths (near CELL DOWN, practice blind shot) fire only within 2° of it (`heldOffDeg`).
+  - code-review notes: counter comment (a real ball whose whole dip falls in a wait isn't counted either: the safe side); "4 balls counted" needs the pocket done; INIT trim warning says "may be kept".
+  - 236 tests. Quick re-check by both agents requested.
 - New files only; **BioBuzz AUTO / AutoPlanner / AutoField / HiveVision are unchanged**.
 - Op modes **BioBuzz HIVE AUTO RED/BLUE**: `auto/BioBuzzHiveAutoBase.java` (a copy of BioBuzzPedroAutoBase with the new plan), `HivePlanner`, `HiveAutoField`, `VolleyGate`, `biobuzz/HiveCells.java`, `HivePlannerTest`, `VolleyGateTest`.
 - Log: `hiveauto_*.csv`, with a `tip` column.
@@ -734,8 +738,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
 - [ ] **HIVE AUTO (branch `auto-hive`, §8c): finish the review round, then the first field test.** Not installed (the robot runs `c5edfc1`).
-  - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Both reviews of it found no blocking issues; their should-fix items are fixed in **`4116bd8`** (rubber-duck) and **`d010203`** (code-review), both pushed, 236 tests. **Next: the follow-up reviews of `6c947c9..d010203`; fix anything, push, report to the user.**
-  - APK for `d010203`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `e3e12345…`.
+  - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Both reviews of it found no blocking issues; their should-fix items are fixed in **`4116bd8`** (rubber-duck) and **`d010203`** (code-review); the follow-up reviews' items in **`9f6bd46`**. All pushed, 236 tests.
+  - APK for `9f6bd46`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `0474f31c…`.
   - **Install `auto-hive` after the reviews.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
   - Dry run first, no balls: watch the lane under the HIVE (~1.8 in to the legs, never past the middle line) and the ~3° turn on the spot at the far spot.
   - Then 3–5 full runs in good light. Note whether TIP 1 happens (and whether before the 4th pre-load: G417 risk, user decision A), how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
