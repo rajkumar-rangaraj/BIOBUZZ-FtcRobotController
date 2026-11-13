@@ -15,9 +15,12 @@ import java.util.List;
 
 public class HivePlannerTest {
 
-    /** Pre-load volley after reaching the spot: aim 1.5 + settle 0.5 + 4 balls (9 Nov logs: 2.3-4.8 s, median ~3.2). */
-    private static final double NEAR_FIRE_TYPICAL = 1.5 + 0.5 + 3.3;
-    private static final double NEAR_FIRE_SLOW = 1.5 + 0.5 + 5.0;
+    /**
+     * Pre-load volley after reaching the spot: aim 1.5 + settle 0.5 + 4 balls (9 Nov logs: 2.3-4.8 s, median ~3.2) + the
+     * TIP watch (0.25 s when the camera sees nothing, up to 1.2 s while it sees our HIVE).
+     */
+    private static final double NEAR_FIRE_TYPICAL = 1.5 + 0.5 + 3.3 + 0.25;
+    private static final double NEAR_FIRE_SLOW = 1.5 + 0.5 + 5.0 + 1.2;
     private static final double GARDEN_DWELL = BioBuzzHiveAutoBase.GARDEN_DWELL_SEC;
     private static final double FAR_AIM_SETTLE = BioBuzzHiveAutoBase.FAR_AIM_SEC + 0.5;
 
@@ -98,6 +101,9 @@ public class HivePlannerTest {
         List<AutoPlanner.Leg> legs = HivePlanner.underHive(GARDEN_END);
         for (AutoPlanner.Leg l : legs) {
             assertEquals(l.label, AutoPlanner.Action.DRIVE, l.action);
+        }
+        for (AutoPlanner.Leg l : HivePlanner.gardenToNearShot()) {
+            assertEquals("plan B, G407: " + l.label, AutoPlanner.Action.DRIVE, l.action);
         }
         Pose entry = legs.get(0).to;
         assertEquals(-HIVE_CLEAR_Y, entry.y, 1e-9);

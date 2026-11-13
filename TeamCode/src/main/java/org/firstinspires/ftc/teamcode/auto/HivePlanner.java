@@ -65,9 +65,13 @@ public final class HivePlanner {
         return AutoPlanner.gardenWiggle();
     }
 
-    /** Plan B (the HIVE did not tip): back to the near spot, as AutoPlanner's stretch. */
+    /**
+     * Plan B (the HIVE did not tip): back to the near spot, as AutoPlanner's stretch but with the intake OFF (the robot
+     * may already hold 4: G407).
+     */
     public static List<Leg> gardenToNearShot() {
-        return AutoPlanner.gardenToShot();
+        return Arrays.asList(new Leg("BACK TURN", GARDEN_TURN, AutoPlanner.SPEED_TRANSIT, Action.DRIVE),
+                new Leg("SHOT SPOT", SHOT, AutoPlanner.SPEED_SHOT, Action.DRIVE));
     }
 
     /**

@@ -407,6 +407,7 @@ Aiming uses the SDK 12 BIOBUZZ tag clusters, so the robot aims at the centre of 
 | Op mode | What it does |
 |---|---|
 | `BioBuzz AUTO RED` / `BioBuzz AUTO BLUE` | LEAVE, launch the 4 preloads into our upward CELL, then AUTO PARK in our LOADING ZONE. Selects `BioBuzz TeleOp` afterwards. |
+| `BioBuzz HIVE AUTO RED` / `BLUE` | **Test version** (branch `auto-hive`, `AUTO_HIVE.md`): pre-loads into our up CELL, GARDEN, then under our HIVE to its other end and fire into the CELL that came up, PARK in slot A. |
 | `BioBuzz TeleOp` | Competition driver control, one gamepad (controls listed at the top of `BioBuzzTeleOp.java`) |
 | `BioBuzz Arm Setup` | Guided flower-arm setup, one step per screen: fit the arm level, move it down onto the pads, test up/down, press X to save. Saved on the Control Hub (`/sdcard/biobuzz_arm.txt`), so no code change or re-deploy is needed |
 | `BioBuzz Pinpoint Setup` | Robot on the floor: it drives forward, slides left and spins 2 turns by itself. Finds which pod is which, their directions and their positions, and saves them on the Control Hub (`/sdcard/biobuzz_pinpoint.txt`). Run it after mounting or moving the pods |
