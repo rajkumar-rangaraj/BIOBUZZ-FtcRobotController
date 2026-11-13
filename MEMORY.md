@@ -591,7 +591,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 - `9f6bd46` (13 Nov): follow-up fixes:
   - rubber-duck should-fix: the far planned heading = `FAR_AIM_HEADING + aim trim` (+ = shots left), clamped to the limits. The not-in-view paths (near CELL DOWN, practice blind shot) fire only within 2° of it (`heldOffDeg`).
   - code-review notes: counter comment (a real ball whose whole dip falls in a wait isn't counted either: the safe side); "4 balls counted" needs the pocket done; INIT trim warning says "may be kept".
-  - 236 tests. Quick re-check by both agents requested.
+  - 236 tests. Re-checked by both agents: **no findings, both "ready for a controlled live-ball practice test"** (trim sign, BLUE turn, `heldOffDeg` in both branches, precedence and log formats confirmed). **Review round closed.**
 - New files only; **BioBuzz AUTO / AutoPlanner / AutoField / HiveVision are unchanged**.
 - Op modes **BioBuzz HIVE AUTO RED/BLUE**: `auto/BioBuzzHiveAutoBase.java` (a copy of BioBuzzPedroAutoBase with the new plan), `HivePlanner`, `HiveAutoField`, `VolleyGate`, `biobuzz/HiveCells.java`, `HivePlannerTest`, `VolleyGateTest`.
 - Log: `hiveauto_*.csv`, with a `tip` column.
@@ -737,10 +737,10 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - `measureMinimumDistance` needs root-context proxies (`body.createForAssemblyContext(occ)`).
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
-- [ ] **HIVE AUTO (branch `auto-hive`, §8c): finish the review round, then the first field test.** Not installed (the robot runs `c5edfc1`).
+- [ ] **HIVE AUTO (branch `auto-hive`, §8c): first field test. Reviews closed 13 Nov (both agents: ready for a controlled live-ball practice test).** Not installed (the robot runs `c5edfc1`).
   - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Both reviews of it found no blocking issues; their should-fix items are fixed in **`4116bd8`** (rubber-duck) and **`d010203`** (code-review); the follow-up reviews' items in **`9f6bd46`**. All pushed, 236 tests.
   - APK for `9f6bd46`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `0474f31c…`.
-  - **Install `auto-hive` after the reviews.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
+  - **Install `auto-hive` `9f6bd46`.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
   - Dry run first, no balls: watch the lane under the HIVE (~1.8 in to the legs, never past the middle line) and the ~3° turn on the spot at the far spot.
   - Then 3–5 full runs in good light. Note whether TIP 1 happens (and whether before the 4th pre-load: G417 risk, user decision A), how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
   - Pull `hiveauto_*.csv`: check `height_in` (UP ≈ 46, DOWN ≈ 32; bands 42 / 37) and the `AIM LIMIT`, `WAIT` / `GO ON` and `STOPPED` events.
