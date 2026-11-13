@@ -362,7 +362,9 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - **Limits:**
       - The robot is 452 mm long (intake y −260 to rear channel y 192; 18 in = 457.2, **R102**), so a bumper can't go behind it.
       - A recessed switch at the rear centre hits the hood (10 mm in already does).
-    - **Manual (2026-27 BIOBUZZ, TU08):**
+    - **Manual (2026-27 BIOBUZZ, TU08; TU09 published 12 Nov 2026 ~16:03 PST, `ftc.game/manual` → `ftc-resources.firstinspires.org/ftc/game/manual`, R102/R105 unchanged):**
+      - **R102** (p. 122): STARTING CONFIGURATION = 18 in wide × 18 in long × 18 in **high** (the manual writes 45.70 cm), all parts stationary; pre-loaded scoring elements may stick out. **R105** (p. 123): after the start, up to 18 × 24 × **29 in tall** (height above the FIELD surface), physically limited (not by software).
+      - **Height check 12 Nov (user: "is the raised Expansion Hub still allowed?"):** floor = z −55 (lowest mecanum roller). The old top was the camera cradle, z 269.6 = 324.6 mm (12.8 in). Expansion Hub top (v3) z 295.5 = **350.5 mm (13.8 in)**; v4 cover roof z 307 = **362 mm (14.25 in)**: 95–106 mm under 18 in. The hub/cover don't change the width or length (82 mm inside the wheels, back y 191).
       - **R603**: the main switch must be accessible, away from high-speed parts and pinch hazards. It "should be ... protected from ROBOT-to-ROBOT contact", and may be behind removable panels.
       - The damage rule (p. 113–114): an opponent turning off an exposed switch is our problem; doing it to a "reasonably well-protected" switch counts against them.
       - **R606**: the Control Hub lights only need to be showable at inspection; visible in matches is strongly encouraged.
