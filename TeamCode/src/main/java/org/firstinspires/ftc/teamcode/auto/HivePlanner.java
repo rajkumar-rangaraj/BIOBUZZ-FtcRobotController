@@ -130,12 +130,13 @@ public final class HivePlanner {
     }
 
     /**
-     * Park pose for the HIVE AUTO from the REAR side: the slot's place facing the REAR wall (the robot is square, so the
-     * footprint is the same as AutoField.slot()'s; no 90 deg turn next to FLOWER 1).
+     * Park pose for the HIVE AUTO from the REAR side: slot A's place facing the REAR wall (the robot is square, so the
+     * footprint is AutoField.slot()'s; no 90 deg turn next to FLOWER 1), at REAR_SLOT_A_Y (the as-built robot's short
+     * back faces the LOADING ZONE).
      */
     public static Pose rearSlot(Slot slot) {
         Pose s = AutoField.slot(slot);
-        return new Pose(s.x, s.y, FACE_REAR);
+        return new Pose(s.x, slot == Slot.A ? REAR_SLOT_A_Y : s.y, FACE_REAR);
     }
 
     /**
@@ -177,8 +178,8 @@ public final class HivePlanner {
         if (slot == Slot.A && p.y >= HIVE_CLEAR_Y - 0.5 && (p.x > AutoField.LANE_X + 0.5 || rearFacing)) {
             // REAR side: up to slot A's row, then straight across facing the REAR wall (never beside slot B, and no
             // turn on the spot next to the wall)
-            if (p.y < SLOT_A_Y - 0.5) {
-                p = new Pose(p.x, SLOT_A_Y, p.headingDeg);
+            if (p.y < REAR_SLOT_A_Y - 0.5) {
+                p = new Pose(p.x, REAR_SLOT_A_Y, p.headingDeg);
                 legs.add(new Leg("TO REAR ROW", p, AutoPlanner.SPEED_PARK, Action.DRIVE));
             }
             legs.add(new Leg("PARK A", rearSlot(Slot.A), AutoPlanner.SPEED_PARK, Action.DRIVE));
@@ -241,11 +242,10 @@ public final class HivePlanner {
             return frame;
         }
         for (FieldMap.Place f : FieldMap.Place.values()) {
-            if (atFlower && f == FieldMap.Place.FLOWER_1) {
+            if (!f.label.startsWith("Flower") || (atFlower && f == FieldMap.Place.FLOWER_1)) {
                 continue;
             }
-            if (f.label.startsWith("Flower")
-                    && AutoPlanner.distanceToRobot(p, f.x, f.y) < FLOWER_RADIUS_IN + AutoPlanner.FLOWER_MARGIN_IN) {
+            if (hitsFlower(c, f)) {
                 return "hits " + f.label + " at " + p;
             }
         }
@@ -257,6 +257,21 @@ public final class HivePlanner {
             }
         }
         return null;
+    }
+
+    /**
+     * A FLOWER's CAD footprint at robot heights (rings and pipes: FLOWER_HALF_WIDTH_IN either side along its wall,
+     * FLOWER_DEPTH_IN out from it) plus FLOWER_MARGIN_IN. AutoPlanner's 3.7 in circle is bigger than the FLOWER and
+     * would block the far shot spot, 1.3 in beside FLOWER 1.
+     */
+    static boolean hitsFlower(double[][] corners, FieldMap.Place f) {
+        double m = AutoPlanner.FLOWER_MARGIN_IN, out = FLOWER_DEPTH_IN / 2;
+        if (Math.abs(f.x) > Math.abs(f.y)) {                    // on the RED / BLUE wall
+            return AutoPlanner.overlapsBox(corners, Math.signum(f.x) * (WALL_IN - out), f.y, out + m,
+                    FLOWER_HALF_WIDTH_IN + m);
+        }
+        return AutoPlanner.overlapsBox(corners, f.x, Math.signum(f.y) * (WALL_IN - out), FLOWER_HALF_WIDTH_IN + m,
+                out + m);                                       // on the audience / REAR wall
     }
 
     /** The RED half of the HIVE frame (feet, low and high leg boxes, both legs), plus margin, vs the robot's body. */

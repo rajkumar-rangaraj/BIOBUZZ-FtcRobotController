@@ -17,8 +17,9 @@ import org.firstinspires.ftc.teamcode.auto.AutoField.Pose;
  *   the HIVE are allowed (manual G409 example D).
  * - Each up CELL starts with 3 NECTAR; when the HIVE TIPS, the CELL that was up spills them toward its end of the field.
  *
- * Robot (Fusion model, 12 Nov): full width up to 8.0 in tall (wheels 4.3 in at the very edge, rail end caps 8.0 in);
- * only the middle +-5.7 in is taller (camera cradle 12.8 in, hubs 13.8 in, PPE7 cover 14.25 in).
+ * Robot (Fusion model, 12-13 Nov): full width up to 8.0 in tall (wheels 4.3 in at the very edge, rail end caps 8.0 in);
+ * only the middle +-5.7 in is taller (camera cradle 12.8 in, hubs 13.8 in, PPE7 cover 14.25 in). Not centred on Pedro's
+ * pose: see ROBOT_FRONT_IN / START_OFFSET_IN.
  */
 public final class HiveAutoField {
     private HiveAutoField() {
@@ -59,15 +60,40 @@ public final class HiveAutoField {
     // ---------------- Route under the HIVE ----------------
 
     /**
-     * Lane under our HIVE: robot centre line. Our side's legs need x >= ~-11.7 (2 in clear of the low body at the end
-     * caps' height, 2.8 in at the wheels); our side ends at x 0 (G402). -10.4 leaves 1.8 in to the legs (CAD, low body
-     * model) and 0.9 in to the middle line.
+     * Lane under our HIVE: robot centre line. -10.2 balances the low body 2.0 in from the legs (model; 3.0 in at wheel
+     * height), FLOWER 1's ring 1.3 in (at the far spot) and our side's line (x 0, G402) 1.2 in.
      */
-    public static final double HIVE_LANE_X = -10.4;
+    public static final double HIVE_LANE_X = -10.2;
     /** Robot centre this far from the middle (y 0) = fully out of the frame's legs (19.5 + 9 + 3.5). */
     public static final double HIVE_CLEAR_Y = 32.0;
     /** Heading under the HIVE: intake toward the REAR wall (launcher + camera look back at the HIVE). */
     public static final double FACE_REAR = 90;
+
+    // ---------------- Robot as built (CAD, 13 Nov) vs the planner's 18 x 18 in box ----------------
+
+    /**
+     * Pedro's pose = the drivetrain centre (mecanum wheel centres at CAD y -144 / +120 mm: 12 mm ahead of the CAD
+     * origin). From there the intake front is 9.76 in, the launcher back 8.03 in, the camera lens 4.63 in back (12.2 in
+     * high, tilted up 30 deg). The planner uses 9.0 / 9.0, so with the S1 start (intake against the audience wall) the
+     * real robot is START_OFFSET_IN further toward the REAR wall than Pedro thinks, all AUTO long.
+     */
+    public static final double ROBOT_FRONT_IN = 9.76;
+    public static final double ROBOT_BACK_IN = 8.03;
+    public static final double CAMERA_BACK_IN = 4.63;
+    public static final double START_OFFSET_IN = ROBOT_FRONT_IN - HALF_LENGTH_IN;
+
+    // ---------------- CELL AprilTag stickers (CAD am-5888, RED) ----------------
+
+    /**
+     * A CELL's tag sticker (4 tags in a row, 17 x 4.3 in) is on its bottom face. Up: centre 49.67 in high, 12.89 in
+     * from the pivot (y 0) toward its own end; tipped down: 35.65 in high, 11.4 in from the pivot. The HIVE tilts 30 deg
+     * either way and BOTH stickers face the same way: down and toward the end that is up. So the audience-side spot sees
+     * our CELLs only before TIP 1, the REAR-side spot only after it (from the far spot, no tag in view in good light =
+     * most likely NOT tipped).
+     */
+    public static final double TAG_UP_HEIGHT_IN = 49.67;
+    public static final double TAG_DOWN_HEIGHT_IN = 35.65;
+    public static final double TAG_UP_Y = 12.89;
 
     // ---------------- Far CELL (the one that comes UP after the first TIP) ----------------
 
@@ -76,18 +102,22 @@ public final class HiveAutoField {
     public static final double FAR_CELL_Y = 10.85;
     /**
      * Far shot spot, in the HIVE lane, facing straight back at the far CELL (exactly the lane heading: turning even 3 deg
-     * on the way puts a corner within 1.5 in of a leg). The launcher's line passes 2.3 in from the CELL centre (opening
-     * 20 in wide). The mirror of the near shot spot (y 59.5, x -12.7) would hit FLOWER 1 (rear wall, x -26.4..-20.4,
-     * y 65.6..70.6): here the front-left corner stays 1.3 in off the planner's FLOWER circle (2 in off the CAD flower).
-     * About 3 in closer to the CELL than the near shot.
+     * on the way puts a corner within 1.5 in of a leg); the shot line passes 2.5 in from the CELL centre (opening 20 in).
+     * The real mirror of the near shot spot: with the as-built robot (START_OFFSET_IN, ROBOT_FRONT_IN) the intake ends
+     * 2 in off the REAR wall and the camera sees the far CELL's sticker from 41.2 in, exactly as the near spot sees the
+     * near one (9 Nov run 212355: seen, 46.3 in high). Closer and the sticker leaves the top of the picture. FLOWER 1
+     * (rear wall, ring x -26.4..-20.4) stays 1.3 in to the side.
      */
-    public static final double FAR_SHOT_Y = 56.5;
+    public static final double FAR_SHOT_Y = 58.0;
     public static final Pose FAR_SHOT = new Pose(HIVE_LANE_X, FAR_SHOT_Y, FACE_REAR);
-    /**
-     * Camera floor distance to the far CELL at the far shot spot when the camera can't see it (for the shot speed):
-     * the near shot spot logged 38.3-39.4 in (9 Nov), the far spot is ~3 in closer.
-     */
-    public static final double FAR_SHOT_PLANNED_FLOOR_IN = 36.0;
+    /** Camera floor distance to the far CELL at the far spot when the camera can't see it (for the shot speed). */
+    public static final double FAR_SHOT_PLANNED_FLOOR_IN = 39.0;
+
+    // ---------------- FLOWERs (CAD footprints at robot heights: lower ring, middle ring, pipes) ----------------
+
+    /** A FLOWER's footprint: CAD_HALF_WIDTH along its wall either side of its centre, CAD_DEPTH out from the wall. */
+    public static final double FLOWER_HALF_WIDTH_IN = 2.98;
+    public static final double FLOWER_DEPTH_IN = AutoField.WALL_IN - 65.63;
 
     // ---------------- FLOWER 1 (rear wall, our side): step 3.5 ----------------
 
@@ -95,10 +125,11 @@ public final class HiveAutoField {
     public static final double FLOWER_X = -23.4;
     public static final double FLOWER_RING_FRONT_Y = 65.65;
     /**
-     * Robot centre when the intake's upper Gecko row touches the FLOWER's middle-ring lip (robot_reach_probe, 18 Oct:
-     * 208.65 mm in front of the ring face): the "stock stop" the flower test kit uses. CALIBRATE on a real FLOWER.
+     * Pedro y when the intake's upper Gecko row touches the FLOWER's middle-ring lip (robot_reach_probe, 18 Oct: CAD
+     * origin 208.65 mm in front of the ring face; Pedro's centre is 12 mm ahead of it; minus START_OFFSET_IN): the "stock
+     * stop" the flower test kit uses. The creep also ends on contact. CALIBRATE on a real FLOWER.
      */
-    public static final double FLOWER_STOP_Y = FLOWER_RING_FRONT_Y - 208.65 / 25.4;
+    public static final double FLOWER_STOP_Y = FLOWER_RING_FRONT_Y - (208.65 - 12.0) / 25.4 - START_OFFSET_IN;
     /** Where the arm goes down: intake ~6 in short of the ring. */
     public static final double FLOWER_APPROACH_Y = FLOWER_STOP_Y - 6.0;
     public static final Pose FLOWER_APPROACH = new Pose(FLOWER_X, FLOWER_APPROACH_Y, FACE_REAR);
@@ -106,4 +137,10 @@ public final class HiveAutoField {
 
     /** The near CELL's spot, for reference (AutoField.SHOT). */
     public static final Pose NEAR_SHOT = SHOT;
+
+    /**
+     * Slot A facing the REAR wall (HIVE AUTO's park from the far spot): 1.6 in lower than AutoField's SLOT_A_Y so the
+     * as-built robot (short back toward the zone, START_OFFSET_IN) is still 4.9 in inside the LOADING ZONE.
+     */
+    public static final double REAR_SLOT_A_Y = SLOT_A_Y - 1.6;
 }

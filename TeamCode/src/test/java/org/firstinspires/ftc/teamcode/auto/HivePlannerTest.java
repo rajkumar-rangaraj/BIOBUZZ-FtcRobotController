@@ -16,10 +16,11 @@ import java.util.List;
 public class HivePlannerTest {
 
     /**
-     * Pre-load volley after reaching the spot: aim 1.5 + settle 0.5 + 4 balls (9 Nov logs: 2.3-4.8 s, median ~3.2) + the
-     * TIP watch (0.25 s when the camera sees nothing, up to 1.2 s while it sees our HIVE).
+     * Pre-load volley after reaching the spot (lit field: the camera sees the CELL): aim ~0.8 s + settle 0.5 + 4 balls
+     * (9 Nov logs: 2.3-4.8 s, median ~3.2) + the TIP watch (~1 s while it sees our HIVE). Slow: aim cap 1.5 s, slow feed,
+     * full watch.
      */
-    private static final double NEAR_FIRE_TYPICAL = 1.5 + 0.5 + 3.3 + 0.25;
+    private static final double NEAR_FIRE_TYPICAL = 0.8 + 0.5 + 3.3 + 1.0;
     private static final double NEAR_FIRE_SLOW = 1.5 + 0.5 + 5.0 + 1.2;
     private static final double GARDEN_DWELL = BioBuzzHiveAutoBase.GARDEN_DWELL_SEC;
     private static final double FAR_AIM_SETTLE = BioBuzzHiveAutoBase.FAR_AIM_SEC + 0.5;
@@ -61,16 +62,59 @@ public class HivePlannerTest {
     @Test
     public void farShotSpotIsLegalAndAimedAtTheFarCell() {
         assertNull(HivePlanner.footprintProblem(FAR_SHOT, null, false));
-        assertNull(AutoPlanner.footprintProblem(FAR_SHOT, null));
-        double d = AutoPlanner.distanceToRobot(FAR_SHOT, FieldMap.Place.FLOWER_1.x, FieldMap.Place.FLOWER_1.y);
-        System.out.printf("far spot %s: %.2f in from FLOWER 1's centre (circle %.1f + margin %.1f)%n", FAR_SHOT, d,
-                FLOWER_RADIUS_IN, AutoPlanner.FLOWER_MARGIN_IN);
+        // as built (robot not centred on Pedro's pose): intake 2 in off the REAR wall, 1.3 in beside FLOWER 1's ring
+        double realFront = FAR_SHOT.y + START_OFFSET_IN + ROBOT_FRONT_IN;
+        double flowerSide = (FAR_SHOT.x - 8.9) - (FLOWER_X + FLOWER_HALF_WIDTH_IN);
+        System.out.printf("far spot %s: intake %.2f in off the REAR wall, %.2f in beside FLOWER 1%n", FAR_SHOT,
+                WALL_IN - realFront, flowerSide);
+        assertTrue(WALL_IN - realFront >= 1.5 && WALL_IN - realFront <= 3.0);
+        assertTrue(flowerSide >= 1.0);
         // straight back down the lane: the shot line passes within 3 in of the far CELL's centre (opening 20 in wide)
         assertEquals(FACE_REAR, FAR_SHOT.headingDeg, 1e-9);
         assertTrue(Math.abs(FAR_SHOT.x - FAR_CELL_X) <= 3.0);
-        assertTrue("about as far as the near shot", FAR_SHOT.distanceTo(new Pose(FAR_CELL_X, FAR_CELL_Y, 0)) > 40);
-        // the plain mirror of the near spot would hit FLOWER 1
+        // the plain mirror of the near spot (x -12.7) would hit FLOWER 1
         assertNotNull(HivePlanner.footprintProblem(new Pose(CELL_X, -SHOT.y, FACE_REAR), null, false));
+    }
+
+    /**
+     * Both tag stickers face the end that is up, so the far spot looks at the far CELL's sticker the way the near spot
+     * looks at the near one (seen there on 9 Nov): the camera must be as far from it, or the sticker leaves the top of
+     * the picture (it was 10-15 deg above the camera axis there; the C270's picture ends at 16.3 deg).
+     */
+    @Test
+    public void farSpotCameraSeesTheFarCellLikeTheNearSpot() {
+        double nearCamY = SHOT.y + START_OFFSET_IN + CAMERA_BACK_IN;          // facing the audience: camera toward +y
+        double near = Math.abs(nearCamY - (-TAG_UP_Y));
+        double farCamY = FAR_SHOT.y + START_OFFSET_IN - CAMERA_BACK_IN;       // facing the REAR: camera toward -y
+        double far = Math.hypot(FAR_SHOT.x - CELL_X, farCamY - TAG_UP_Y);
+        System.out.printf("camera to the UP sticker: near spot %.2f in, far spot %.2f in%n", near, far);
+        assertEquals(near, far, 0.6);
+    }
+
+    /** The FLOWER footprint is FLOWER 1's CAD slice (rings and pipes at robot heights): x -26.37..-20.42, y 65.63..70.5. */
+    @Test
+    public void flowerFootprintIsTheCadSlice() {
+        assertEquals(-20.42, FLOWER_X + FLOWER_HALF_WIDTH_IN, 0.05);
+        assertEquals(-26.37, FLOWER_X - FLOWER_HALF_WIDTH_IN, 0.05);
+        assertEquals(65.63, WALL_IN - FLOWER_DEPTH_IN, 0.01);
+        double m = AutoPlanner.FLOWER_MARGIN_IN;
+        FieldMap.Place f1 = FieldMap.Place.FLOWER_1, f3 = FieldMap.Place.FLOWER_3;
+        // a robot 0.1 in outside the margin is clear, 0.1 in inside is not (FLOWER 1, rear wall; FLOWER 3, RED wall)
+        assertTrue(!HivePlanner.hitsFlower(AutoPlanner.corners(new Pose(-20.42 + m + 9.1, 60, 90)), f1));
+        assertTrue(HivePlanner.hitsFlower(AutoPlanner.corners(new Pose(-20.42 + m + 8.9, 60, 90)), f1));
+        assertTrue(!HivePlanner.hitsFlower(AutoPlanner.corners(new Pose(-60, f3.y + FLOWER_HALF_WIDTH_IN + m + 9.1, 0)), f3));
+        assertTrue(HivePlanner.hitsFlower(AutoPlanner.corners(new Pose(-60, f3.y + FLOWER_HALF_WIDTH_IN + m + 8.9, 0)), f3));
+    }
+
+    /** Parked facing the REAR wall the robot's short back is toward the LOADING ZONE: still well inside it. */
+    @Test
+    public void rearSlotAIsWellInsideTheZoneAsBuilt() {
+        Pose a = HivePlanner.rearSlot(Slot.A);
+        double back = a.y + START_OFFSET_IN - ROBOT_BACK_IN;
+        System.out.printf("rear slot A %s: %.2f in inside the LOADING ZONE as built%n", a, ZONE_Y_MAX - back);
+        assertTrue(ZONE_Y_MAX - back >= 4.0);
+        assertTrue(AutoPlanner.partlyInZone(a));
+        assertNull(HivePlanner.footprintProblem(a, Slot.B, false));
     }
 
     @Test
@@ -143,7 +187,8 @@ public class HivePlannerTest {
                 assertNull("park " + slot + " from " + p, HivePlanner.routeProblem(p, legs, slot.other()));
                 Pose end = AutoPlanner.end(p, legs);
                 assertEquals(slot(slot).x, end.x, 1e-9);
-                assertEquals(slot(slot).y, end.y, 1e-9);
+                assertTrue("slot " + slot + " row, from " + p, Math.abs(end.y - slot(slot).y) < 1e-9
+                        || (slot == Slot.A && Math.abs(end.y - REAR_SLOT_A_Y) < 1e-9));
                 assertTrue(AutoPlanner.partlyInZone(end));
                 for (Pose q : samples(p, legs)) {               // a blocked park re-plans from where it stopped
                     assertNull("re-plan " + slot + " from " + q,
