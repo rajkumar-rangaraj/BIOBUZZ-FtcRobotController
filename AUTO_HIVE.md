@@ -62,7 +62,7 @@ What the robot does:
    - The stickers turn away = probably tipped: on to the far CELL.
 3. **Far CELL** (the far spot gives the camera the same view as the near spot):
    - Camera confirms it **up** and the robot is **lined up** (the aim settled, or the last frame is within 2°, TeleOp's aim gate): fires. Up but not lined up (for example held back by the turn limit below): keeps the POLLEN.
-   - Not in view, but the camera sees the near CELL **down** from there: fires on the planned heading.
+   - Not in view, but the camera sees the near CELL **down** from there: fires on the planned heading (with the aim trim), only if the turn limits below let the robot get within 2° of it.
    - **Down**, or seen but not sure: keeps the POLLEN for TeleOp.
    - **Nothing in view: keeps the POLLEN**, unless **"blind far shot"** is ON (Circle, **OFF by default, PRACTICE ONLY**). With it ON, the robot fires anyway after 4 counted pre-loads.
      - Only for practice in bad light (the garage at night). **Never in a match**: INIT shows a warning line while it is ON.
@@ -82,7 +82,7 @@ The planner treats the robot as an 18 × 18 in box centred on Pedro's pose. The 
 The far spot, FLOWER stop and rear slot use these numbers:
 - **Far spot (x −10.4, y 58):** the robot arrives straight down the lane (90°), then turns 2.75° on the spot so its centre line (camera and launcher) points at the far CELL's opening (87.25°). The intake ends 2 in off the REAR wall, and the camera is 41.3 in from the far sticker (near spot: 41.2 in).
   - **The camera aim there may turn at most 2.5° either way, and less where the robot really stopped.** The REAR wall, FLOWER 1 and the middle line are close. From where Pedro stopped, the robot only turns as far as keeps it 0.4 in clear of all three with 1° of Pedro error on top, or, from something it is already closer to, never closer than it was. Already within 0.1 in of something, it does not turn at all (`AIM BLOCKED`). From the planned spot that is the whole ±2.5° (clear from 83.2° to 94.4°); stopped up to ¾ in off, it can still turn (laptop test).
-  - An aim trim (Tune) bigger than 2.5° is cut there: the log says `AIM LIMIT`, the far shot is kept, and INIT shows a warning.
+  - An aim trim (Tune) bigger than 2.5° is cut there: the log says `AIM LIMIT`, the far shot may be kept (it fires only within 2° of the CELL), and INIT shows a warning.
 - **FLOWER stop:** set from the same offsets.
 - **Rear slot A:** 4.9 in inside the zone.
 
@@ -128,6 +128,7 @@ The INIT screen shows the plan times, the route check and the camera.
 4. **Pull the logs:** `/sdcard/BioBuzzLogs/hiveauto_*.csv`.
    - The `EVENT` lines show what it decided and why: "TIP after the pre-loads", "FAR AIM", "FAR CELL … UP", "not lined up", "far CELL not in view…", "NOT TIPPED…", "AIM LIMIT" / "AIM BLOCKED", "WAIT: … not seen" / "GO ON", FIRE done (how it ended: 4 balls counted, 12 pockets, STOPPED: …, cut by the PARK TIME, …), PARK.
    - The `height_in` column shows what the camera read: UP should be about 46, DOWN about 32 (bands 42 / 37).
+   - If the log often says "not lined up" or "AIM BLOCKED" at the far spot, Pedro is stopping too close to the middle line (about ⅔ in or more): tell us, and we'll move `HIVE_LANE_X`.
 5. If the far CELL is often short of time, try park-by 28 (RB). If TIP 2 never happens with 4 POLLEN, the far shot still leaves them in the CELL for TeleOp.
 
 ## Code

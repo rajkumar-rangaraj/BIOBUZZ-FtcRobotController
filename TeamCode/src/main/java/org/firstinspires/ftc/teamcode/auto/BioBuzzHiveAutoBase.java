@@ -412,10 +412,11 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
 
     /**
      * Far CELL: camera aim, turning only within HivePlanner.farAimLimits (FAR_AIM_HEADING +- FAR_AIM_MAX_TURN_DEG, cut
-     * where Pedro really stopped so the as-built robot stays clear). UP (confirmed, not contradicted by the near CELL) and
-     * lined up: fire (camera speed) while it stays UP; UP but not lined up (the limit, or no time): POLLEN kept. DOWN (or
-     * the near CELL confirmed up), or seen but not sure: POLLEN kept. Not seen: fire on the planned heading while the
-     * camera sees the near CELL DOWN from here (after TIP 1 its sticker faces this end), or, only with
+     * where Pedro really stopped so the as-built robot stays clear), starting on the planned heading with the aim trim.
+     * UP (confirmed, not contradicted by the near CELL) and lined up: fire (camera speed) while it stays UP; UP but not
+     * lined up (the limit, or no time): POLLEN kept. DOWN (or the near CELL confirmed up), or seen but not sure: POLLEN
+     * kept. Not seen: fire on the planned heading (only when the limits let the robot get within AIM_FIRE_TOLERANCE_DEG
+     * of it) while the camera sees the near CELL DOWN from here (after TIP 1 its sticker faces this end), or, only with
      * {@code allowBlind}, with "blind far shot" ON (practice only, default OFF: in good light, no tag in view from here
      * means not tipped), all 4 pre-loads counted and NOT TIPPED never seen. Returns true when the robot is empty after.
      */
@@ -425,15 +426,19 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         double aimStart = now();
         Pose at = redHere();
         double[] lim = HivePlanner.farAimLimits(at);
+        double planned = HiveAutoField.FAR_AIM_HEADING + settings.aimTrimDeg;   // trim: + = shots LEFT (CCW)
+        double heldOffDeg;                                      // how far the limits keep it from the planned heading
         AimResult a;
         if (lim == null) {
+            heldOffDeg = Math.abs(AutoField.normalizeDeg(planned - at.headingDeg));
             log.row(now(), "EVENT", "AIM BLOCKED: no safe heading to turn to at " + at + " (as built): no turn");
             double h = follower.pose().heading();
             a = aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far, h, h, h);
         } else {
-            double start = HivePlanner.limitHeadingDeg(HiveAutoField.FAR_AIM_HEADING, lim[0], lim[1]);
-            log.row(now(), "EVENT", String.format("FAR AIM: from %s turn to %.2f deg, camera trim within %.2f..%.2f",
-                    at, start, lim[0], lim[1]));
+            double start = HivePlanner.limitHeadingDeg(planned, lim[0], lim[1]);
+            heldOffDeg = Math.abs(AutoField.normalizeDeg(planned - start));
+            log.row(now(), "EVENT", String.format("FAR AIM: from %s turn to %.2f deg (planned %.2f, aim trim %.1f),"
+                    + " camera aim within %.2f..%.2f", at, start, planned, settings.aimTrimDeg, lim[0], lim[1]));
             a = aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far, pedroHeading(start), pedroHeading(lim[0]),
                     pedroHeading(lim[1]));
         }
@@ -461,11 +466,14 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         } else {
             boolean nearDown = confirmed(HiveCells.otherEnd(far), CELL_FRESH_SEC) < 0;
             boolean blind = allowBlind && blindFar && tip != Tip.NOT_TIPPED && preloadBalls >= AUTO_PRELOADS;
-            log.row(now(), "EVENT", "far CELL not in view: " + (nearDown ? "near CELL DOWN, firing on the planned heading"
-                    : blind ? "BLIND far shot (practice), firing on the planned heading" : "POLLEN kept")
+            boolean onPlan = heldOffDeg <= AIM_FIRE_TOLERANCE_DEG;
+            log.row(now(), "EVENT", "far CELL not in view: " + (!nearDown && !blind ? "POLLEN kept"
+                    : !onPlan ? String.format("held %.1f deg off the planned heading (limits), POLLEN kept", heldOffDeg)
+                    : nearDown ? "near CELL DOWN, firing on the planned heading"
+                    : "BLIND far shot (practice), firing on the planned heading")
                     + " (tip=" + tip + ", pre-loads counted " + preloadBalls + ", blind far shot=" + blindFar
                     + (allowBlind ? "" : ", 2nd far volley needs the camera") + ")");
-            if (!nearDown && !blind) {
+            if ((!nearDown && !blind) || !onPlan) {
                 return false;
             }
             ev = nearDown ? Evidence.OTHER_END_DOWN : Evidence.NONE;
@@ -647,7 +655,8 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
             }
             double velocity = robot.launcherVelocity();
             // the counter runs on the feeder's clock: while the windmill waits for the camera its pocket stays open but
-            // nothing new counts (a non-ball dip then can't make the robot look empty: G407), and none is lost by it
+            // nothing new counts, so a non-ball dip then can't make the robot look empty (G407); a real ball whose whole
+            // dip falls inside a wait isn't counted either (the safe side: at worst a few more empty pockets)
             if (counter.update(gate == null ? t : gate.feederTime(t), feeder.state() == ShotFeeder.State.FEEDING,
                     launchTps, velocity)) {
                 log.row(t, "EVENT", "BALL " + counter.balls(), "launcher", velocity);
@@ -674,7 +683,8 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         }
         String end = stopped ? "STOPPED: " + stopWhy
                 : feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED"
-                : counter.balls() >= AUTO_PRELOADS ? AUTO_PRELOADS + " balls counted"
+                : counter.balls() >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING
+                ? AUTO_PRELOADS + " balls counted"
                 : feeder.shots() >= AUTO_FEED_POCKETS ? AUTO_FEED_POCKETS + " pockets"
                 : now() >= parkStart() ? "cut by the PARK TIME"
                 : !opModeIsActive() ? "op mode stopped" : "feed time out";
@@ -1144,7 +1154,7 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         }
         if (Math.abs(settings.aimTrimDeg) > HiveAutoField.FAR_AIM_MAX_TURN_DEG) {
             telemetry.addLine(String.format("!! Aim trim %.1f deg: the far spot can only turn %.1f (wall, FLOWER 1, middle"
-                    + " line) -> far shots will be kept. Check the trim in Tune !!", settings.aimTrimDeg,
+                    + " line) -> far shots may be kept (AIM LIMIT). Check the trim in Tune !!", settings.aimTrimDeg,
                     HiveAutoField.FAR_AIM_MAX_TURN_DEG));
         }
         telemetry.addData("Start", start.label + " only");
