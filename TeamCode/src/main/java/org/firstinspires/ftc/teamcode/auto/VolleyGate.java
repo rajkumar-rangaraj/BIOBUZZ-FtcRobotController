@@ -73,7 +73,8 @@ public final class VolleyGate {
         return waits;
     }
 
-    public double waitedSec() {
-        return waitedSec;
+    /** Seconds waited so far, the wait going on at {@code t} included. */
+    public double waitedSec(double t) {
+        return waitedSec + (Double.isNaN(waitStart) ? 0 : t - waitStart);
     }
 }

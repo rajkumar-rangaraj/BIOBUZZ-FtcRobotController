@@ -119,10 +119,15 @@ public final class HiveAutoField {
     public static final Pose FAR_AIM = new Pose(HIVE_LANE_X, FAR_SHOT_Y, FAR_AIM_HEADING);
     /**
      * The camera aim at the far spot may turn the robot this far either way from FAR_AIM_HEADING (aim trim, the CELL's
-     * real place); with 1 deg of Pedro heading error on top the as-built robot stays 0.4 in off the REAR wall, FLOWER 1
-     * and our side's line (HivePlannerTest). An aim trim bigger than this is cut there.
+     * real place); HivePlanner.farAimLimits cuts it further where Pedro really stopped, so the as-built robot stays
+     * FAR_AIM_CLEAR_IN off the REAR wall, FLOWER 1 and our side's line with FAR_AIM_HEADING_ERR_DEG of Pedro heading
+     * error (HivePlannerTest). An aim trim bigger than this is cut there (INIT warns).
      */
     public static final double FAR_AIM_MAX_TURN_DEG = 2.5;
+    public static final double FAR_AIM_CLEAR_IN = 0.4;
+    public static final double FAR_AIM_HEADING_ERR_DEG = 1.0;
+    /** Already closer than this to the REAR wall, FLOWER 1 or our side's line: the far aim does not turn at all. */
+    public static final double FAR_AIM_MIN_CLEAR_IN = 0.1;
     /** Camera floor distance to the far CELL at the far spot when the camera can't see it (for the shot speed). */
     public static final double FAR_SHOT_PLANNED_FLOOR_IN = 39.0;
 

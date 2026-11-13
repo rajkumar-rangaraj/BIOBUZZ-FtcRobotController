@@ -99,12 +99,89 @@ public final class HivePlanner {
     static final Pose FAR_SHOT_LOW = new Pose(HIVE_LANE_X, FLOWER_APPROACH_Y, FACE_REAR);
 
     /**
-     * {@code headingDeg} limited to {@code centreDeg} +- {@code maxTurnDeg}, the short way round (the camera aim at the
-     * far spot: FAR_AIM_HEADING +- FAR_AIM_MAX_TURN_DEG). Returns {@code headingDeg} itself when it is inside.
+     * {@code headingDeg} limited to {@code loDeg..hiDeg} (an arc shorter than 360 deg), the short way round. Returns
+     * {@code headingDeg} itself when it is inside.
      */
-    public static double limitHeadingDeg(double headingDeg, double centreDeg, double maxTurnDeg) {
-        double off = normalizeDeg(headingDeg - centreDeg);
-        return Math.abs(off) <= maxTurnDeg ? headingDeg : centreDeg + Math.copySign(maxTurnDeg, off);
+    public static double limitHeadingDeg(double headingDeg, double loDeg, double hiDeg) {
+        double mid = (loDeg + hiDeg) / 2, half = (hiDeg - loDeg) / 2;
+        double off = normalizeDeg(headingDeg - mid);
+        return Math.abs(off) <= half ? headingDeg : mid + Math.copySign(half, off);
+    }
+
+    // ---------------- The robot as built (HiveAutoField: ROBOT_*, START_OFFSET_IN) at the far spot ----------------
+
+    /** The as-built robot's corners at a Pedro pose (RED frame): really START_OFFSET_IN further toward the REAR wall. */
+    public static double[][] asBuiltCorners(Pose p) {
+        double h = Math.toRadians(p.headingDeg), c = Math.cos(h), s = Math.sin(h);
+        double cx = p.x, cy = p.y + START_OFFSET_IN;
+        double[][] local = {{ROBOT_FRONT_IN, ROBOT_HALF_WIDTH_IN}, {ROBOT_FRONT_IN, -ROBOT_HALF_WIDTH_IN},
+                {-ROBOT_BACK_IN, -ROBOT_HALF_WIDTH_IN}, {-ROBOT_BACK_IN, ROBOT_HALF_WIDTH_IN}};
+        double[][] out = new double[4][];
+        for (int i = 0; i < 4; i++) {
+            double f = local[i][0], l = local[i][1];
+            out[i] = new double[]{cx + f * c - l * s, cy + f * s + l * c};
+        }
+        return out;
+    }
+
+    /** As-built clearances (in) at a Pedro pose (RED frame): {REAR wall, our side's line x 0, FLOWER 1's CAD box}. */
+    public static double[] asBuiltClearances(Pose p) {
+        double[][] k = asBuiltCorners(p);
+        double fx0 = FLOWER_X - FLOWER_HALF_WIDTH_IN, fx1 = FLOWER_X + FLOWER_HALF_WIDTH_IN;
+        double fy0 = WALL_IN - FLOWER_DEPTH_IN, fy1 = WALL_IN;
+        double wall = Double.MAX_VALUE, middle = Double.MAX_VALUE, flower = Double.MAX_VALUE;
+        for (int i = 0; i < 4; i++) {
+            double[] a = k[i], b = k[(i + 1) % 4];
+            wall = Math.min(wall, WALL_IN - a[1]);
+            middle = Math.min(middle, -a[0]);
+            for (int j = 0; j <= 80; j++) {                     // along the robot's side, every ~0.2 in
+                double x = a[0] + (b[0] - a[0]) * j / 80.0, y = a[1] + (b[1] - a[1]) * j / 80.0;
+                double dx = Math.max(Math.max(fx0 - x, x - fx1), 0), dy = Math.max(Math.max(fy0 - y, y - fy1), 0);
+                flower = Math.min(flower, Math.hypot(dx, dy));
+            }
+        }
+        return new double[]{wall, middle, flower};
+    }
+
+    /**
+     * The headings (deg, RED frame) the far aim may turn to where Pedro really stopped ({@code at}; its heading = where
+     * the robot points now): FAR_AIM_HEADING +- FAR_AIM_MAX_TURN_DEG, cut so that every heading from at.headingDeg to
+     * there, plus FAR_AIM_HEADING_ERR_DEG of Pedro heading error, keeps the as-built robot FAR_AIM_CLEAR_IN off the REAR
+     * wall, our side's line and FLOWER 1, or, from one it is already closer to, never closer than now (it may turn away
+     * from it). {lo, hi} in at.headingDeg's 360 wrap, or null when there is none or the robot is already within
+     * FAR_AIM_MIN_CLEAR_IN of something (it must not turn).
+     */
+    public static double[] farAimLimits(Pose at) {
+        final double step = 0.05, search = 30;
+        double[] now = asBuiltClearances(at);
+        double[] floor = new double[now.length];
+        for (int i = 0; i < now.length; i++) {
+            if (now[i] < FAR_AIM_MIN_CLEAR_IN) {
+                return null;
+            }
+            floor[i] = Math.min(FAR_AIM_CLEAR_IN, now[i]);
+        }
+        double lo = at.headingDeg, hi = at.headingDeg;
+        while (lo - step > at.headingDeg - search && clearOf(new Pose(at.x, at.y, lo - step), floor)) {
+            lo -= step;
+        }
+        while (hi + step < at.headingDeg + search && clearOf(new Pose(at.x, at.y, hi + step), floor)) {
+            hi += step;
+        }
+        double centre = at.headingDeg + normalizeDeg(FAR_AIM_HEADING - at.headingDeg);
+        double aimLo = Math.max(lo + FAR_AIM_HEADING_ERR_DEG, centre - FAR_AIM_MAX_TURN_DEG);
+        double aimHi = Math.min(hi - FAR_AIM_HEADING_ERR_DEG, centre + FAR_AIM_MAX_TURN_DEG);
+        return aimLo <= aimHi ? new double[]{aimLo, aimHi} : null;
+    }
+
+    private static boolean clearOf(Pose p, double[] floor) {
+        double[] c = asBuiltClearances(p);
+        for (int i = 0; i < c.length; i++) {
+            if (c[i] < floor[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** From the far spot to FLOWER 1's approach point (intake facing the FLOWER, centred on it): back, then across. */

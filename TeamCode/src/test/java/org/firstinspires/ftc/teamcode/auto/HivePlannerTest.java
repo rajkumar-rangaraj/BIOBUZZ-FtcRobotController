@@ -328,15 +328,74 @@ public class HivePlannerTest {
 
     @Test
     public void farAimHeadingLimitWorksTheShortWayRound() {
-        double c = FAR_AIM_HEADING, m = FAR_AIM_MAX_TURN_DEG;
-        assertEquals(c + 1.0, HivePlanner.limitHeadingDeg(c + 1.0, c, m), 1e-12);
-        assertEquals(c + m, HivePlanner.limitHeadingDeg(c + 7.0, c, m), 1e-12);
-        assertEquals(c - m, HivePlanner.limitHeadingDeg(c - 7.0, c, m), 1e-12);
-        assertEquals(c - m, HivePlanner.limitHeadingDeg(c - 7.0 + 360, c, m), 1e-12);  // Pedro may report 0..360
+        double c = FAR_AIM_HEADING, m = FAR_AIM_MAX_TURN_DEG, lo = c - m, hi = c + m;
+        assertEquals(c + 1.0, HivePlanner.limitHeadingDeg(c + 1.0, lo, hi), 1e-12);
+        assertEquals(hi, HivePlanner.limitHeadingDeg(c + 7.0, lo, hi), 1e-9);
+        assertEquals(lo, HivePlanner.limitHeadingDeg(c - 7.0, lo, hi), 1e-9);
+        assertEquals(lo, HivePlanner.limitHeadingDeg(c - 7.0 + 360, lo, hi), 1e-9);   // Pedro may report 0..360
         Pose blue = FAR_AIM.forAlliance(Alliance.BLUE);
         double b = blue.headingDeg;
-        assertEquals(b + m, HivePlanner.limitHeadingDeg(b + 20 - 360, b, m), 1e-12);
-        assertEquals(179.0, HivePlanner.limitHeadingDeg(-179.0, 178.0, 1.0), 1e-12);   // across +-180
+        assertEquals(b + m, HivePlanner.limitHeadingDeg(b + 20 - 360, b - m, b + m), 1e-9);
+        assertEquals(179.0, HivePlanner.limitHeadingDeg(-179.0, 177.0, 179.0), 1e-9);   // across +-180
+    }
+
+    /** The op mode's as-built clearances (coarser, so cheap on the robot) agree with this test's fine sampling. */
+    @Test
+    public void asBuiltClearancesMatchAFineSampling() {
+        for (double dx = -1; dx <= 1 + 1e-9; dx += 0.5) {
+            for (double hd = 78; hd <= 102 + 1e-9; hd += 0.25) {
+                Pose p = new Pose(FAR_SHOT.x + dx, FAR_SHOT.y, hd);
+                double[] fast = HivePlanner.asBuiltClearances(p), fine = clearances(p);
+                for (int i = 0; i < 3; i++) {
+                    assertEquals(p + " #" + i, fine[i], fast[i], 0.02);
+                }
+            }
+        }
+    }
+
+    /**
+     * The far aim turns only as far as is clear where Pedro really stopped: from the planned spot the whole
+     * FAR_AIM_HEADING +- FAR_AIM_MAX_TURN_DEG; stopped up to 0.75 in sideways, 1 in short or long and 1 deg turned, it
+     * can always turn, every heading on the way and +- 1 deg around the limits keeps the as-built robot 0.4 in clear (or,
+     * from something it is already closer to, never closer than it was), and up to 0.5 in off it aims within 0.5 deg of
+     * the plan; right next to the middle line it does not turn at all.
+     */
+    @Test
+    public void farAimLimitsFollowWherePedroStops() {
+        double[] nominal = HivePlanner.farAimLimits(FAR_SHOT);
+        assertNotNull(nominal);
+        assertEquals(FAR_AIM_HEADING - FAR_AIM_MAX_TURN_DEG, nominal[0], 1e-9);
+        assertEquals(FAR_AIM_HEADING + FAR_AIM_MAX_TURN_DEG, nominal[1], 1e-9);
+        double worst = 0;
+        for (double dx = -0.75; dx <= 0.75 + 1e-9; dx += 0.25) {
+            for (double dy = -1; dy <= 1 + 1e-9; dy += 0.5) {
+                for (double dh = -1; dh <= 1 + 1e-9; dh += 0.5) {
+                    Pose at = new Pose(FAR_SHOT.x + dx, FAR_SHOT.y + dy, FACE_REAR + dh);
+                    double[] lim = HivePlanner.farAimLimits(at);
+                    assertNotNull("stopped at " + at, lim);
+                    double start = HivePlanner.limitHeadingDeg(FAR_AIM_HEADING, lim[0], lim[1]);
+                    worst = Math.max(worst, Math.abs(start - FAR_AIM_HEADING));
+                    if (Math.abs(dx) <= 0.5 + 1e-9 && Math.abs(dy) <= 0.5 + 1e-9) {
+                        assertEquals("aims near the plan from " + at, FAR_AIM_HEADING, start, 0.5);
+                    }
+                    double[] was = clearances(at);
+                    double from = Math.min(at.headingDeg, lim[0] - FAR_AIM_HEADING_ERR_DEG);
+                    double to = Math.max(at.headingDeg, lim[1] + FAR_AIM_HEADING_ERR_DEG);
+                    for (double hd = from; hd <= to + 1e-9; hd += 0.1) {
+                        double[] c = clearances(new Pose(at.x, at.y, hd));
+                        for (int i = 0; i < 3; i++) {
+                            assertTrue("from " + at + " at " + hd + " #" + i + ": " + c[i],
+                                    c[i] >= Math.min(FAR_AIM_CLEAR_IN, was[i]) - 0.02);
+                        }
+                    }
+                }
+            }
+        }
+        System.out.printf("far aim limits: every stop pose can turn; first aim at most %.2f deg off the plan%n", worst);
+        assertNull("1.2 in toward the middle line: no turn", HivePlanner.farAimLimits(
+                new Pose(FAR_SHOT.x + 1.2, FAR_SHOT.y, FACE_REAR)));
+        assertNull("touching the middle line: no turn", HivePlanner.farAimLimits(
+                new Pose(FAR_SHOT.x + 1.45, FAR_SHOT.y, FACE_REAR)));
     }
 
     private static List<Pose> samples(Pose from, List<AutoPlanner.Leg> legs) {
@@ -367,7 +426,8 @@ public class HivePlannerTest {
         return out;
     }
 
-    /** As-built clearances (in) at a Pedro pose: {REAR wall, our side's line x 0, FLOWER 1's CAD box}. */
+    /** As-built clearances (in) at a Pedro pose: {REAR wall, our side's line x 0, FLOWER 1's CAD box}. Fine sampling:
+     *  the reference for HivePlanner.asBuiltClearances. */
     private static double[] clearances(Pose p) {
         double[][] k = asBuiltCorners(p);
         double fx0 = FLOWER_X - FLOWER_HALF_WIDTH_IN, fx1 = FLOWER_X + FLOWER_HALF_WIDTH_IN;

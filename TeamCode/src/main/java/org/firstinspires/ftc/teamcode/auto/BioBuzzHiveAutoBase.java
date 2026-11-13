@@ -42,7 +42,8 @@ import java.util.List;
  * or its other end coming up, is confirmed. Both tag stickers face the end that is up (CAD), so the near spot sees our
  * CELLs only before TIP 1 and the far spot only after it. NOT TIPPED (the near CELL still up or the far one down 1 s
  * after the last pre-load) -> the GARDEN POLLEN go back to the near CELL instead (camera must confirm it up). The far
- * CELL is fired at while the camera sees it up (or, from there, the near CELL down); when it sees nothing, only with
+ * CELL is fired at while the camera sees it up and the robot is lined up (or, from there, while it sees the near CELL
+ * down); when it sees nothing, only with
  * "blind far shot" (Circle/B, PRACTICE ONLY, OFF by default: in good light nothing in view from the far spot means not
  * tipped) and all 4 pre-loads counted. The pre-loads always go all 4 (coach, 13 Nov: "Its fine to aim 4 at first
  * shot. Later we will enhance"; if the HIVE tips mid-volley the rest still go: G417 risk, a verbal warning first). Every
@@ -410,19 +411,32 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     }
 
     /**
-     * Far CELL: camera aim (at most FAR_AIM_MAX_TURN_DEG from the planned heading). UP (confirmed, not contradicted by
-     * the near CELL): fire (camera speed) while it stays UP. DOWN (or the near CELL confirmed up), or seen but not sure:
-     * POLLEN kept. Not seen: fire on the planned heading while the camera sees the near CELL DOWN from here (after TIP 1
-     * its sticker faces this end), or, only with {@code allowBlind}, with "blind far shot" ON (practice only, default
-     * OFF: in good light, no tag in view from here means not tipped), all 4 pre-loads counted and NOT TIPPED never seen.
-     * Returns true when the robot is empty after.
+     * Far CELL: camera aim, turning only within HivePlanner.farAimLimits (FAR_AIM_HEADING +- FAR_AIM_MAX_TURN_DEG, cut
+     * where Pedro really stopped so the as-built robot stays clear). UP (confirmed, not contradicted by the near CELL) and
+     * lined up: fire (camera speed) while it stays UP; UP but not lined up (the limit, or no time): POLLEN kept. DOWN (or
+     * the near CELL confirmed up), or seen but not sure: POLLEN kept. Not seen: fire on the planned heading while the
+     * camera sees the near CELL DOWN from here (after TIP 1 its sticker faces this end), or, only with
+     * {@code allowBlind}, with "blind far shot" ON (practice only, default OFF: in good light, no tag in view from here
+     * means not tipped), all 4 pre-loads counted and NOT TIPPED never seen. Returns true when the robot is empty after.
      */
     private boolean volleyFar(boolean allowBlind) {
         HiveVision.Cell far = farCell();
         step = "AIM (far CELL)";
         double aimStart = now();
-        aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far,
-                pedro(HiveAutoField.FAR_AIM.forAlliance(alliance())).heading(), HiveAutoField.FAR_AIM_MAX_TURN_DEG);
+        Pose at = redHere();
+        double[] lim = HivePlanner.farAimLimits(at);
+        AimResult a;
+        if (lim == null) {
+            log.row(now(), "EVENT", "AIM BLOCKED: no safe heading to turn to at " + at + " (as built): no turn");
+            double h = follower.pose().heading();
+            a = aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far, h, h, h);
+        } else {
+            double start = HivePlanner.limitHeadingDeg(HiveAutoField.FAR_AIM_HEADING, lim[0], lim[1]);
+            log.row(now(), "EVENT", String.format("FAR AIM: from %s turn to %.2f deg, camera trim within %.2f..%.2f",
+                    at, start, lim[0], lim[1]));
+            a = aim(Math.min(now() + FAR_AIM_SEC, parkStart()), far, pedroHeading(start), pedroHeading(lim[0]),
+                    pedroHeading(lim[1]));
+        }
         CellSeen s = cells.get(far);
         int v = cellState(far, CELL_FRESH_SEC);
         Evidence ev;
@@ -432,6 +446,10 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                     s.target.horizontalIn(), s.target.bearingDeg) : ": its other end is confirmed UP"));
             if (v < 0) {
                 return false;                                   // G417: never launch into a downward CELL
+            }
+            if (!linedUp(a)) {
+                log.row(now(), "EVENT", "far CELL UP but not lined up (" + a + "): POLLEN kept");
+                return false;
             }
             launchTps = ShotSpeed.standard().tableSpeed(s.target.horizontalIn());
             robot.setLauncherVelocity(launchTps);
@@ -459,35 +477,64 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
     /** Plan B at the near CELL: fires only when the camera confirms it UP (and its other end does not say otherwise). */
     private void volleyCamera(HiveVision.Cell cell, double aimSec, String label) {
         step = "AIM (" + label + ")";
-        aim(Math.min(now() + aimSec, parkStart()), cell);
+        AimResult a = aim(Math.min(now() + aimSec, parkStart()), cell);
         int v = cellState(cell, CELL_FRESH_SEC);
+        boolean go = v > 0 && linedUp(a);
         log.row(now(), "EVENT", label + ": CELL " + cell + (v > 0 ? " UP" : v < 0 ? " DOWN" : " not confirmed")
-                + (v > 0 ? "" : ": POLLEN kept"));
-        if (v > 0) {
+                + (go ? "" : v > 0 ? " but not lined up (" + a + "): POLLEN kept" : ": POLLEN kept"));
+        if (go) {
             launchTps = ShotSpeed.standard().tableSpeed(cells.get(cell).target.horizontalIn());
             robot.setLauncherVelocity(launchTps);
             fire(false, cell, Evidence.TARGET_UP);
         }
     }
 
-    /** Turns on the spot (Pedro hold) until the camera bearing to {@code cell} is within AIM_TOLERANCE_DEG on 3 frames. */
-    private HiveVision.Target aim(double endSec, HiveVision.Cell cell) {
-        return aim(endSec, cell, Double.NaN, 0);
+    /** What aim() saw of its CELL: the last frame (or null) and when, lined up (3 frames in a row), cut by the limit. */
+    private static final class AimResult {
+        HiveVision.Target last;
+        double lastSec = -1;
+        boolean settled;
+        boolean limited;
+
+        @Override
+        public String toString() {
+            return last == null ? "CELL not seen" : String.format("bearing %.1f deg%s%s", last.bearingDeg,
+                    settled ? ", settled" : "", limited ? ", AIM LIMIT" : "");
+        }
     }
 
     /**
-     * As {@link #aim(double, HiveVision.Cell)}, but first turns on the spot to {@code centre} (Pedro heading, radians;
-     * NaN = stay as it is, no limit) and never further than {@code maxTurnDeg} from it: the far spot is close to the
-     * REAR wall, FLOWER 1 and our side's line. Not seen: the robot ends at {@code centre} (the planned aim).
+     * Lined up well enough to fire: the aim settled, or the latest fresh frame of the CELL is within the TeleOp aim gate
+     * (AIM_FIRE_TOLERANCE_DEG). Not when the heading limit holds the robot away from the CELL.
      */
-    private HiveVision.Target aim(double endSec, HiveVision.Cell cell, double centre, double maxTurnDeg) {
-        if (vision == null && Double.isNaN(centre)) {
-            return null;
+    private boolean linedUp(AimResult a) {
+        return a.settled || (a.last != null && now() - a.lastSec <= CELL_FRESH_SEC
+                && Math.abs(a.last.bearingDeg) <= AIM_FIRE_TOLERANCE_DEG);
+    }
+
+    /** A RED-frame heading (deg) as the Pedro heading (radians) for our alliance. */
+    private double pedroHeading(double redHeadingDeg) {
+        return Math.toRadians(new Pose(0, 0, redHeadingDeg).forAlliance(alliance()).headingDeg);
+    }
+
+    /** Turns on the spot (Pedro hold) until the camera bearing to {@code cell} is within AIM_TOLERANCE_DEG on 3 frames. */
+    private AimResult aim(double endSec, HiveVision.Cell cell) {
+        return aim(endSec, cell, Double.NaN, Double.NaN, Double.NaN);
+    }
+
+    /**
+     * As {@link #aim(double, HiveVision.Cell)}, but first turns on the spot to {@code startRad} (Pedro heading, radians;
+     * NaN = stay as it is) and never leaves {@code loRad..hiRad} (NaN = no limit): the far spot is close to the REAR
+     * wall, FLOWER 1 and our side's line. Not seen: the robot ends at {@code startRad} (the planned aim).
+     */
+    private AimResult aim(double endSec, HiveVision.Cell cell, double startRad, double loRad, double hiRad) {
+        AimResult r = new AimResult();
+        if (vision == null && Double.isNaN(startRad)) {
+            return r;
         }
         com.pedropathing.math.Pose spot = follower.pose();
-        double targetHeading = Double.isNaN(centre) ? spot.heading() : centre;
+        double targetHeading = Double.isNaN(startRad) ? spot.heading() : startRad;
         follower.hold(spot.withHeading(targetHeading));
-        HiveVision.Target last = null;
         int settled = 0;
         boolean limitLogged = false;
         while (opModeIsActive() && now() < endSec) {
@@ -501,22 +548,25 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                 }
                 lastTarget = t;
                 if (t != null) {
-                    last = t;
+                    r.last = t;
+                    r.lastSec = now();
                     double headingErr = AutoField.normalizeDeg(Math.toDegrees(follower.pose().heading() - targetHeading));
                     if (Math.abs(t.bearingDeg) <= AIM_TOLERANCE_DEG) {
                         if (++settled >= 3) {
+                            r.settled = true;
                             break;
                         }
                     } else {
                         settled = 0;
                         if (Math.abs(headingErr) < AIM_TOLERANCE_DEG) {   // only re-aim on frames taken after the last turn
                             double want = follower.pose().heading() + Math.toRadians(t.bearingDeg);
-                            targetHeading = limitHeading(want, centre, maxTurnDeg);
-                            if (targetHeading != want && !limitLogged) {
+                            targetHeading = limitHeading(want, loRad, hiRad);
+                            r.limited = targetHeading != want;
+                            if (r.limited && !limitLogged) {
                                 limitLogged = true;
-                                log.row(now(), "EVENT", String.format("AIM LIMIT: wanted %.1f deg, held at %.1f (max %.1f"
-                                        + " from %.1f)", Math.toDegrees(want), Math.toDegrees(targetHeading), maxTurnDeg,
-                                        Math.toDegrees(centre)));
+                                log.row(now(), "EVENT", String.format("AIM LIMIT: wanted %.1f deg, held at %.1f (%.1f..%.1f)",
+                                        Math.toDegrees(want), Math.toDegrees(targetHeading), Math.toDegrees(loRad),
+                                        Math.toDegrees(hiRad)));
                             }
                             follower.hold(spot.withHeading(targetHeading));
                         }
@@ -525,16 +575,16 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
             }
             loopTick();
         }
-        return last;
+        return r;
     }
 
-    /** {@code heading} limited to {@code centre} +- {@code maxTurnDeg} (radians; NaN centre = no limit). */
-    private static double limitHeading(double heading, double centre, double maxTurnDeg) {
-        if (Double.isNaN(centre)) {
+    /** {@code heading} limited to {@code lo..hi} (radians; NaN = no limit). */
+    private static double limitHeading(double heading, double lo, double hi) {
+        if (Double.isNaN(lo) || Double.isNaN(hi)) {
             return heading;
         }
         double deg = Math.toDegrees(heading);
-        double limited = HivePlanner.limitHeadingDeg(deg, Math.toDegrees(centre), maxTurnDeg);
+        double limited = HivePlanner.limitHeadingDeg(deg, Math.toDegrees(lo), Math.toDegrees(hi));
         return limited == deg ? heading : Math.toRadians(limited);
     }
 
@@ -590,7 +640,10 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                 }
             }
             double velocity = robot.launcherVelocity();
-            if (counter.update(t, feeder.state() == ShotFeeder.State.FEEDING, launchTps, velocity)) {
+            // the counter runs on the feeder's clock: while the windmill waits for the camera its pocket stays open but
+            // nothing new counts (a non-ball dip then can't make the robot look empty: G407), and none is lost by it
+            if (counter.update(gate == null ? t : gate.feederTime(t), feeder.state() == ShotFeeder.State.FEEDING,
+                    launchTps, velocity)) {
                 log.row(t, "EVENT", "BALL " + counter.balls(), "launcher", velocity);
                 if (preloads) {
                     preloadBalls = counter.balls();
@@ -613,11 +666,16 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
             preloadsGone = empty;
             preloadBalls = counter.balls();
         }
-        log.row(now(), "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %s%s%s%s", counter.balls(),
-                feeder.shots(), feeder.jams(), feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED" : "ok",
-                gate != null && gate.waits() > 0 ? String.format(", waited for the camera %d x %.2f s", gate.waits(),
-                        gate.waitedSec()) : "",
-                stopped ? ", STOPPED: " + stopWhy : "",
+        String end = stopped ? "STOPPED: " + stopWhy
+                : feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED"
+                : counter.balls() >= AUTO_PRELOADS ? AUTO_PRELOADS + " balls counted"
+                : feeder.shots() >= AUTO_FEED_POCKETS ? AUTO_FEED_POCKETS + " pockets"
+                : now() >= parkStart() ? "cut by the PARK TIME"
+                : !opModeIsActive() ? "op mode stopped" : "feed time out";
+        log.row(now(), "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %s%s%s", counter.balls(),
+                feeder.shots(), feeder.jams(), end,
+                gate != null && gate.waits() > 0 ? String.format(", waited for the camera %d x, %.2f s", gate.waits(),
+                        gate.waitedSec(now())) : "",
                 preloads ? (preloadsGone ? ", windmill empty" : ", balls may be left (no GARDEN)") : ""));
         return empty && !stopped;
     }
@@ -640,7 +698,7 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
                     : HiveCells.otherEnd(target) + " DOWN", gate.evidenceAgeSec(t)));
         } else if (g == VolleyGate.Verdict.GO && wasWaiting) {
             log.row(t, "EVENT", String.format("GO ON: the camera sees it again (%.2f s waited so far)",
-                    gate.waitedSec()));
+                    gate.waitedSec(t)));
         }
         return g;
     }
@@ -1077,6 +1135,11 @@ public abstract class BioBuzzHiveAutoBase extends LinearOpMode {
         telemetry.addLine("BIOBUZZ HIVE AUTO " + alliance() + " - near CELL, GARDEN, under the HIVE, far CELL");
         if (blindFar) {
             telemetry.addLine("!!! BLIND FAR SHOT IS ON: PRACTICE ONLY. Turn it OFF (Circle/B) for a match (G417) !!!");
+        }
+        if (Math.abs(settings.aimTrimDeg) > HiveAutoField.FAR_AIM_MAX_TURN_DEG) {
+            telemetry.addLine(String.format("!! Aim trim %.1f deg: the far spot can only turn %.1f (wall, FLOWER 1, middle"
+                    + " line) -> far shots will be kept. Check the trim in Tune !!", settings.aimTrimDeg,
+                    HiveAutoField.FAR_AIM_MAX_TURN_DEG));
         }
         telemetry.addData("Start", start.label + " only");
         telemetry.addData("Park slot (Square/X)", slot.label);

@@ -61,7 +61,8 @@ What the robot does:
    - The near CELL is still up, or the far CELL is still down, after 1 s = **NOT TIPPED**. The robot takes the GARDEN POLLEN back to the near CELL instead, and fires only while the camera sees it up.
    - The stickers turn away = probably tipped: on to the far CELL.
 3. **Far CELL** (the far spot gives the camera the same view as the near spot):
-   - Camera confirms it **up** (or sees the near CELL down from there): aims and fires.
+   - Camera confirms it **up** and the robot is **lined up** (the aim settled, or the last frame is within 2°, TeleOp's aim gate): fires. Up but not lined up (for example held back by the turn limit below): keeps the POLLEN.
+   - Not in view, but the camera sees the near CELL **down** from there: fires on the planned heading.
    - **Down**, or seen but not sure: keeps the POLLEN for TeleOp.
    - **Nothing in view: keeps the POLLEN**, unless **"blind far shot"** is ON (Circle, **OFF by default, PRACTICE ONLY**). With it ON, the robot fires anyway after 4 counted pre-loads.
      - Only for practice in bad light (the garage at night). **Never in a match**: INIT shows a warning line while it is ON.
@@ -69,7 +70,8 @@ What the robot does:
 4. **Every volley after the pre-loads fires only while the camera keeps seeing what it fired on** (the CELL up, or the near CELL down):
    - Missing for 0.3 s: the windmill stops at once, even mid-pocket, and goes on when the camera sees it again (a ball flying past the camera hides the tags for ~0.1 s).
    - Missing for 0.6 s (TIP 2 turns the stickers away), or the CELL reads down: the volley ends. The rest stay on board for TeleOp.
-5. **After the FLOWER** (if it ever has time): it fires at the far CELL again only if the camera confirms it up.
+   - While the windmill waits, no new ball is counted, so a flywheel wobble can't make the robot think it is empty (G407).
+5. **Plan B** (back at the near CELL) and **after the FLOWER** (if it ever has time): fires only when the camera confirms the CELL up and the robot is lined up.
 
 ## The robot as built vs the planner
 
@@ -79,7 +81,8 @@ The planner treats the robot as an 18 × 18 in box centred on Pedro's pose. The 
 
 The far spot, FLOWER stop and rear slot use these numbers:
 - **Far spot (x −10.4, y 58):** the robot arrives straight down the lane (90°), then turns 2.75° on the spot so its centre line (camera and launcher) points at the far CELL's opening (87.25°). The intake ends 2 in off the REAR wall, and the camera is 41.3 in from the far sticker (near spot: 41.2 in).
-  - **The camera aim there may turn at most 2.5° either way.** The REAR wall, FLOWER 1 and the middle line are close: with 1° of Pedro error on top, the robot stays 0.4 in clear of all three (clear from 83.2° to 94.4°). An aim trim (Tune) bigger than 2.5° is cut there; the log says `AIM LIMIT`.
+  - **The camera aim there may turn at most 2.5° either way, and less where the robot really stopped.** The REAR wall, FLOWER 1 and the middle line are close. From where Pedro stopped, the robot only turns as far as keeps it 0.4 in clear of all three with 1° of Pedro error on top, or, from something it is already closer to, never closer than it was. Already within 0.1 in of something, it does not turn at all (`AIM BLOCKED`). From the planned spot that is the whole ±2.5° (clear from 83.2° to 94.4°); stopped up to ¾ in off, it can still turn (laptop test).
+  - An aim trim (Tune) bigger than 2.5° is cut there: the log says `AIM LIMIT`, the far shot is kept, and INIT shows a warning.
 - **FLOWER stop:** set from the same offsets.
 - **Rear slot A:** 4.9 in inside the zone.
 
@@ -123,7 +126,7 @@ The INIT screen shows the plan times, the route check and the camera.
    - Did the far shots go in? Did TIP 2 happen?
    - Did it park by 30 s?
 4. **Pull the logs:** `/sdcard/BioBuzzLogs/hiveauto_*.csv`.
-   - The `EVENT` lines show what it decided and why: "TIP after the pre-loads", "FAR CELL … UP", "far CELL not in view…", "NOT TIPPED…", "AIM LIMIT", "WAIT: … not seen" / "GO ON", FIRE done (with "STOPPED: …" when the camera lost it), PARK.
+   - The `EVENT` lines show what it decided and why: "TIP after the pre-loads", "FAR AIM", "FAR CELL … UP", "not lined up", "far CELL not in view…", "NOT TIPPED…", "AIM LIMIT" / "AIM BLOCKED", "WAIT: … not seen" / "GO ON", FIRE done (how it ended: 4 balls counted, 12 pockets, STOPPED: …, cut by the PARK TIME, …), PARK.
    - The `height_in` column shows what the camera read: UP should be about 46, DOWN about 32 (bands 42 / 37).
 5. If the far CELL is often short of time, try park-by 28 (RB). If TIP 2 never happens with 4 POLLEN, the far shot still leaves them in the CELL for TeleOp.
 
@@ -132,9 +135,9 @@ The INIT screen shows the plan times, the route check and the camera.
 | File | What |
 |---|---|
 | `auto/BioBuzzHiveAutoBase.java` | The op mode: a copy of BioBuzzPedroAutoBase with the new plan, CELL tracking and FLOWER |
-| `auto/HivePlanner.java` | Routes, HIVE-leg and FLOWER footprint checks, park from anywhere, adaptive corner time, far aim limit |
+| `auto/HivePlanner.java` | Routes, HIVE-leg and FLOWER footprint checks, park from anywhere, adaptive corner time, the robot as built at the far spot and its aim limits |
 | `auto/HiveAutoField.java` | Places from the field CAD (legs, lane, far spot and aim heading, tag stickers, FLOWERs) and the robot as built |
 | `auto/VolleyGate.java` | Camera gate for every volley after the pre-loads: go / wait / stop as the camera evidence ages |
 | `biobuzz/HiveCells.java` | Every visible CELL of our HIVE (HiveVision unchanged) |
-| `HivePlannerTest.java` | 17 laptop tests: CAD leg model, lane, camera view and as-built clearances at the far spot, aim limit, every route, park from 150+ points, timeline |
-| `VolleyGateTest.java` | 7 laptop tests: the camera gate's wait, go on and stop |
+| `HivePlannerTest.java` | 19 laptop tests: CAD leg model, lane, camera view and as-built clearances at the far spot, aim limits from where Pedro stops, every route, park from 150+ points, timeline |
+| `VolleyGateTest.java` | 8 laptop tests: the camera gate's wait, go on and stop; no ball counted while it waits |
