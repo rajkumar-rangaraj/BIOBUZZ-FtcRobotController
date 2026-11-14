@@ -270,11 +270,11 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - **Windmill stalls cluster at one angle:** 17:58 had 21 STUCK in 121 shots, 15 of the 21 inside one 135° arc; 21:18 19/122; 21:31 18/96; 22:23 (fresh battery) 1/29. Cause: the motor mount's tight spot plus the low battery. Glue the PPW1 bearing (gel CA or 5-min epoxy, not bed glue).
     - **Gamepad right-stick drift** 0.087–0.134 at 21:08–21:14 ("robot rotating on its own"); back to 0 at 21:18. TeleOp has no dead zone (8 % offered on 9 Nov, not applied).
     - The 17:45 install did not remove any TeleOp: all 14 op modes registered.
-17. **14 Nov practice with the overnight AUTO (`9ed92bc`, logs `robot_logs/20261114_125319`: 21 AUTO runs 11:40–12:52; coach: "looks like it has a weird auto bug"):**
+17. **14 Nov practice with the overnight AUTO (`9ed92bc`, logs `robot_logs/20261114_125319`: 20 AUTO runs 11:40–12:52; coach: "looks like it has a weird auto bug"):**
     - **The CELL names on the practice HIVE are the other way round from the manual.** From S1, the CELL straight in front is UP and named BLUE_AUDIENCE / RED_REAR (13 Nov HIVE AUTO log: 36–37 in away, 50–51 in high). The cluster named like `startingUpCell` (BLUE_REAR / RED_AUDIENCE, Competition Manual Fig 10-2) is the HIVE's far CELL, DOWN (55–69 in away, 29–33 in high). On 9 Nov the near CELL was BLUE_REAR, so the practice setup changed.
     - **Effect of the name-based aim** (`targetCell`):
-      - 13 runs waited the full 3.5 s aim timeout and fired blind at ~4.05 s.
-      - 3 runs (11:58:03, 11:58:48, 12:48:48) saw the far CELL "DOWN" and refused to shoot (G417): no GARDEN, parked at ~5 s. This is most likely the "weird bug".
+      - 14 of the 20 runs (RED 7 of 9, BLUE 7 of 11) waited the full 3.5 s aim timeout and fired blind at ~4.05 s.
+      - 3 runs (RED 11:58:03 and 11:58:48, BLUE 12:48:48: both alliances) saw the far CELL "DOWN" and refused to shoot (G417): no GARDEN, parked at ~5 s. This is most likely the "weird bug".
       - Fixed in `5854796`: aim at the **CELL in front** = our alliance's nearest CELL within 47 in, any name (`HiveVision.nearestCell`, `CellCheck.front`).
     - **12:25:44: a real I2C fault on the Pinpoint** (`I2C_TIMEOUT_SDA_STUCK`, Control Hub bus 0; "Error communicating with I2C device(s) 'pinpoint'").
       - It happened in the GARDEN sweep, stalled against the wall with the intake on (battery 12.46 → 11.84 V).
