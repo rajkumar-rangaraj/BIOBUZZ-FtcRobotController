@@ -767,7 +767,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - Buy 3 × M4 × 12 **flat head** (countersunk) + 3 nylocks + 4 × M3 × 6 button heads.
   - Before fitting: flatness check, and a test screw in one countersink.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
-- [ ] **HIVE AUTO (branch `auto-hive`, §8c): first field test. Reviews closed 13 Nov (both agents: ready for a controlled live-ball practice test).** Not installed (the robot runs `c5edfc1`).
+- [ ] **HIVE AUTO (branch `auto-hive`, §8c): first field test. Reviews closed 13 Nov (both agents: ready for a controlled live-ball practice test).** **Installed 13 Nov ~17:45** (`auto-hive` `9f6bd46`, hub `base.apk` MD5 `0474f31c…` = local APK; `Robot Status: running`; 14 BioBuzz op modes incl. **HIVE AUTO RED/BLUE**, AUTO RED/BLUE, Field Tour, TeleOp, Tune, Calibration; crash buffer empty; was `c5edfc1` / `1a85f757…`). The user's USB Wi-Fi adapter `Wi-Fi 5` was unplugged at first ("no such wireless interface"); after plugging in it joined 37102-RC (79 %). Disconnected after.
   - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Both reviews of it found no blocking issues; their should-fix items are fixed in **`4116bd8`** (rubber-duck) and **`d010203`** (code-review); the follow-up reviews' items in **`9f6bd46`**. All pushed, 236 tests.
   - APK for `9f6bd46`: `C:\repo\FtcRobotController-auto-hive\TeamCode\build\outputs\apk\debug\TeamCode-debug.apk`, MD5 `0474f31c…`.
   - **Install `auto-hive` `9f6bd46`.** It also contains everything on `master` `c29d480` (HUBS_ON_EDGE, wiggle).
@@ -775,7 +775,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - Then 3–5 full runs in good light. Note whether TIP 1 happens (and whether before the 4th pre-load: G417 risk, user decision A), how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
   - Pull `hiveauto_*.csv`: check `height_in` (UP ≈ 46, DOWN ≈ 32; bands 42 / 37) and the `AIM LIMIT`, `WAIT` / `GO ON` and `STOPPED` events.
   - Blind far shot: practice only, keep it OFF in matches.
-- [ ] **Install `master` = `auto-work` `81c1f31` and test the GARDEN corner + the IMU** (not installed yet; the robot runs `c5edfc1`).
+- [ ] **Test the GARDEN corner wiggle + the IMU (`master` = `auto-work` `81c1f31` / `c29d480`): on the robot since 13 Nov ~17:45** (inside the `auto-hive` `9f6bd46` install).
   - **`81c1f31` (12 Nov, user: "I also moved the control hub to side, there was an env update needed?"):** `BioBuzzConstants.HUBS_ON_EDGE = true` (IMU: logo LEFT, USB FORWARD).
     - Both mountings stand the hub upright with the same hub axis up (logo × USB points down in both), so they differ by a fixed yaw offset only. All code uses heading changes (`imuAtInit`, `imuHeading0`, `resetYaw`, FieldHeading offsets) and nothing reads pitch/roll, so the old setting did not break driving.
     - The Pedro AUTO uses the Pinpoint only.
