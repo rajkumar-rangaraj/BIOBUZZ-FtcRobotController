@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<!-- BIOBUZZ AUTO Driver Guide: how the drive team runs "BioBuzz AUTO RED / BLUE" (Pedro) in a match. 2 pages.
+     Rebuild the PDF:  msedge --headless --no-pdf-header-footer --print-to-pdf=BioBuzz_AUTO_Driver_Guide.pdf tools/BioBuzz_AUTO_Driver_Guide.html
+     Keep in step with AUTO.md and auto/BioBuzzPedroAutoBase.java (INIT buttons, defaults, INIT / Step screen lines),
+     auto/AutoField.java (starts, slots; the map is drawn from its CAD numbers) and AutoPlanner.java (routes, Plan times). -->
+<html><head><meta charset="utf-8"><title>BIOBUZZ AUTO Driver Guide</title>
+<style>
+  @page { size: letter landscape; margin: 0.35in; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; color: #1a1a1a; }
+  .page { height: 7.75in; page-break-after: always; position: relative; overflow: hidden; }
+  .page:last-child { page-break-after: auto; }
+  h1 { margin: 0; font-size: 27px; letter-spacing: .5px; }
+  h2 { margin: 0 0 3px; font-size: 17px; }
+  .top { display: flex; justify-content: space-between; align-items: center; background: #111; color: #FFD000;
+         padding: 7px 16px; border-radius: 10px; }
+  .top small { color: #fff; font-size: 14px; }
+  .card { border-radius: 12px; padding: 5px 10px 6px; }
+  .ok { background: #EAF5E4; border-left: 8px solid #2E7D32; }
+  .warn { background: #FDECEC; border-left: 8px solid #C00000; }
+  .tip { background: #FFF4CC; border-left: 8px solid #FFD000; }
+  .ctitle { font-size: 16.5px; font-weight: 800; }
+  .mono { font-family: Consolas, monospace; background: #eee; padding: 0 3px; border-radius: 4px; font-size: 11.5px; }
+  .small { font-size: 12.5px; line-height: 1.28; }
+  ul, ol { margin: 2px 0 0 0; padding-left: 18px; } li { margin: 1px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th { background: #111; color: #FFD000; padding: 3px 6px; text-align: left; font-size: 12.5px; }
+  td { padding: 2px 6px; border-bottom: 1px solid #ddd; vertical-align: top; line-height: 1.24; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  .n { display: inline-block; width: 23px; height: 23px; line-height: 23px; border-radius: 50%; background: #111; color: #FFD000;
+       font-weight: 800; font-size: 14px; text-align: center; margin-right: 5px; vertical-align: 1px; }
+  .steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 7px; }
+  .step { background: #FFF4CC; border: 3px solid #FFD000; border-radius: 14px; padding: 3px 8px 4px; font-size: 12.5px; line-height: 1.24; }
+  .sh { font-weight: 800; font-size: 15px; margin-bottom: 1px; white-space: nowrap; }
+  .cols { display: grid; gap: 12px; margin-top: 7px; }
+  .p1cols { grid-template-columns: 306px 300px minmax(0, 1fr); }
+  .p2cols { grid-template-columns: 285px minmax(0, 1fr) 285px; }
+  .start { border-radius: 10px; padding: 3px 9px; font-size: 12.5px; line-height: 1.26; margin-top: 4px; }
+  .s1 { background: #EAF5E4; border: 2px solid #2E7D32; }
+  .s2 { background: #F4F4F4; border: 2px solid #9E9E9E; }
+  .legend { font-size: 11.5px; color: #333; line-height: 1.25; }
+  .btn td:last-child { font-weight: 700; color: #2E7D32; white-space: nowrap; }
+  .key { display: inline-block; min-width: 15px; text-align: center; font-weight: 800; font-size: 15px; line-height: 1; }
+  /* Driver Hub mock */
+  .hub { background: #1f2327; color: #e9ecef; border-radius: 10px; padding: 4px 8px; font-size: 11px; line-height: 1.24; }
+  .hub div { padding: 0 3px; border-left: 3px solid transparent; }
+  .hub .k { border-left-color: #FFD000; background: #2d3338; }
+  .hub .c { color: #FFD000; font-weight: 700; float: right; margin-left: 6px; }
+  .hub .t { color: #fff; font-weight: 700; }
+  .bad td { font-size: 12px; }
+  .bad td:first-child { white-space: normal; color: #C00000; font-family: Consolas, monospace; font-weight: 400; font-size: 11.5px; width: 40%; }
+  /* page 2 */
+  .tl { display: grid; grid-template-columns: repeat(5, 1fr) 0.95fr; gap: 8px; }
+  .ts { background: #FFF4CC; border: 3px solid #FFD000; border-radius: 14px; padding: 3px 7px 4px; text-align: center; font-size: 12.5px; line-height: 1.22; }
+  .ts .time { font-size: 19px; font-weight: 800; vertical-align: middle; }
+  .ts .em { font-size: 18px; vertical-align: middle; margin-left: 4px; }
+  .ts .h { display: block; font-weight: 800; font-size: 15px; }
+  .ts .pts { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 700; color: #2E7D32; }
+  .ts.off { background: #F4F4F4; border: 3px dashed #9E9E9E; }
+  .rule { background: #C00000; color: #fff; font-weight: 800; font-size: 15.5px; text-align: center; padding: 5px; border-radius: 10px; margin-top: 6px; }
+  .note { font-size: 12.5px; margin-top: 3px; color: #333; }
+  .prob td:first-child { white-space: normal; width: 45%; }
+  .stepl td { font-size: 12px; padding: 2px 6px; }
+  .stepl td:first-child { white-space: normal; font-family: Consolas, monospace; font-weight: 400; font-size: 11.5px; width: 55%; }
+  .check { border: 4px solid #2E7D32; border-radius: 14px; padding: 5px 10px 6px; background: #fff; }
+  .check .ttl { font-size: 18px; font-weight: 800; color: #2E7D32; white-space: nowrap; }
+  .check div.i { font-size: 13.5px; line-height: 1.26; padding: 4.5px 0 4.5px 22px; text-indent: -22px; border-bottom: 1px dotted #bbb; }
+  .check div.i:last-child { border-bottom: none; }
+  .box { font-size: 15px; margin-right: 5px; }
+  .foot { position: absolute; bottom: 0; width: 100%; text-align: center; font-size: 11px; color: #888; }
+</style></head><body>
+
+<!-- ======================= PAGE 1: BEFORE THE MATCH ======================= -->
+<div class="page">
+  <div class="top"><h1>🐝 AUTO: before the match</h1><small>Team 37102 · BioBuzz AUTO RED / BLUE (Pedro) · 30 s, hands off</small></div>
+
+  <div class="steps">
+    <div class="step"><div class="sh"><span class="n">1</span>🤝 Talk to partner</div>Who has S1, who parks in A / B, the GARDEN, our lane (yellow box).</div>
+    <div class="step"><div class="sh"><span class="n">2</span>📋 Pick op mode</div><b>BioBuzz AUTO RED</b> / <b>BLUE</b> = our colour (no other AUTO). TeleOp is preselected.</div>
+    <div class="step"><div class="sh"><span class="n">3</span>📍 Place + load</div>Robot at <b>S1</b> or <b>S2</b> (map). <b>4 pre-loads</b>, one in each windmill pocket.</div>
+    <div class="step"><div class="sh"><span class="n">4</span>✋ INIT, hands off</div>Don't touch the robot until START: the Pinpoint calibrates while it is still.</div>
+    <div class="step"><div class="sh"><span class="n">5</span>🎮 Check + START</div>Set gamepad 1 buttons, read the screen. <b>▶ START</b> when the match starts.</div>
+  </div>
+
+  <div class="cols p1cols">
+    <!-- column 1: where to place it -->
+    <div>
+      <h2>📍 Where to place it</h2>
+      <svg width="306" height="298" viewBox="-80 -78 160 156" style="display:block">
+        <defs>
+          <marker id="rt" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 z" fill="#1565C0"/></marker>
+          <marker id="sh" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 z" fill="#E65100"/></marker>
+          <pattern id="hz" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="3" fill="#CFD8DC"/><line x1="0" y1="0" x2="0" y2="3" stroke="#90A4AE" stroke-width="1.2"/></pattern>
+        </defs>
+        <!-- field in inches, seen from our alliance station (our wall at the bottom); positions from AutoField / FieldMap -->
+        <rect x="-70.5" y="-70.5" width="141" height="141" fill="#EEF3EA" stroke="#888" stroke-width="0.8"/>
+        <g stroke="#D3DBCB" stroke-width="0.4">
+          <line x1="-47" y1="-70.5" x2="-47" y2="70.5"/><line x1="-23.5" y1="-70.5" x2="-23.5" y2="70.5"/><line x1="0" y1="-70.5" x2="0" y2="70.5"/>
+          <line x1="23.5" y1="-70.5" x2="23.5" y2="70.5"/><line x1="47" y1="-70.5" x2="47" y2="70.5"/>
+          <line x1="-70.5" y1="-47" x2="70.5" y2="-47"/><line x1="-70.5" y1="-23.5" x2="70.5" y2="-23.5"/><line x1="-70.5" y1="0" x2="70.5" y2="0"/>
+          <line x1="-70.5" y1="23.5" x2="70.5" y2="23.5"/><line x1="-70.5" y1="47" x2="70.5" y2="47"/>
+        </g>
+        <line x1="-70.5" y1="70.5" x2="70.5" y2="70.5" stroke="#111" stroke-width="2.4"/>
+        <text x="0" y="77" text-anchor="middle" font-size="5.2" font-weight="800">▲ OUR ALLIANCE WALL · you stand here</text>
+        <text transform="translate(75,0) rotate(90)" text-anchor="middle" font-size="4.8" font-weight="800">RIGHT wall · RED: AUDIENCE · BLUE: REAR</text>
+        <text transform="translate(-73.6,0) rotate(-90)" text-anchor="middle" font-size="4.6" fill="#555">LEFT wall · RED: REAR · BLUE: AUDIENCE</text>
+        <text x="0" y="-72.8" text-anchor="middle" font-size="4.6" fill="#555">far wall: the other alliance</text>
+        <!-- HIVE frame and our up CELL (opening toward the right wall) -->
+        <rect x="-19.5" y="-24.75" width="39" height="49.5" fill="#F7F7F7" stroke="#888" stroke-width="0.6" stroke-dasharray="2 1.2"/>
+        <text x="0" y="-12" text-anchor="middle" font-size="5.5" font-weight="800" fill="#666">HIVE</text>
+        <rect x="1.6" y="2.1" width="18.5" height="21.2" fill="#FFD000" stroke="#8a6d00" stroke-width="0.6"/>
+        <text x="10.85" y="10.2" text-anchor="middle" font-size="4.4" font-weight="800">our</text>
+        <text x="10.85" y="14.7" text-anchor="middle" font-size="4.4" font-weight="800">up</text>
+        <text x="10.85" y="19.2" text-anchor="middle" font-size="4.4" font-weight="800">CELL</text>
+        <!-- FLOWERs -->
+        <g fill="#F8BBD0" stroke="#C2185B" stroke-width="0.5">
+          <circle cx="23.4" cy="68.1" r="3.7"/><circle cx="-68.1" cy="23.4" r="3.7"/><circle cx="68.1" cy="-23.4" r="3.7"/><circle cx="-23.4" cy="-68.1" r="3.7"/>
+        </g>
+        <text x="23.4" y="62.3" text-anchor="middle" font-size="4.2" font-weight="700" fill="#C2185B">FLOWER</text>
+        <!-- GARDEN: 4 POLLEN against the right wall, in our corner -->
+        <g fill="#7E57C2"><circle cx="69.3" cy="60.6" r="1.45"/><circle cx="69.3" cy="63.5" r="1.45"/><circle cx="69.3" cy="66.4" r="1.45"/><circle cx="69.3" cy="69.3" r="1.45"/></g>
+        <text x="57" y="68.4" text-anchor="end" font-size="4.6" font-weight="800" fill="#5E35B1">GARDEN ▸</text>
+        <!-- LOADING ZONE and the two park slots (robot 2 in off the wall, 5 in of it inside the zone) -->
+        <rect x="-45.6" y="59.1" width="20.7" height="11.4" fill="url(#hz)" stroke="#455A64" stroke-width="0.6"/>
+        <rect x="-58.6" y="50.5" width="18" height="18" fill="#1565C0" fill-opacity="0.08" stroke="#1565C0" stroke-width="0.8" stroke-dasharray="1.8 1.2"/>
+        <rect x="-29.9" y="50.5" width="18" height="18" fill="#1565C0" fill-opacity="0.08" stroke="#1565C0" stroke-width="0.8" stroke-dasharray="1.8 1.2"/>
+        <text x="-49.6" y="62" text-anchor="middle" font-size="7" font-weight="800" fill="#1565C0">A</text>
+        <text x="-20.9" y="62" text-anchor="middle" font-size="7" font-weight="800" fill="#1565C0">B</text>
+        <text x="-37" y="47.6" text-anchor="middle" font-size="4.4" font-weight="800" fill="#37474F">LOADING ZONE ▾</text>
+        <!-- route: shoot, GARDEN sweep, lane beside the HIVE, park (B; dotted on to A) -->
+        <line x1="52" y1="12.7" x2="21.6" y2="12.7" stroke="#E65100" stroke-width="1.2" stroke-dasharray="3 1.4" marker-end="url(#sh)"/>
+        <polyline points="59.5,12.7 52,28 60,36 60,60.5 48,37.6 -20.9,37.6 -20.9,57.5" fill="none" stroke="#1565C0" stroke-width="1" stroke-dasharray="2.4 1.4" marker-end="url(#rt)"/>
+        <polyline points="-20.9,37.6 -49.6,37.6 -49.6,57.5" fill="none" stroke="#1565C0" stroke-width="0.8" stroke-dasharray="0.7 1.5" marker-end="url(#rt)"/>
+        <line x1="0" y1="25.5" x2="0" y2="52" stroke="#777" stroke-width="0.5" stroke-dasharray="1.2 1.2"/>
+        <text transform="translate(-1.6,50.5) rotate(-90)" font-size="3.6" fill="#666">middle line</text>
+        <!-- robots at the two starts (yellow bar = intake = front) -->
+        <rect x="52.5" y="3.7" width="18" height="18" rx="1.5" fill="#555"/><rect x="68.5" y="3.7" width="2" height="18" fill="#FFD000"/>
+        <text x="61" y="14.8" text-anchor="middle" font-size="6" font-weight="800" fill="#fff">S1</text>
+        <rect x="-9" y="52.5" width="18" height="18" rx="1.5" fill="#555"/><rect x="-9" y="68.5" width="18" height="2" fill="#FFD000"/>
+        <text x="0" y="63.3" text-anchor="middle" font-size="6" font-weight="800" fill="#fff">S2</text>
+        <!-- step numbers -->
+        <g font-size="4.8" font-weight="800" text-anchor="middle" fill="#FFD000">
+          <circle cx="36.5" cy="7.4" r="3.7" fill="#111"/><text x="36.5" y="9.1">1</text>
+          <circle cx="47" cy="50" r="3.7" fill="#111"/><text x="47" y="51.7">2</text>
+          <circle cx="14" cy="32.6" r="3.7" fill="#111"/><text x="14" y="34.3">3</text>
+          <circle cx="-12.4" cy="46" r="3.7" fill="#111"/><text x="-12.4" y="47.7">4</text>
+        </g>
+      </svg>
+      <div class="legend"><b>Seen from where you stand: the same for RED and BLUE.</b> Yellow bar = intake (front); launcher + camera at the back.
+        <b>1</b> shoot · <b>2</b> GARDEN · <b>3</b> lane beside the HIVE · <b>4</b> park in B (dotted: to A)</div>
+      <div class="start s1"><b>S1 · CELL wall</b> (default, best): <b>intake against the wall on your RIGHT</b> (RED: audience wall, BLUE: rear wall),
+        <b>centred on our up CELL</b> (robot middle in line with the CELL middle), square to the wall. It shoots from here.</div>
+      <div class="start s2"><b>S2 · ALLIANCE wall:</b> <b>intake against our wall</b>, <b>centred on the middle line</b> (between the FLOWER and the LOADING ZONE),
+        square to the wall. It drives about 5 s to the shot spot, so the GARDEN is short or skipped.</div>
+    </div>
+
+    <!-- column 2: INIT buttons + partner -->
+    <div style="display:flex; flex-direction:column; gap:7px">
+      <div>
+        <h2>🎮 INIT buttons (gamepad 1)</h2>
+        <table class="btn">
+          <tr><th>Press</th><th>Changes</th><th>Default</th></tr>
+          <tr><td>D-pad ← or →</td><td>Start S1 ⇄ S2</td><td>S1</td></tr>
+          <tr><td><span class="key">□</span> Square</td><td>Park slot B ⇄ A</td><td>B</td></tr>
+          <tr><td><span class="key">✕</span> Cross</td><td>Shoot pre-loads</td><td>ON</td></tr>
+          <tr><td><span class="key">△</span> Triangle</td><td>GARDEN</td><td>ON</td></tr>
+          <tr><td><span class="key">○</span> Circle</td><td>Stretch</td><td>OFF</td></tr>
+          <tr><td>D-pad ↑ / ↓</td><td>Start delay +1 / −1 s</td><td>0 s <span style="font-weight:400;color:#555">(0–10)</span></td></tr>
+          <tr><td>R1 / L1</td><td>Park by +1 / −1 s</td><td>24 s <span style="font-weight:400;color:#555">(18–27)</span></td></tr>
+        </table>
+        <div class="small" style="margin-top:3px">✕ △ ○ switch ON ⇄ OFF. One press = one change.
+          <b>Start delay</b>: it waits that long after START. <b>Park by</b>: the latest time it stops and goes to park.
+          <b>Stretch</b>: shoot again after the GARDEN (page 2). The screen calls L1 / R1 "LB / RB".
+          <b>Every INIT starts from these defaults</b>: after a new INIT, set them again.</div>
+      </div>
+      <div class="card tip">
+        <div class="ctitle">🤝 Agree with your partner (every match)</div>
+        <ol class="small">
+          <li><b>Start:</b> only one robot can use S1.</li>
+          <li><b>Park:</b> one robot in A, one in B (the screen says <span class="mono">we park in slot B, they take slot A</span>).
+            They park <b>only at their end</b> of the zone, close to the wall.</li>
+          <li><b>GARDEN:</b> we take our GARDEN POLLEN. They should not.</li>
+          <li><b>Lane:</b> at the end of AUTO they stay out of our lane beside the HIVE (map, 3).</li>
+        </ol>
+        <div class="small" style="margin-top:2px">B is the default: the way to A goes past B.</div>
+      </div>
+    </div>
+
+    <!-- column 3: INIT screen -->
+    <div>
+      <h2>📺 INIT screen: a good one</h2>
+      <div class="hub">
+        <div class="k t"><span class="c">our colour?</span>BIOBUZZ AUTO RED - Pedro</div>
+        <div class="k"><span class="c">as agreed</span>Start (D-pad L/R) : CELL wall: side wall in front of our up CELL (shoots from here)</div>
+        <div class="k"><span class="c">as agreed</span>Park slot (Square/X) : B = MIDDLE end of the LOADING ZONE (toward the FLOWER)</div>
+        <div>&gt;&gt; Tell your partner: we park in slot B, they take slot A</div>
+        <div class="k"><span class="c">ON</span>Shoot pre-loads (Cross/A) : ON</div>
+        <div class="k"><span class="c">ON</span>GARDEN POLLEN (Triangle/Y) : ON</div>
+        <div>Stretch: shoot again (Circle/B) : OFF</div>
+        <div>Start delay (D-pad U/D) : 0 s</div>
+        <div>Park by (LB/RB) : 24 s at the latest</div>
+        <div>Plan : shot spot + 4 pre-loads done ~6 s</div>
+        <div>Plan : GARDEN done ~17 s (intake on, 2 in back and forth …)</div>
+        <div>Plan : PARK B starts by 23 s, takes ~6 s</div>
+        <div class="k"><span class="c">must be OK</span>Route check : OK</div>
+        <div class="k"><span class="c">must be ready</span>Pedro : ready</div>
+        <div class="k"><span class="c">ok</span>Camera : no CELL in view (normal at the wall)</div>
+        <div class="k"><span class="c">robot there?</span>Place: intake against the AUDIENCE wall, centred on our up CELL, square to the wall</div>
+      </div>
+      <div class="small" style="margin:2px 0 3px">RED, all defaults. BLUE: AUTO BLUE, REAR wall. Plan times are estimates.</div>
+      <table class="bad">
+        <tr><th>Bad line</th><th>What happens · what you do</th></tr>
+        <tr><td>Pedro : NOT READY …</td><td>No Pinpoint or Pedro not tuned: AUTO only backs 8 in off the wall (LEAVE, 3 points). Keep still; tell the coach.</td></tr>
+        <tr><td>Camera : NOT FOUND …</td><td>Fires the pre-loads unaimed, no stretch. Tell the coach.</td></tr>
+        <tr><td>GARDEN POLLEN : ON but needs shooting (G407)</td><td>Shoot is OFF, so no GARDEN. ✕ turns Shoot ON.</td></tr>
+        <tr><td>Route check : PROBLEM …</td><td>Tell the coach.</td></tr>
+        <tr><td>GARDEN ON but no "GARDEN done" Plan line</td><td>Not enough time: it will skip the GARDEN.</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code master c29d480 (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
+</div>
+
+<!-- ======================= PAGE 2: IN THE MATCH ======================= -->
+<div class="page">
+  <div class="top"><h1>🐝 AUTO: in the match</h1><small>what the robot does · hands off · if something goes wrong · checklist</small></div>
+
+  <h2 style="margin-top:6px">⏱️ What the robot does by itself (30 s)</h2>
+  <div class="tl">
+    <div class="ts"><span class="n">1</span><span class="time">0–1 s</span><span class="em">🚀</span><span class="h">LEAVE</span>Leaves the wall, spins up the flywheel.<span class="pts">LEAVE +3 (counted at the end)</span></div>
+    <div class="ts"><span class="n">2</span><span class="time">1–7 s</span><span class="em">🎯</span><span class="h">SHOOT</span>Camera aims at our up CELL, fires the 4 pre-loads.<span class="pts">HIVE TIP +20 if it tips</span></div>
+    <div class="ts"><span class="n">3</span><span class="time">7–14 s</span><span class="em">🌼</span><span class="h">GARDEN</span>Sweeps slowly along the wall into the GARDEN corner, intake on.<span class="pts">POLLEN for TeleOp</span></div>
+    <div class="ts"><span class="n">4</span><span class="time">14–18 s</span><span class="em">↔️</span><span class="h">CORNER</span>Intake on up to 4 s, going 2 in back and forth, so the last POLLEN rolls in.</div>
+    <div class="ts"><span class="n">5</span><span class="time">~18 s</span><span class="em">🅿️</span><span class="h">PARK</span>In our LOADING ZONE. Slot B: parked by ~24 s. Slot A: by ~28 s.<span class="pts">PARK +5</span></div>
+    <div class="ts off"><span class="time" style="font-size:15px">STRETCH (○)</span><span class="em" style="font-size:15px">🔁</span><span class="pts" style="color:#666; margin:0 0 1px">OFF by default</span>Back to the spot, fires the GARDEN POLLEN only if the camera sees our CELL still <b>up</b>.</div>
+  </div>
+  <div class="note">Times are from S1 with no start delay. A start delay makes it all later. From S2 it first drives about 5 s to the shot spot.</div>
+  <div class="rule">🅿️ PARKING ALWAYS WINS: at the Park-by time (24 s, or earlier if the drive is long) it stops what it is doing and parks.</div>
+
+  <div class="cols p2cols">
+    <!-- column 1: hands off -->
+    <div style="display:flex; flex-direction:column; gap:7px">
+      <div class="card warn">
+        <div class="ctitle">✋ During AUTO: hands off</div>
+        <ul class="small">
+          <li><b>Don't touch</b> the robot or the gamepads. The gamepads do nothing in AUTO.</li>
+          <li><b>Don't press STOP.</b> All motors stop at once and the robot won't park. Emergencies only.</li>
+          <li>It waits or skips a step? <b>Let it.</b> Those are its own rules (middle column).</li>
+          <li>Watch the <span class="mono">Step</span> line to see what it is doing.</li>
+        </ul>
+      </div>
+      <div class="card ok">
+        <div class="ctitle">➡️ After AUTO: TeleOp</div>
+        <ol class="small">
+          <li>The 30 s AUTO timer ends AUTO. The robot holds its park until then.</li>
+          <li><b>BioBuzz TeleOp</b> is already selected for you: press <b>INIT</b>.</li>
+          <li><span class="mono">Alliance</span> line: AUTO already set our colour. Check it anyway.</li>
+          <li>Field-centric on? The screen says <span class="mono">Start heading: from AUTO</span>. Don't press OPTIONS.</li>
+          <li>Don't touch the robot. <b>▶ START</b> when TeleOp starts.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- column 2: if this happens + Step line -->
+    <div>
+      <h2>🛠️ If this happens in AUTO</h2>
+      <table class="prob">
+        <tr><th>If…</th><th>the robot…</th></tr>
+        <tr><td>No CELL in view</td><td>fires the pre-loads on the planned heading.</td></tr>
+        <tr><td>Our CELL is already <b>down</b> (HIVE tipped)</td><td>never fires into it (G417). No GARDEN; it parks.</td></tr>
+        <tr><td>Windmill not empty after shooting (e.g. a jam)</td><td>skips the GARDEN (G407: max 4 balls) and parks.</td></tr>
+        <tr><td>Blocked 1 s before the park (e.g. by our partner)</td><td>drops that step and goes to park.</td></tr>
+        <tr><td>Blocked while parking</td><td>waits and tries again until AUTO ends. Already partly in the zone? It stays.</td></tr>
+      </table>
+      <div class="small" style="margin:2px 0 5px"><b>You: hands off.</b> Tell the coach after the match: the log has every step.</div>
+      <h2>📺 The Step line during AUTO</h2>
+      <table class="stepl">
+        <tr><th>Step says</th><th>It is…</th></tr>
+        <tr><td>DELAY</td><td>waiting (start delay)</td></tr>
+        <tr><td>SHOT SPOT · AIM … · FIRE …</td><td>shooting the pre-loads</td></tr>
+        <tr><td>GARDEN …</td><td>in the GARDEN</td></tr>
+        <tr><td>BACK TURN · AIM (GARDEN POLLEN)</td><td>stretch (only when ON)</td></tr>
+        <tr><td>PARK: …</td><td>driving to the slot</td></tr>
+        <tr><td>PARKED B / PARKED A</td><td><b>done ✓</b></td></tr>
+        <tr><td>FALLBACK DONE (LEAVE only)</td><td>Pedro was not ready</td></tr>
+      </table>
+    </div>
+
+    <!-- column 3: one-box pre-match checklist -->
+    <div class="check">
+      <div class="ttl">✅ PRE-MATCH CHECKLIST</div>
+      <div class="i"><span class="box">☐</span><b>Partner agreed:</b> who has S1 · A or B · our GARDEN · our lane</div>
+      <div class="i"><span class="box">☐</span><b>Op mode:</b> BioBuzz AUTO RED / BLUE = our colour</div>
+      <div class="i"><span class="box">☐</span><b>4 pre-loads</b>, one in each pocket</div>
+      <div class="i"><span class="box">☐</span><b>Robot at S1 or S2:</b> intake against the wall, centred, square</div>
+      <div class="i"><span class="box">☐</span><b>INIT</b>, then hands off the robot</div>
+      <div class="i"><span class="box">☐</span>Title line = <b>our colour</b></div>
+      <div class="i"><span class="box">☐</span><b>Start</b> and <b>Park slot</b> as agreed</div>
+      <div class="i"><span class="box">☐</span><b>Shoot ON, GARDEN ON</b> · stretch, delay, park by as agreed</div>
+      <div class="i"><span class="box">☐</span><b>Route check: OK</b> · <b>Pedro: ready</b> · Camera not NOT FOUND</div>
+      <div class="i"><span class="box">☐</span><b>Place</b> line = where the robot is</div>
+      <div class="i"><span class="box">☐</span>Last look, then <b>▶ START</b> when the match starts. Hands off.</div>
+    </div>
+  </div>
+  <div class="foot">BioBuzz AUTO Driver Guide · page 2 of 2 · AUTO log on the robot: /sdcard/BioBuzzLogs/pedroauto_*.csv · details: AUTO.md</div>
+</div>
+</body></html>
