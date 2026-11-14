@@ -206,14 +206,14 @@
         <div class="k"><span class="c">must be ready</span>Pedro : ready</div>
         <div class="k"><span class="c">READY</span>Pinpoint : READY</div>
         <div class="k"><span class="c">12.5 V or more</span>Battery : 12.9 V</div>
-        <div class="k"><span class="c">UP</span>Camera : our CELL RED_AUDIENCE UP: height 46 in</div>
+        <div class="k"><span class="c">UP</span>Camera : CELL in front: UP, height 46 in (…)</div>
         <div class="k"><span class="c">robot there?</span>Place: intake against the AUDIENCE wall, centred on our up CELL, square to the wall</div>
       </div>
-      <div class="small" style="margin:2px 0 3px">RED, all defaults (BLUE: REAR wall). Camera "not in view" is OK too.</div>
+      <div class="small" style="margin:2px 0 3px">RED, all defaults (BLUE: REAR wall). "No CELL in front" is OK too.</div>
       <table class="bad">
         <tr><th>Bad line</th><th>What happens · what you do</th></tr>
         <tr><td>!! BATTERY 12.1 V …</td><td>Put in a charged battery (12.5 V+).</td></tr>
-        <tr><td>!! OUR CELL … DOWN</td><td>Won't shoot (G417). Practice: reset the HIVE.</td></tr>
+        <tr><td>!! CELL IN FRONT … DOWN</td><td>Won't shoot (G417). Practice: reset the HIVE.</td></tr>
         <tr><td>!! PEDRO NOT READY …</td><td>FALLBACK: S1 still shoots, then LEAVE. No GARDEN, no PARK. Tell the coach.</td></tr>
         <tr><td>Camera : NOT FOUND …</td><td>Fires unaimed, no stretch. Tell the coach.</td></tr>
         <tr><td>GARDEN … needs shooting</td><td>Shoot is OFF, so no GARDEN (G407). ✕ = Shoot ON.</td></tr>
@@ -221,7 +221,7 @@
       </table>
     </div>
   </div>
-  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code auto-work cf9928c (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
+  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code auto-work 5854796 (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
 </div>
 
 <!-- ======================= PAGE 2: IN THE MATCH ======================= -->
@@ -235,7 +235,7 @@
     <div class="ts"><span class="n">3</span><span class="time">7–14 s</span><span class="em">🌼</span><span class="h">GARDEN</span>Sweeps slowly along the wall into the GARDEN corner, intake on, until it touches the wall.<span class="pts">POLLEN for TeleOp</span></div>
     <div class="ts"><span class="n">4</span><span class="time">14–18 s</span><span class="em">↔️</span><span class="h">CORNER</span>Intake on up to 4 s: backs 2 in off the wall and pushes in again, so the last POLLEN rolls in.</div>
     <div class="ts"><span class="n">5</span><span class="time">~18 s</span><span class="em">🅿️</span><span class="h">PARK</span>In our LOADING ZONE. Slot B: parked by ~24 s. Slot A: by ~28 s.<span class="pts">PARK +5</span></div>
-    <div class="ts off"><span class="time" style="font-size:15px">STRETCH (○)</span><span class="em" style="font-size:15px">🔁</span><span class="pts" style="color:#666; margin:0 0 1px">OFF by default</span>Back to the spot, fires the GARDEN POLLEN only if the camera sees our CELL still <b>up</b>.</div>
+    <div class="ts off"><span class="time" style="font-size:15px">STRETCH (○)</span><span class="em" style="font-size:15px">🔁</span><span class="pts" style="color:#666; margin:0 0 1px">OFF by default</span>Back to the spot, fires the GARDEN POLLEN only if the camera sees the CELL in front still <b>up</b>.</div>
   </div>
   <div class="note">Times are from S1 with no start delay. A start delay makes it all later. From S2 it first drives about 5 s to the shot spot.</div>
   <div class="rule">🅿️ PARKING ALWAYS WINS: at the Park-by time (24 s, or earlier if the drive is long) it stops what it is doing and parks.</div>
@@ -275,8 +275,8 @@
         <tr><td>Blocked 1 s (e.g. by our partner)</td><td>drops that step and parks; while parking it tries again until AUTO ends.</td></tr>
         <tr><td>The Pinpoint fails (low battery)</td><td>stops; backs off the wall (LEAVE). No PARK.</td></tr>
       </table>
-      <div class="card tip small" style="margin:4px 0 6px"><b>💡 Practice:</b> set our HIVE to the match start first (<b>our CELL up</b>).
-        If our CELL is down, <b>AUTO won't shoot</b> (G417).</div>
+      <div class="card tip small" style="margin:4px 0 6px"><b>💡 Practice:</b> set our HIVE to the match start first (<b>the CELL in front of S1 up</b>).
+        If it is down, <b>AUTO won't shoot</b> (G417).</div>
       <h2>📺 The Step line during AUTO</h2>
       <table class="stepl">
         <tr><th>Step says</th><th>It is…</th></tr>
