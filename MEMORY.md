@@ -289,7 +289,10 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - **Checks** against a fresh Fusion mesh export:
     - launcher hood 5.79 mm (≥ 5.5 required: it vibrates); everything else ≥ 5.0 mm;
     - ball path ≥ 14 mm; camera view and power switch clear.
-  - **Jobs:** frame 2.4 h / 95 g black (0.20 mm, 3 walls, 100 %, no brim); panel 2.3 h / 30 g black + 20 g white (0.16 mm, ironing).
+  - **Jobs:**
+    - **One job, both parts** (coach, 13 Nov: "P2S, one job black and white"): `Name_Board_Frame_and_Text_Panel_One_Job_P2S_PETG_AMS_black+white`. 0.20 mm (the prime tower needs one layer height), per-object ironing for the panel only (object metadata), prime tower at (180, 30). **5 h 7 min, 128.6 g black + 30.0 g white, 26 colour changes.** Opened and sliced in the Bambu Studio GUI (Ctrl+R): same numbers, no warnings, "Print plate" ready (goBildaStarter `c59772d`).
+    - Separate jobs as an alternative: frame 2.4 h / 95 g black (0.20 mm, 3 walls, 100 %, no brim); panel 2.3 h / 30 g black + 20 g white (0.16 mm, ironing).
+    - A big push timed out ("unable to rewind rpc post data"); `git -c http.postBuffer=524288000 push` worked.
   - **Rubber-duck review:** first verdict "fix first" (M3 length, Ø9.0 countersink too tight, hood gap 3.9 mm). All fixed, then **"print as is"**. The later shortening reran all checks OK.
   - **In the Fusion robot document:** component `PPN1_Name_Board` (the document is unsaved).
   - A face-down single part can't have raised letters: the background would print in mid-air. Hence the two parts.
@@ -759,7 +762,8 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - `measureMinimumDistance` needs root-context proxies (`body.createForAssemblyContext(occ)`).
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
 - [ ] **Name board (§7):** print and fit, following `stl_name_board/README.md`.
-  - Load **black + white PETG** in the AMS, then print the frame job and the text panel job.
+  - The one-job plate is open and sliced in Bambu Studio (13 Nov ~17:00).
+  - Load **black + white PETG** in the AMS; in the Send dialog, filament 1 = black, 2 = white.
   - Buy 3 × M4 × 12 **flat head** (countersunk) + 3 nylocks + 4 × M3 × 6 button heads.
   - Before fitting: flatness check, and a test screw in one countersink.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
