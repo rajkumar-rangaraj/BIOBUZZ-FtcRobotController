@@ -8,7 +8,7 @@ Last updated: 2026-11-03 (branch `field-tour`).
 
 ## 1. Team, robot, goals
 
-- **FTC team 37102**, season **BIOBUZZ 2026-27**. The users are a coach/parent plus students. Keep explanations **short and simple**. Students find long documents boring, so give them visual cards and numbered steps.
+- **FTC team 37102 "Technically Functional"** (Maple Valley, WA; region Washington), season **BIOBUZZ 2026-27** ("BIOBUZZ" is the season/game name, NOT the team name: the op-mode names "BioBuzz …" refer to the season). The users are a coach/parent plus students. Keep explanations **short and simple**. Students find long documents boring, so give them visual cards and numbered steps.
 - **Robot:** goBILDA StarterBot with REV **Control Hub + Expansion Hub**.
   - Mecanum drive with 4 × goBILDA 312 RPM motors (537.7 ticks/rev, 104 mm wheels).
   - **Flywheel launcher:** 1 motor at 1:1 ratio (28 ticks/rev, 6000 RPM), goBILDA Hogback 96 mm wheels. It now has **two wheels side by side** (added 31 Oct): wheel 2 touches wheel 1 on the side away from the motor (robot photos, 3 Nov).
@@ -271,6 +271,28 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - jobs `bambu_p2s/Robot_Sign_37102_{BLUE,RED}_x2_P2S_PETG_AMS_*.gcode.3mf`
   - **Send dialog:** filament 1 = background colour slot, filament 2 = white
   - The red signs were printed on 31 Oct (one white copy, painted red)
+- **Name board "TECHNICALLY FUNCTIONAL"** (13 Nov; goBildaStarter `4fdeaf3` + `dbfd35e`; `stl_name_board/README.md`, `make_name_board.py`, `make_name_board_job.py`, `guide_name_board.py`, `name_board_export_mesh.py`):
+  - What the coach asked for, in order:
+    1. A black board with the team name in white on the robot's **back** (launcher end), in a marked area between the power switch and the right launcher tower, below the camera. "Technically functional".
+    2. "Font not good, find an impressive font, let the text project more."
+    3. "This should be enough": only the part above the middle of the back channel.
+  - **Two parts:**
+    - PPN1 frame: black, printed face-down, 134 × 137 mm, 5 mm plate with a window, ribs.
+    - PPN2 text panel: printed face-up, black base, white letters 5 mm tall, one AMS colour change.
+    - The letters' tops are flush with the frame face. R102: robot 452.0 → **455.0 mm**. **Flush countersunk M4 needed**: button heads would make it 18.0 in.
+  - **Font:** Saira Black Italic condensed (Google Fonts, OFL; variable instance wght 900 / wdth 75), downloaded and instanced by the generator. Chosen from 16 sampled fonts. "TECHNICALLY / FUNCTIONAL" justified to 113.5 mm: 20.4 / 21.9 mm tall.
+  - **Mount:**
+    - 3 × M4 × 12 flat heads (Ø9.4 countersinks) in the back channel's top hole row: z 16, x −76 / −20 / +36.
+    - Nylocks inside the channel, reached from in front of it.
+    - The ribs rest on the channel's top flange (0.3 mm gap), so pushes go into the channel.
+    - Panel held with 4 × M3 × 6 into blind pilots. M3 × 8 would reach the face.
+  - **Checks** against a fresh Fusion mesh export:
+    - launcher hood 5.79 mm (≥ 5.5 required: it vibrates); everything else ≥ 5.0 mm;
+    - ball path ≥ 14 mm; camera view and power switch clear.
+  - **Jobs:** frame 2.4 h / 95 g black (0.20 mm, 3 walls, 100 %, no brim); panel 2.3 h / 30 g black + 20 g white (0.16 mm, ironing).
+  - **Rubber-duck review:** first verdict "fix first" (M3 length, Ø9.0 countersink too tight, hood gap 3.9 mm). All fixed, then **"print as is"**. The later shortening reran all checks OK.
+  - **In the Fusion robot document:** component `PPN1_Name_Board` (the document is unsaved).
+  - A face-down single part can't have raised letters: the background would print in mid-air. Hence the two parts.
 - **Bambu P2S:** sign settings are 3 walls, 100 % infill (**Rectilinear**; zig-zag doesn't allow 100 %), PETG 250/70 °C, Textured PEI, no supports.
 - **Bambu Studio project rule (found 4 Nov, checked in the 02.09.01.70 source):**
   - When the GUI opens a 3MF, every setting that is **not** listed in `different_settings_to_system` resets to the system preset (`PresetCollection::load_external_preset` → `update_non_diff_values_to_base_config`).
@@ -736,6 +758,10 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - **Fusion pitfalls:**
     - `measureMinimumDistance` needs root-context proxies (`body.createForAssemblyContext(occ)`).
     - A shared face between union/cut features (anchor = notch width) made a non-manifold STL; make one 1 mm wider.
+- [ ] **Name board (§7):** print and fit, following `stl_name_board/README.md`.
+  - Load **black + white PETG** in the AMS, then print the frame job and the text panel job.
+  - Buy 3 × M4 × 12 **flat head** (countersunk) + 3 nylocks + 4 × M3 × 6 button heads.
+  - Before fitting: flatness check, and a test screw in one countersink.
 - [ ] **Next practice:** save the SHOT SPOT, 20+ shots with R1 (battery ≥ 12.5 V), label every ball (L1 + D-pad), pull the logs (`tools/pull_robot_logs.ps1`) and run `tools/shot_results.py`; give the driver quiz (`BioBuzz_Driver_Quiz.pdf`, pass 28/33 + every ★).
 - [ ] **HIVE AUTO (branch `auto-hive`, §8c): first field test. Reviews closed 13 Nov (both agents: ready for a controlled live-ball practice test).** Not installed (the robot runs `c5edfc1`).
   - **13 Nov ~08:52: pushed `6c947c9`** (design-review fixes on top of `57a87e6`; 233 tests pass). Both reviews of it found no blocking issues; their should-fix items are fixed in **`4116bd8`** (rubber-duck) and **`d010203`** (code-review); the follow-up reviews' items in **`9f6bd46`**. All pushed, 236 tests.
