@@ -60,7 +60,7 @@
   .rule { background: #C00000; color: #fff; font-weight: 800; font-size: 15.5px; text-align: center; padding: 5px; border-radius: 10px; margin-top: 6px; }
   .note { font-size: 12.5px; margin-top: 3px; color: #333; }
   .prob td:first-child { white-space: normal; width: 45%; }
-  .stepl td { font-size: 12px; padding: 2px 6px; }
+  .stepl td { font-size: 12px; padding: 1.5px 6px; }
   .stepl td:first-child { white-space: normal; font-family: Consolas, monospace; font-weight: 400; font-size: 11.5px; width: 55%; }
   .check { border: 4px solid #2E7D32; border-radius: 14px; padding: 5px 10px 6px; background: #fff; }
   .check .ttl { font-size: 18px; font-weight: 800; color: #2E7D32; white-space: nowrap; }
@@ -245,7 +245,7 @@
         <ul class="small">
           <li><b>Don't touch</b> the robot or the gamepads. The gamepads do nothing in AUTO.</li>
           <li><b>Don't press STOP.</b> All motors stop at once and the robot won't park. Emergencies only.</li>
-          <li>It waits or skips a step? <b>Let it.</b> Those are its own rules (middle column).</li>
+          <li>It waits or skips a step? <b>Let it</b>: those are its own rules (middle column). After the match, tell the coach: the log has every step.</li>
           <li>Watch the <span class="mono">Step</span> line to see what it is doing.</li>
         </ul>
       </div>
@@ -270,16 +270,16 @@
         <tr><td>Our CELL is already <b>down</b> (HIVE tipped)</td><td>never fires into it (G417). No GARDEN; it parks.</td></tr>
         <tr><td>Windmill not empty after shooting (e.g. a jam)</td><td>skips the GARDEN (G407: max 4 balls) and parks.</td></tr>
         <tr><td>Blocked 1 s before the park (e.g. by our partner)</td><td>drops that step and goes to park.</td></tr>
-        <tr><td>Blocked while parking</td><td>waits and tries again until AUTO ends. Already partly in the zone? It stays.</td></tr>
+        <tr><td>Blocked while parking</td><td>waits and tries again until AUTO ends (stays if partly in the zone).</td></tr>
       </table>
-      <div class="small" style="margin:2px 0 5px"><b>You: hands off.</b> Tell the coach after the match: the log has every step.</div>
+      <div class="card tip small" style="margin:4px 0 6px"><b>💡 Practice:</b> set our HIVE to the match start first: <b>our CELL up</b>
+        (the CELL that points at a FLOWER is the down one). If our CELL is down, <b>AUTO won't shoot</b> (G417).</div>
       <h2>📺 The Step line during AUTO</h2>
       <table class="stepl">
         <tr><th>Step says</th><th>It is…</th></tr>
         <tr><td>DELAY</td><td>waiting (start delay)</td></tr>
         <tr><td>SHOT SPOT · AIM … · FIRE …</td><td>shooting the pre-loads</td></tr>
         <tr><td>GARDEN …</td><td>in the GARDEN</td></tr>
-        <tr><td>BACK TURN · AIM (GARDEN POLLEN)</td><td>stretch (only when ON)</td></tr>
         <tr><td>PARK: …</td><td>driving to the slot</td></tr>
         <tr><td>PARKED B / PARKED A</td><td><b>done ✓</b></td></tr>
         <tr><td>FALLBACK DONE (LEAVE only)</td><td>Pedro was not ready</td></tr>
