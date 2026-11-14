@@ -2,7 +2,7 @@
 
 Read this first. It records what was built, why, what was measured on the robot, and what is still open, so a new agent session can continue without starting over. Keep it up to date when you change something important.
 
-Last updated: 2026-11-03 (branch `field-tour`).
+Last updated: 2026-11-14 (branch `field-tour`).
 
 ---
 
@@ -27,7 +27,7 @@ Last updated: 2026-11-03 (branch `field-tour`).
 | Robot code | `C:\repo\FtcRobotController` (fork `rajkumar-rangaraj/BIOBUZZ-FtcRobotController`, `upstream` = FIRST). Our code is in `TeamCode/.../teamcode/biobuzz/` |
 | CAD and print repo | `C:\repo\goBildaStarter` (`rajkumar-rangaraj/ftc-biobuzz-starterbot`): Fusion via FusionBridge (`fusion.py`), Python/manifold3d generators, Bambu P2S print jobs in `bambu_p2s/` |
 | SDK | **FTC SDK 12.0** (merged 31 Oct; the Driver Hub was also updated to 12.0). 12.0 changed AprilTags: detections are `AprilTagSingleDetection` or `AprilTagClusterDetection` |
-| Branches | `master` = competition code, checked out in `C:\repo\FtcRobotController` (4 Nov). `field-tour` = Pedro Pathing test (see §8), checked out in the **worktree `C:\repo\FtcRobotController-field-tour`** (own VS Code window; `local.properties` copied there). **`master` is merged into `field-tour`** (5 Nov `198208d`: printed-hood flywheel code; `08aff9d`: windmill feed fix); merge again after new `master` commits (they touch different files, no conflicts so far; `field-tour` does NOT have `b1cee74` yet). **`auto-work`** = the user's AUTO work (7 Nov, from `master` `b1cee74`), **worktree `C:\repo\FtcRobotController-auto-work`** (`local.properties` copied, builds). **`hive-auto-v2`** (13 Nov, user: "for new auto create a new git work tree") = next round of the HIVE AUTO, from `auto-hive` `9f6bd46`, **worktree `C:\repo\FtcRobotController-hive-auto-v2`** (`local.properties` copied, builds; not pushed yet). `auto-hive` stays as installed on the robot. **MEMORY.md exists only on `field-tour`** (and `auto-work`, whose copy got its own §8b on 9 Nov: merge the two copies by hand when the branches meet). **9 Nov: `master`, `auto-work` and `field-tour` pushed to `origin`** (the user's fork). Ask before pushing |
+| Branches | `master` = competition code, checked out in `C:\repo\FtcRobotController` (4 Nov). `field-tour` = Pedro Pathing test (see §8), checked out in the **worktree `C:\repo\FtcRobotController-field-tour`** (own VS Code window; `local.properties` copied there). **`master` is merged into `field-tour`** (5 Nov `198208d`: printed-hood flywheel code; `08aff9d`: windmill feed fix); merge again after new `master` commits (they touch different files, no conflicts so far; `field-tour` does NOT have `b1cee74` yet). **`auto-work`** = the user's AUTO work (7 Nov, from `master` `b1cee74`), **worktree `C:\repo\FtcRobotController-auto-work`** (`local.properties` copied, builds). **`hive-auto-v2`** (13 Nov, user: "for new auto create a new git work tree") = next round of the HIVE AUTO, from `auto-hive` `9f6bd46`, **worktree `C:\repo\FtcRobotController-hive-auto-v2`** (`local.properties` copied, builds; not pushed yet). `auto-hive` stays as installed on the robot. **MEMORY.md exists only on `field-tour`** (and `auto-work`, whose copy got its own §8b on 9 Nov: merge the two copies by hand when the branches meet). **9 Nov: `master`, `auto-work` and `field-tour` pushed to `origin`** (the user's fork). **14 Nov: `auto-work` = `master` `2328ed9` (AUTO driver guide, 2 commits, `master` itself not pushed) + `cf9928c` (overnight AUTO hardening) + `9ed92bc` (guide update), pushed.** Ask before pushing |
 | Build | `$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot'; .\gradlew.bat :TeamCode:testDebugUnitTest :TeamCode:assembleDebug -q` (exit code 1 can just be a stderr deprecation note: check for `BUILD SUCCESSFUL` / `error:`) |
 | Tests | JUnit in `TeamCode/src/test/...` (98 tests on `field-tour`, 93 on `master`, 5 Nov night). Results in `TeamCode/build/test-results/testDebugUnitTest/*.xml` |
 | adb | `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`. Hub at `192.168.43.1:5555`. **Always use `-s 192.168.43.1:5555`**, because a stale "offline" device sometimes appears |
@@ -254,9 +254,26 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - **Drivers used full-deflection flicks**, mostly full-speed spins (4–15 % of rows vs 0–5 % on 7 Nov). Each flick fell between 70 ms log samples, and the wheels spun down over ~0.4 s.
     - **Correction (10 Nov): not glitches.** Those were 0.5 s IMU samples (`DIAG_SLOW_SAMPLE_MS` = 500) during fast turns, plus **the IMU yaw flipping by 180°**. The wheel encoders (logged every 50 ms) show each big jump = the real turn ± 180° (fit 0.02155°/tick, median error 4°). The yaw mostly stays within ±90° and flips where it crosses: ~1290 flips in the diag logs 30 Oct – 9 Nov (32 on 9 Nov), on every practice day; 31 Oct still had some smooth crossings past ±95°. Cause not proven: maybe a mounting/orientation mismatch near an Euler singularity (a constant mounting error alone only adds an offset). **Check on the robot:** BioBuzz Calibration, turn the robot slowly by hand past 90°; if the heading jumps 180°, check the hub's real logo/USB directions against `HUB_LOGO`/`HUB_USB` (and recheck after the electronics v2 move). **Affects:** OLD AUTO (IMU heading, and it drops the Pinpoint if the two differ by > 15°), LB + SHARE "teach AUTO position" (refuses when Pinpoint and IMU differ by > 5°), BioBuzz System Check turn test. Field-centric TeleOp corrects the flips (`FieldHeading`).
     - **Offered:** an 8 % stick dead zone (+ optional gentler turning near centre). The user said "TeleOp worked, no need to tweak now", so nothing was changed. If it comes back: swap or re-pair the gamepad (don't touch the sticks while pairing), then add the dead zone.
+16. **13 Nov practice (logs `robot_logs/20261113_222415` in the main checkout = every 13 Nov session; overnight review 13→14 Nov):**
+    - **The 13 Nov "Pinpoint faults" were an SDK driver trap, not hardware** (code-review agent, 14 Nov; SDK 12 driver source + logs).
+      - `GoBildaPinpointDriver` (error detection LOCAL_TEST, the default) refuses a reading more than 5000 mm (196.85 in) from the last one it took: it keeps the old value and reports FAULT_BAD_READ. `setPosition()` only writes the device.
+      - TeleOp resets the Pinpoint at INIT and tracks in its own frame. After the 21:44 / 21:46 TeleOps, AUTO 21:47:13 (BLUE S1) set the start pose: x took it (12.7), y was refused (253 in off) and stayed at −191.5 → POSE LOST at 0.2 s, 0 points.
+      - The next two AUTOs (21:47:31, 21:48:47) saw FAULT_BAD_READ at START (y still refused while x and heading tracked) → LEAVE only. The 21:48:57 TeleOp reset re-synced it (|0 − stored| < 5000 mm) and the 21:49 AUTOs drove normally.
+      - **Any Pedro op mode that sets a pose after a TeleOp has this trap** (HIVE AUTO, Field Tour). Fixed only in the Pedro AUTO (`auto-work` `cf9928c`, §10).
+    - **Battery drained all evening:** median 12.87 V (15:58), 12.30 (21:08), 11.87 (21:37, p5 10.45), 11.28 (22:09, min 8.45), 10.50 (22:15, min 6.27); fresh battery 13.45 (22:23). AUTOs started at 10.4–11.3 V.
+      - Expansion Hub unresponsive at 21:47:48 (0.26 s) and 21:53:52 (then the RC app restarted); "battery too low to run motors and servos" on both hubs at 22:19.
+      - Driver Hub connection lost during AUTO at 21:49:56 (run ended at 5.8 s) and 21:56:31.
+    - **The AUTO runs that fired never saw our CELL** (17:52–18:06 and 21:06–21:08: "no CELL in view: firing on the planned heading" at 1450 t/s). The old aim used `HiveVision.target()` (most tags wins) and then dropped a CELL that wasn't ours.
+      - The practice HIVE was in the tipped state that evening: the HIVE AUTO at 17:52 saw the far CELL UP, and the Pedro AUTO at 21:49–21:54 saw "CELL BLUE_REAR DOWN" 29–32 in → no fire (G417, by design). So those shots likely went at a DOWN CELL.
+      - Team: "slightly long and misses" → AUTO 1440 t/s.
+    - **CELL camera height at the S1 shot spot:** UP 46.1–46.3 in (9 Nov), DOWN 29.3–32.1 in (13 Nov). A DOWN CELL's floor distance reads 55–69 in (the formula assumes the UP tag height). The old 45 in threshold left 1 in of margin; AUTO.md's "59 in" was wrong.
+    - **Windmill stalls cluster at one angle:** 17:58 had 21 STUCK in 121 shots, 15 of the 21 inside one 135° arc; 21:18 19/122; 21:31 18/96; 22:23 (fresh battery) 1/29. Cause: the motor mount's tight spot plus the low battery. Glue the PPW1 bearing (gel CA or 5-min epoxy, not bed glue).
+    - **Gamepad right-stick drift** 0.087–0.134 at 21:08–21:14 ("robot rotating on its own"); back to 0 at 21:18. TeleOp has no dead zone (8 % offered on 9 Nov, not applied).
+    - The 17:45 install did not remove any TeleOp: all 14 op modes registered.
 
 ## 6. Docs and team artifacts (robot repo)
 
+- `BioBuzz_AUTO_Driver_Guide.pdf` (`tools/BioBuzz_AUTO_Driver_Guide.html`, 13–14 Nov): 2 landscape pages for the drive team running BioBuzz AUTO RED / BLUE: placement map, INIT buttons, a good INIT screen + bad lines, partner agreement, timeline, if-this-happens, Step lines, pre-match checklist. Rebuild: `msedge --headless --no-pdf-header-footer --print-to-pdf=…`; check that nothing reaches the footer (both pages are full).
 - `BioBuzz_Driver_Card.pdf` (`tools/driver_card.html`): a 2-page visual card for students (gamepad picture, 5 scoring steps, pit-crew SHOT SPOT steps, fix-it table).
 - `BioBuzz_Shooting_Guide.pdf/docx` (`tools/make_shooting_guide.js`): the long coach guide (5 pages).
 - `BioBuzz_Wiring_Sheet.pdf/docx` (`tools/make_wiring_sheet.js`).
@@ -740,6 +757,28 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 
 ## 10. Open items / backlog
 
+- [ ] **AUTO hardening (overnight 13→14 Nov; `auto-work` `cf9928c` + guide `9ed92bc`, pushed; NOT installed; APK MD5 `ad349580…`, 218 tests).** The team asked:
+  - "the intake stays 2 in behind the perimeter wall";
+  - "reduce 10 rpm in the auto, it was slightly long";
+  - "completely review the auto … no flaw … cannot afford losing points".
+
+  Reviewed by a rubber-duck agent (5 rounds) and a code-review agent (4 rounds); both: "ready to commit and install for a practice test". Details: AUTO.md "If something goes wrong" and the `cf9928c` message. In short:
+  - **Pinpoint:** the after-TeleOp trap (§5.16) is fixed. INIT reads the Pinpoint unchecked, and `startPedro()` confirms the start pose took.
+  - **Pose lost:** NaN, outside the field, an impossible jump (margin 3 in, replayed on 37 logs), or not READY for 0.25 s with the drive stopped meanwhile. Pedro then stops for good.
+  - **FALLBACK:** at S1 it still shoots on the camera (hub IMU, at most 6.5°), then backs up 8 in. After a pose loss elsewhere, it backs the intake 4 in off the wall in front of it (LEAVE = not touching a wall).
+  - **GARDEN:** the sweep and the corner pushes aim 2 in past the wall. Still within 6 in of the wall = AGAINST THE WALL; still farther out = BLOCKED → park. The corner moves back off 2 in from where the robot stopped.
+  - **Shot and CELL:** one shot speed, 1450 → 1440 t/s. G417 uses `targetCell` + `CellCheck` (median of 5 and the latest frame ≥ 39 in). The stretch needs the CELL in view. The aim turns at most 8°.
+  - **INIT warnings:** !! Pedro / battery / CELL DOWN.
+
+  **Install (ask first), then check on the field:**
+  1. Battery ≥ 12.5 V (INIT warns). Practice HIVE at the match start (INIT: `Camera: our CELL … UP`).
+  2. AUTO → TeleOp → AUTO **without a power cycle**: the second AUTO must drive normally (log `Pinpoint READY at the start pose`).
+  3. S1 runs: log `CELL … UP: height ~46 in (median …)`. Do the 1440 t/s shots go in? Adjust `AUTO_LAUNCH_VELOCITY` in 10 t/s steps.
+  4. GARDEN: `AGAINST THE WALL on GARDEN SWEEP` and `GARDEN WIGGLE done: … deepest x` (≈ −61.5 to −62.5). Does the intake touch the wall? How many POLLEN come in?
+  5. Still parked by ~24 s (slot B)? The wall settle adds ~1 s.
+  6. Any `POSE JUMP` in a normal run → raise `POSE_JUMP_IN`.
+  - **Open question (this AUTO and the HIVE AUTO):** which CELL is up at the real match start. The AUTO assumes the CELL in front of S1 (`startingUpCell`: BLUE_REAR / RED_AUDIENCE). The 9 Nov practice agreed; the 13 Nov practice HIVE was in the other state. INIT now shows our CELL UP/DOWN: check it at the first real match setup.
+  - Then merge into `master` (fast-forward: `auto-work` = `master` + 2 commits).
 - [ ] Aim test (□ + 10 balls from the spot) to decide between camera offset and driver aim. Then set `aim_trim_deg` or retrain the drivers. (FIRE now waits for the aim when the CELL is in view: `AimGate`.)
 - [ ] Fit launcher hood v2 (PPL1, printed 4 Nov; `Launcher_Hood_Step_by_Step.pdf`, **6 inserts / 3 screws per tower**) and the floor parts PPR1–3 (PPR2 + PPR3 printed 5 Nov, PPR1 printing 5 Nov night; `Floor_Parts_Step_by_Step.pdf`).
   - **Installed: `master` `b1cee74` (7 Nov ~21:05)**, after `8967f09` (6 Nov 09:57). The robot no longer has `a80ff5c` with the old flywheel settings.
@@ -790,6 +829,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - Then 3–5 full runs in good light. Note whether TIP 1 happens (and whether before the 4th pre-load: G417 risk, user decision A), how many GARDEN POLLEN come in with the 1–2 s corner, whether the far shots go in and TIP 2 happens, and whether it parks by 30 s.
   - Pull `hiveauto_*.csv`: check `height_in` (UP ≈ 46, DOWN ≈ 32; bands 42 / 37) and the `AIM LIMIT`, `WAIT` / `GO ON` and `STOPPED` events.
   - Blind far shot: practice only, keep it OFF in matches.
+  - **Before its next test (`hive-auto-v2`): port the Pinpoint START fix** from the Pedro AUTO (`cf9928c`: INIT error detection NONE + `startPedro()`, and the stricter `poseLost()`). It has the same after-TeleOp trap (§5.16).
 - [ ] **Test the GARDEN corner wiggle + the IMU (`master` = `auto-work` `81c1f31` / `c29d480`): on the robot since 13 Nov ~17:45** (inside the `auto-hive` `9f6bd46` install).
   - **`81c1f31` (12 Nov, user: "I also moved the control hub to side, there was an env update needed?"):** `BioBuzzConstants.HUBS_ON_EDGE = true` (IMU: logo LEFT, USB FORWARD).
     - Both mountings stand the hub upright with the same hub axis up (logo × USB points down in both), so they differ by a fixed yaw offset only. All code uses heading changes (`imuAtInit`, `imuHeading0`, `resetYaw`, FieldHeading offsets) and nothing reads pitch/roll, so the old setting did not break driving.
@@ -803,6 +843,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - Log: `EVENT GARDEN WIGGLE … / done: N moves`; steps `GARDEN WIGGLE OUT/IN`.
     - New laptop test `gardenWiggleIsShortStraightAndClear`; 209 tests pass.
   - **Check on the field:** all 4 POLLEN in, no wall hits. Tune `GARDEN_WIGGLE_IN` within 1–2 in if needed.
+  - **13 Nov:** the team saw the intake stop ~2 in short of the wall → superseded by the push past the wall in `cf9928c` (item above).
   - **Encoding pitfall (12 Nov):** `a1f12ab` double-encoded this file. Windows PowerShell 5's `Get-Content -Raw` reads UTF-8 without a BOM as cp1252, and writing that back as UTF-8 garbles every special character. Repaired from `9ee6811`. Edit this file with the edit tool or Python (`encoding='utf-8'`), never Get-Content → WriteAllText. Here-strings piped to `python -` also turn non-ASCII characters into `?`: use `\u` escapes in such scripts.
 - [ ] Fusion trial: the window title said "Trial ends in 6 days" on 9 Nov and **"Trial ends in 3 days" on 12 Nov (≈ 15 Nov)**. Make sure the team keeps a working Fusion licence: every CAD script runs through the FusionBridge add-in, and the robot doc is open but unsaved (title `3200-2627-0004 BIOBUZZ robot*`). CAD is in Fusion v26; the v2.1 save on 9 Nov ~16:55 hadn't shown up as v27 in the cloud by 17:10: check Fusion's Job Status, or re-run `electronics_v2_build.py` and save.
 - [ ] Straight-on check for the SHOT SPOT (cluster yaw), if aiming from the side keeps missing.
