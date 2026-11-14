@@ -270,6 +270,23 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
     - **Windmill stalls cluster at one angle:** 17:58 had 21 STUCK in 121 shots, 15 of the 21 inside one 135° arc; 21:18 19/122; 21:31 18/96; 22:23 (fresh battery) 1/29. Cause: the motor mount's tight spot plus the low battery. Glue the PPW1 bearing (gel CA or 5-min epoxy, not bed glue).
     - **Gamepad right-stick drift** 0.087–0.134 at 21:08–21:14 ("robot rotating on its own"); back to 0 at 21:18. TeleOp has no dead zone (8 % offered on 9 Nov, not applied).
     - The 17:45 install did not remove any TeleOp: all 14 op modes registered.
+17. **14 Nov practice with the overnight AUTO (`9ed92bc`, logs `robot_logs/20261114_125319`: 21 AUTO runs 11:40–12:52; coach: "looks like it has a weird auto bug"):**
+    - **The CELL names on the practice HIVE are the other way round from the manual.** From S1, the CELL straight in front is UP and named BLUE_AUDIENCE / RED_REAR (13 Nov HIVE AUTO log: 36–37 in away, 50–51 in high). The cluster named like `startingUpCell` (BLUE_REAR / RED_AUDIENCE, Competition Manual Fig 10-2) is the HIVE's far CELL, DOWN (55–69 in away, 29–33 in high). On 9 Nov the near CELL was BLUE_REAR, so the practice setup changed.
+    - **Effect of the name-based aim** (`targetCell`):
+      - 13 runs waited the full 3.5 s aim timeout and fired blind at ~4.05 s.
+      - 3 runs (11:58:03, 11:58:48, 12:48:48) saw the far CELL "DOWN" and refused to shoot (G417): no GARDEN, parked at ~5 s. This is most likely the "weird bug".
+      - Fixed in `5854796`: aim at the **CELL in front** = our alliance's nearest CELL within 47 in, any name (`HiveVision.nearestCell`, `CellCheck.front`).
+    - **12:25:44: a real I2C fault on the Pinpoint** (`I2C_TIMEOUT_SDA_STUCK`, Control Hub bus 0; "Error communicating with I2C device(s) 'pinpoint'").
+      - It happened in the GARDEN sweep, stalled against the wall with the intake on (battery 12.46 → 11.84 V).
+      - The loop froze for 0.42 s, then the Pinpoint read (0, 0) NOT_READY → POSE LOST. AUTO backed 4.4 in off the wall and stopped (no PARK), as designed.
+      - **Hardware:** reseat and strain-relieve the Pinpoint I2C cable at both ends, keep it away from motor wires, keep the battery ≥ 12.5 V.
+    - **"POSE LOST (−72, −72)" at the end of runs** (STOP or the 30 s timer) was harmless shutdown noise: after `$Stop$` the SDK's I2C reads return zeros. Since `5854796` AUTO ignores them and records no TeleOp heading from them; the drives are cut.
+    - **Other runs:**
+      - Runs ended early because STOP was pressed (0.9, 1.4, 1.7, 5.8, 11.8, 13.8, 25.1 s; RC log: `$Stop$` commands, no exceptions).
+      - 3 runs had Shoot OFF: straight to park by design (G407).
+      - 2 runs JAMMED (3 balls) → no GARDEN.
+      - The GARDEN sweep reached the wall (`AGAINST THE WALL` at x 61.4–62.1) or its target −63.5 (deepest x −63.5 to −63.7).
+      - Parked by 22–26 s.
 
 ## 6. Docs and team artifacts (robot repo)
 
@@ -784,6 +801,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   6. Any `POSE JUMP` in a normal run → raise `POSE_JUMP_IN`.
   - **Open question (this AUTO and the HIVE AUTO):** which CELL is up at the real match start. The AUTO assumes the CELL in front of S1 (`startingUpCell`: BLUE_REAR / RED_AUDIENCE). The 9 Nov practice agreed; the 13 Nov practice HIVE was in the other state. INIT now shows our CELL UP/DOWN: check it at the first real match setup.
   - `master` = `auto-work` since 14 Nov (local fast-forward; push `master` when the coach says so).
+  - **14 Nov ~13:15: fix `5854796` (CELL in front, not by name; nothing from the zero reads at STOP) + guide `cf15bf9`, pushed; both agents: ready. APK MD5 `9360817c…`, 219 tests. NOT installed yet** (robot still `9ed92bc` / `ad349580…`). Local `master` = `cf15bf9`, but its `BioBuzz_AUTO_Driver_Guide.pdf` on disk was locked (open in a viewer): run `git checkout -- BioBuzz_AUTO_Driver_Guide.pdf` after closing it. See §5.17.
 - [ ] Aim test (□ + 10 balls from the spot) to decide between camera offset and driver aim. Then set `aim_trim_deg` or retrain the drivers. (FIRE now waits for the aim when the CELL is in view: `AimGate`.)
 - [ ] Fit launcher hood v2 (PPL1, printed 4 Nov; `Launcher_Hood_Step_by_Step.pdf`, **6 inserts / 3 screws per tower**) and the floor parts PPR1–3 (PPR2 + PPR3 printed 5 Nov, PPR1 printing 5 Nov night; `Floor_Parts_Step_by_Step.pdf`).
   - **Installed: `master` `b1cee74` (7 Nov ~21:05)**, after `8967f09` (6 Nov 09:57). The robot no longer has `a80ff5c` with the old flywheel settings.
