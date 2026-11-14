@@ -111,7 +111,7 @@ public final class BioBuzzConstants {
     // one-wheel shots of 7 Nov (above), in between and beyond shaped by tools/shot_model.py (flat to ~36 in, then
     // ~0.6 %/in). 36-44 in lowered 10 Nov from 51 labelled TeleOp shots (tools/shot_results.py: IN balls 10-26 t/s
     // under the table there; 1450 at ~40 in went IN 8 of 10). 48 in and up: not enough labelled shots at auto speed
-    // yet (10 Nov: 1450 at 48-52 in went IN 5, SHORT 4 of 14). Used by the Pedro AUTO too when it sees the CELL.
+    // yet (10 Nov: 1450 at 48-52 in went IN 5, SHORT 4 of 14). TeleOp only: the Pedro AUTO fires at AUTO_LAUNCH_VELOCITY.
     public static final double[] AUTO_SPEED_DIST_IN = {30, 36, 40, 44, 48, 52, 56, 60, 64};
     public static final double[] AUTO_SPEED_TPS = {1440, 1440, 1440, 1465, 1525, 1555, 1585, 1610, 1640};
     public static final double AUTO_SPEED_KEEP_SEC = 3.0;                        // keep the auto speed after the CELL is lost
@@ -223,7 +223,10 @@ public final class BioBuzzConstants {
     public static final double AUTO_AIM_HEADING_DEG = -50;                       // camera found the BLUE CELL at about -50 (31 Oct); + is CCW
     public static final double AUTO_WALL_GAP_IN = 4;                             // stay off the wall for LEAVE
     public static final double AUTO_PARK_STRAFE_IN = 14;                         // CALIBRATE; strafe right into zone
-    public static final double AUTO_LAUNCH_VELOCITY = LAUNCHER_NEAR_VELOCITY;    // CALIBRATE at the shot spot
+    // AUTO's one shot speed: every Pedro AUTO shot is from the one shot spot (AutoField.SHOT, ~39 in camera floor distance).
+    // 13 Nov: 1450 (= LAUNCHER_NEAR_VELOCITY) from there went slightly LONG (team) -> 1440, one D-pad trim step lower
+    // (also the TeleOp table speed at 39 in). CALIBRATE at the shot spot in LAUNCHER_TRIM_STEP steps.
+    public static final double AUTO_LAUNCH_VELOCITY = 1440;
     public static final int AUTO_FEED_POCKETS = 12;                              // up to 3 full turns (not every pocket launches)
     public static final double AUTO_FIRE_SETTLE_SEC = 0.5;                       // still robot before firing: balls settle
     public static final double AUTO_FEED_POWER = 0.3;                            // ContinuousFeeder power (not used by AUTO now)

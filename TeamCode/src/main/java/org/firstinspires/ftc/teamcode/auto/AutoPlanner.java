@@ -80,14 +80,27 @@ public final class AutoPlanner {
     public static final class Leg {
         public final String label;
         public final Pose to;
+        /** Where the robot really stops: {@link #to} itself, or the wall in front of it on a leg into a wall. */
+        public final Pose stop;
         public final double speed;
         public final Action action;
 
         public Leg(String label, Pose to, double speed, Action action) {
+            this(label, to, to, speed, action);
+        }
+
+        /** A leg into a wall: it aims at {@code to} beyond the wall, the wall stops the robot at {@code stop}. */
+        public Leg(String label, Pose to, Pose stop, double speed, Action action) {
             this.label = label;
             this.to = to;
+            this.stop = stop;
             this.speed = speed;
             this.action = action;
+        }
+
+        /** Staying still at the end of this leg means the robot has reached the wall, not that it is blocked. */
+        public boolean intoWall() {
+            return stop != to;
         }
 
         @Override
@@ -113,27 +126,36 @@ public final class AutoPlanner {
                 new Leg("SHOT SPOT", SHOT, SPEED_SHOT, Action.DRIVE));
     }
 
-    /** From the shot spot: back off and turn, line up on the wall, sweep the 4 POLLEN with the intake on. */
+    /** From the shot spot: back off and turn, line up on the wall, sweep the 4 POLLEN with the intake on, into the wall. */
     public static List<Leg> toGarden() {
         return Arrays.asList(
                 new Leg("GARDEN TURN", GARDEN_TURN, SPEED_TRANSIT, Action.DRIVE),
                 leg("GARDEN LINE-UP", GARDEN_SWEEP_START_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL, SPEED_TRANSIT),
                 new Leg("GARDEN APPROACH", new Pose(GARDEN_SWEEP_SLOW_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL),
                         SPEED_SWEEP_APPROACH, Action.INTAKE),
-                new Leg("GARDEN SWEEP", new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL), SPEED_SWEEP,
-                        Action.INTAKE));
+                new Leg("GARDEN SWEEP", new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL),
+                        gardenCorner(), SPEED_SWEEP, Action.INTAKE));
+    }
+
+    /** Intake bumper against the RED wall at the GARDEN corner. */
+    public static Pose gardenCorner() {
+        return new Pose(GARDEN_CORNER_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL);
     }
 
     /**
-     * At the GARDEN corner: back GARDEN_WIGGLE_IN along the wall, then in to the sweep end again. The op mode repeats it
-     * while the intake runs at the corner, so a POLLEN pressed against the wall gets room to roll into the intake.
+     * At the GARDEN corner, from where the robot is now ({@code at}, RED frame): back GARDEN_WIGGLE_IN along the wall from
+     * there, then push in to the wall again. The op mode repeats it while the intake runs at the corner, so a POLLEN
+     * pressed against the wall gets room to roll into the intake. The back-off is measured from where the robot really
+     * stopped (the wall or a POLLEN), not from where it thinks the wall is, and never leaves the part of the lane the
+     * sweep already crossed.
      */
-    public static List<Leg> gardenWiggle() {
-        Pose corner = new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL);
+    public static List<Leg> gardenWiggle(Pose at) {
+        double outX = Math.min(Math.max(at.x, GARDEN_SWEEP_END_X) + GARDEN_WIGGLE_IN, GARDEN_SWEEP_SLOW_X);
         return Arrays.asList(
-                new Leg("GARDEN WIGGLE OUT", new Pose(corner.x + GARDEN_WIGGLE_IN, corner.y, corner.headingDeg),
-                        SPEED_WIGGLE, Action.INTAKE),
-                new Leg("GARDEN WIGGLE IN", corner, SPEED_WIGGLE, Action.INTAKE));
+                new Leg("GARDEN WIGGLE OUT", new Pose(outX, GARDEN_LANE_Y, FACE_ALLIANCE_WALL), SPEED_WIGGLE,
+                        Action.INTAKE),
+                new Leg("GARDEN WIGGLE IN", new Pose(GARDEN_SWEEP_END_X, GARDEN_LANE_Y, FACE_ALLIANCE_WALL),
+                        gardenCorner(), SPEED_WIGGLE, Action.INTAKE));
     }
 
     /** End of the GARDEN sweep back to the shot spot (stretch); the intake keeps pulling the POLLEN in on the way. */
@@ -180,10 +202,24 @@ public final class AutoPlanner {
 
     // ---------------- Time ----------------
 
+    /** A leg into a wall ends once the robot has stayed still this long against it (the op mode uses the same). */
+    public static final double WALL_SETTLE_SEC = 1.0;
+    /**
+     * Still on a leg into a wall counts as AT THE WALL only this close to where the wall should stop it (pose error ~2 in,
+     * a POLLEN wedged in front ~3 in). Still farther out = blocked (e.g. by a robot): the op mode stops there as on any
+     * other leg, so no back and forth into whatever is in the way.
+     */
+    public static final double WALL_CONTACT_BAND_IN = 6.0;
+
+    /** On a leg into a wall, is the robot ({@code at}, RED frame) close enough to the wall to be stopped by it? */
+    public static boolean atWall(Pose at, Leg leg) {
+        return leg.intoWall() && at.distanceTo(leg.stop) <= WALL_CONTACT_BAND_IN;
+    }
+
     public static double legSec(Pose from, Leg leg) {
-        double drive = from.distanceTo(leg.to) / (leg.speed * TOP_SPEED_IN_PER_SEC * SPEED_EFFICIENCY);
+        double drive = from.distanceTo(leg.stop) / (leg.speed * TOP_SPEED_IN_PER_SEC * SPEED_EFFICIENCY);
         double turn = Math.abs(normalizeDeg(leg.to.headingDeg - from.headingDeg)) / 90 * TURN_SEC_PER_90;
-        return drive + turn / 2 + LEG_OVERHEAD_SEC;
+        return drive + turn / 2 + LEG_OVERHEAD_SEC + (leg.intoWall() ? WALL_SETTLE_SEC : 0);
     }
 
     public static double estimateSec(Pose from, List<Leg> legs) {
@@ -191,13 +227,14 @@ public final class AutoPlanner {
         Pose p = from;
         for (Leg l : legs) {
             t += legSec(p, l);
-            p = l.to;
+            p = l.stop;
         }
         return t;
     }
 
+    /** Where the robot ends after the legs (the wall's stop, on a leg into a wall). */
     public static Pose end(Pose from, List<Leg> legs) {
-        return legs.isEmpty() ? from : legs.get(legs.size() - 1).to;
+        return legs.isEmpty() ? from : legs.get(legs.size() - 1).stop;
     }
 
     /** Latest match time to start parking from {@code from}: the user deadline, earlier if the drive is long. */
@@ -260,21 +297,25 @@ public final class AutoPlanner {
         return null;
     }
 
-    /** Checks the robot along every leg (straight line, heading turning the short way, as Pedro's linear()). */
+    /**
+     * Checks the robot along every leg (straight line, heading turning the short way, as Pedro's linear()). A leg into a
+     * wall is checked up to where the wall stops the robot.
+     */
     public static String routeProblem(Pose from, List<Leg> legs, Slot partnerSlot) {
         Pose p = from;
         for (Leg l : legs) {
-            double dh = normalizeDeg(l.to.headingDeg - p.headingDeg);
-            int n = (int) Math.max(4, Math.ceil(Math.max(p.distanceTo(l.to), Math.abs(dh) / 2)));
+            Pose to = l.stop;
+            double dh = normalizeDeg(to.headingDeg - p.headingDeg);
+            int n = (int) Math.max(4, Math.ceil(Math.max(p.distanceTo(to), Math.abs(dh) / 2)));
             for (int i = 0; i <= n; i++) {
                 double t = (double) i / n;
-                Pose q = new Pose(p.x + t * (l.to.x - p.x), p.y + t * (l.to.y - p.y), p.headingDeg + t * dh);
+                Pose q = new Pose(p.x + t * (to.x - p.x), p.y + t * (to.y - p.y), p.headingDeg + t * dh);
                 String problem = footprintProblem(q, partnerSlot);
                 if (problem != null) {
                     return l.label + ": " + problem;
                 }
             }
-            p = l.to;
+            p = to;
         }
         return null;
     }

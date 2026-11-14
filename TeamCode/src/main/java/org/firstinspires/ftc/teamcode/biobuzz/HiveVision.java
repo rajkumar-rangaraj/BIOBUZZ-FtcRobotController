@@ -183,23 +183,49 @@ public class HiveVision {
         }
         Target best = null;
         for (AprilTagDetection det : latest) {
-            if (!(det instanceof AprilTagClusterDetection) || det.ftcPose == null) {
+            Target t = toTarget(det);
+            if (t == null || !t.cell.belongsTo(alliance)) {
                 continue;
             }
-            AprilTagClusterDetection d = (AprilTagClusterDetection) det;
-            Cell cell = d.metadata == null ? null : Cell.forCluster(d.metadata.name);
-            if (cell == null || !cell.belongsTo(alliance)) {
-                continue;
-            }
-            int count = Math.max(1, (int) Math.round(d.percentClusterFound * 4 / 100.0));
-            Target t = new Target(cell, count, d.ftcPose.bearing, aimTrimDeg, d.ftcPose.range, d.ftcPose.elevation,
-                    d.ftcPose.x, d.ftcPose.y, d.ftcPose.z);
             if (best == null || t.tagCount > best.tagCount
-                    || (t.tagCount == best.tagCount && cell == preferred)) {
+                    || (t.tagCount == best.tagCount && t.cell == preferred)) {
                 best = t;
             }
         }
         return best;
+    }
+
+    /**
+     * Only this CELL of our ALLIANCE, or null when it is not in a recent frame. Unlike {@link #target}, another CELL with
+     * more visible tags can't hide it (AUTO aims at one CELL only).
+     */
+    public Target targetCell(Alliance alliance, Cell cell) {
+        if (latest == null || sinceFrame.seconds() > TARGET_MAX_AGE_SEC || !cell.belongsTo(alliance)) {
+            return null;
+        }
+        Target best = null;
+        for (AprilTagDetection det : latest) {
+            Target t = toTarget(det);
+            if (t != null && t.cell == cell && (best == null || t.tagCount > best.tagCount)) {
+                best = t;
+            }
+        }
+        return best;
+    }
+
+    /** A CELL cluster detection as a Target (null for single tags, unknown clusters or no pose). */
+    private Target toTarget(AprilTagDetection det) {
+        if (!(det instanceof AprilTagClusterDetection) || det.ftcPose == null) {
+            return null;
+        }
+        AprilTagClusterDetection d = (AprilTagClusterDetection) det;
+        Cell cell = d.metadata == null ? null : Cell.forCluster(d.metadata.name);
+        if (cell == null) {
+            return null;
+        }
+        int count = Math.max(1, (int) Math.round(d.percentClusterFound * 4 / 100.0));
+        return new Target(cell, count, d.ftcPose.bearing, aimTrimDeg, d.ftcPose.range, d.ftcPose.elevation,
+                d.ftcPose.x, d.ftcPose.y, d.ftcPose.z);
     }
 
     public int visibleTagCount() {

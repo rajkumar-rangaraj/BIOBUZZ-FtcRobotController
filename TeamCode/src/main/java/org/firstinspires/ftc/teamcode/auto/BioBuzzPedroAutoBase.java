@@ -19,10 +19,10 @@ import org.firstinspires.ftc.teamcode.biobuzz.BioBuzzRobot;
 import org.firstinspires.ftc.teamcode.biobuzz.CsvLog;
 import org.firstinspires.ftc.teamcode.biobuzz.HiveVision;
 import org.firstinspires.ftc.teamcode.biobuzz.ShotFeeder;
-import org.firstinspires.ftc.teamcode.biobuzz.ShotSpeed;
 import org.firstinspires.ftc.teamcode.biobuzz.TeleOpSettings;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /*
@@ -37,6 +37,10 @@ import java.util.List;
  * PARK ALWAYS WINS: every step is cut short at the park start (the INIT "park by" time, earlier when the drive to the
  * slot is long). Blocked for 1 s (e.g. by our partner): before the park the step is dropped and the robot parks;
  * while parking it waits and tries again until the end of AUTO.
+ *
+ * NO PEDRO (the Pinpoint not READY at the start pose at START, after up to PINPOINT_START_WAIT_SEC: startPedro) or the
+ * pose lost before the robot left the start: FALLBACK on the wheel encoders and the camera. S1: back off to the shot
+ * spot, camera aim, fire the pre-loads (G417 check), back off for LEAVE. S2: LEAVE only.
  *
  * INIT (gamepad 1): D-pad L/R = start, Square/X = slot A/B, Cross/A = shoot, Triangle/Y = GARDEN, Circle/B = stretch,
  *                   D-pad U/D = start delay, LB/RB = park-by time.
@@ -65,10 +69,48 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double GARDEN_WIGGLE_MOVE_SEC = 1.0;
     /** Stretch only when at least this much time is left for aim + settle + a few pockets at the spot. */
     static final double STRETCH_MIN_FIRE_SEC = 4.0;
-    /** CELL opening height when UP is ~59 in, when tipped down ~30-35 in. CALIBRATE: logged as height_in. */
-    static final double CELL_UP_MIN_HEIGHT_IN = 45.0;
     /** Fallback without Pedro: back straight off the wall this far (LEAVE). */
     static final double FALLBACK_LEAVE_IN = 8.0;
+    /**
+     * After a pose loss away from the start: back up until the intake is this far off the wall in front of it (LEAVE =
+     * not touching a wall at 0:00; the last trusted pose can be ~2 in off).
+     */
+    static final double CLEAR_WALL_IN = 4.0;
+    /** Fallback: firing ends by then, so the robot can still back off for LEAVE. */
+    static final double FALLBACK_FIRE_END_SEC = AutoPlanner.MATCH_SEC - 3.0;
+    /** One encoder back-off ends after this long even if it is short (stuck): never a long blind drive. */
+    static final double BACK_OFF_MAX_SEC = 2.0;
+    /**
+     * Pose lost: the Pinpoint not READY this long while Pedro drives. On a bad read the driver keeps the last pose and
+     * Pedro reads it without checking the status, so it would drive on a frozen pose.
+     * Meanwhile the robot stands still (power cut on every bad reading); READY again in time = carry on.
+     */
+    static final double PINPOINT_LOST_SEC = 0.25;
+    /**
+     * Pose lost: it jumps more between two checks than the robot can move in that time (1.5 x top speed, HEADING_MAX_RATE_DPS)
+     * plus these margins. A Pinpoint that restarts reports its origin, the RED GARDEN corner, which is inside the field.
+     * Replayed on all 37 AUTO logs (35,762 loop pairs, 9-13 Nov): with a 1 in margin the closest normal pair had ~1 in to
+     * spare (park legs: loop timing jitter), so 3 in; the heading margin was never closer than 8.6 deg.
+     */
+    static final double POSE_JUMP_IN = 3.0;
+    static final double POSE_JUMP_DEG = 5.0;
+    /** The jump check starts with the first check this close to the START pose. */
+    static final double POSE_ARM_IN = 3.0;
+    /** START: the pose read back after setPose (robot still) must be this close to the start pose, twice in a row. */
+    static final double START_POSE_TOL_IN = 0.25;
+    static final double START_POSE_TOL_DEG = 1.0;
+    /** The aim without Pedro (raw turn power) stops this much before AutoField.AIM_MAX_YAW_DEG: it coasts on ... */
+    static final double AIM_COAST_DEG = 1.5;
+    /** ... and turns at AIM_MIN_TURN only once it is this close to that stop. */
+    static final double AIM_SLOW_ZONE_DEG = 3.0;
+    /** START: the Pinpoint gets this long to be READY at the start pose (startPedro) before AUTO falls back. */
+    static final double PINPOINT_START_WAIT_SEC = 1.0;
+    /** INIT: a Pinpoint in a FAULT for this long gets a reset (team rule: the robot stands still in INIT) ... */
+    static final double PINPOINT_RESET_AFTER_SEC = 2.0;
+    /** ... and again at most this often while the fault lasts. */
+    static final double PINPOINT_RESET_EVERY_SEC = 5.0;
+    /** INIT warning below this (13 Nov: from ~11.9 V on, the Expansion Hub dropped out and the hubs cut the motors). */
+    static final double LOW_BATTERY_V = 12.5;
 
     private Start start = Start.CELL_WALL;
     private Slot slot = Slot.B;                                 // B: no driving past a partner parked in the other slot
@@ -88,7 +130,25 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private HiveVision.Target lastTarget;
     private double launchTps = AUTO_LAUNCH_VELOCITY;
     private boolean preloadsGone = false;
+    private boolean preloadsTried = false;                      // the pre-load volley started (aim / fire)
     private boolean poseSet = false;                            // Pedro runs from the known start pose
+    private boolean pedroDrives = false;                        // Pedro drives (false: no Pedro, or the pose was lost)
+    private boolean poseLostOnce = false;
+    private boolean poseJumped = false;
+    private boolean pinpointLost = false;                       // not READY for PINPOINT_LOST_SEC (latched)
+    private Pose lastPose;                                      // pose at the last check (jump check; set from the start)
+    private double lastPoseSec;                                 // ... and its match time
+    private double pinpointBadSince = Double.NaN;               // match time the Pinpoint stopped being READY
+    private Pose lastGoodRed;                                   // last trusted pose, RED frame
+    private boolean leftStart = false;                          // at least FALLBACK_LEAVE_IN from the start (LEAVE)
+    private double startForwardIn;                              // wheel encoders at START (fallback back-offs)
+    private final List<Double> aimHeights = new ArrayList<>();  // our CELL's height on each frame of the last aim
+    private final List<Double> aimFloors = new ArrayList<>();   // ... and its floor distance (log only)
+    private final List<Double> initHeights = new ArrayList<>(); // our CELL's height on the latest INIT frames
+    private HiveVision.Target initCell;                         // our CELL on the latest INIT frame
+    private double pinpointFaultSince = Double.NaN;
+    private double lastPinpointReset = -1e9;
+    private int pinpointResets = 0;
 
     @Override
     public void runOpMode() {
@@ -113,6 +173,11 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         } catch (Exception e) {
             pinpointDev = null;
         }
+        if (pinpointDev != null) {
+            // INIT reads unchecked: the driver's last taken position may be stale (e.g. from a TeleOp in its own frame) and
+            // would be refused for good otherwise (see startPedro). The robot stands still in INIT.
+            pinpointDev.setErrorDetectionType(GoBildaPinpointDriver.ErrorDetectionType.NONE);
+        }
         BioBuzzMatchState.rememberAlliance(hiveAlliance());
 
         while (opModeInInit()) {
@@ -120,13 +185,17 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             if (follower != null) {
                 follower.update();                              // idle: motors 0, keeps the Pinpoint status fresh
             }
-            if (vision != null) {
-                vision.update();
+            recoverPinpointInInit();
+            if (vision != null && vision.update()) {
+                noteInitCell();
             }
             showInit(visionError, pedroError);
             sleep(20);
         }
         if (isStopRequested()) {
+            if (pinpointDev != null) {
+                pinpointDev.setErrorDetectionType(GoBildaPinpointDriver.ErrorDetectionType.LOCAL_TEST);
+            }
             closeVision();
             return;
         }
@@ -136,32 +205,36 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 "height_in", "floor_in");
         log.row("CONFIG", "start=" + start, "slot=" + slot, "shoot=" + shoot, "garden=" + garden, "stretch=" + stretch,
                 "delay=" + delaySec, "park_by=" + parkBySec, "camera=" + (vision != null),
-                String.format("aim_trim=%.1f", settings.aimTrimDeg));
+                String.format("aim_trim=%.1f", settings.aimTrimDeg), String.format("battery=%.1f", robot.battery.getVoltage()),
+                "pinpoint=" + pinpointStatus(), "pinpoint_resets=" + pinpointResets,
+                String.format("launcher=%.0f", launchTps));
         matchStart = clock.seconds();
+        startForwardIn = robot.forwardInches();
         // TeleOp field-centric start: the robot's heading relative to its drivers. The RED frame's heading is exactly
         // that (RED drivers look along +X; BLUE poses are mirrored into it). The start pose holds for the no-Pedro
         // fallback too (it only backs straight off the wall); loopTick() updates it while Pedro drives.
         BioBuzzMatchState.recordAutoHeading(AutoField.start(start).headingDeg);
         try {
-            String why = pedroProblem();
+            String why = startPedro();
             if (why != null) {
-                log.row(0, "EVENT", "NO PEDRO: " + why + " -> fallback LEAVE only");
-                fallbackLeave();
+                log.row(now(), "EVENT", "NO PEDRO: " + why + " -> " + fallbackPlan());
+                fallback();
             } else {
-                follower.setPose(pedro(AutoField.start(start).forAlliance(alliance())));
                 poseSet = true;
+                pedroDrives = true;
                 runPlan();
             }
             log.row("RESULT", "t=" + now(), "step=" + step, "pose=" + (follower == null ? "?" : here()));
             while (opModeIsActive()) {                          // hold the park until the AUTO timer ends
-                if (follower != null && pedroProblem() == null) {
-                    follower.update();
-                }
+                holdTick();
                 loopTick();
             }
         } finally {
             if (follower != null) {
                 halt();
+            }
+            if (pinpointDev != null) {                          // leave the driver as the SDK made it (TeleOp next)
+                pinpointDev.setErrorDetectionType(GoBildaPinpointDriver.ErrorDetectionType.LOCAL_TEST);
             }
             robot.stopAll();
             closeVision();
@@ -174,7 +247,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void runPlan() {
         step = "DELAY";
         while (opModeIsActive() && now() < delaySec) {
-            follower.update();
+            holdTick();
             loopTick();
         }
         if (shoot) {
@@ -183,6 +256,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             if (drive(AutoPlanner.toShot(start), false)) {
                 volley(true);
             }
+        }
+        if (poseLostOnce) {                                     // no pose: no GARDEN, no park
+            afterPoseLost();
+            return;
         }
         boolean collected = false;
         if (garden && preloadsGone
@@ -199,6 +276,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         } else if (garden) {
             log.row(now(), "EVENT", preloadsGone ? "GARDEN skipped: no time" : "GARDEN skipped: pre-loads not all fired (G407)");
         }
+        if (poseLostOnce) {
+            afterPoseLost();
+            return;
+        }
         if (stretch && collected
                 && AutoPlanner.fits(now(), redHere(), AutoPlanner.gardenToShot(), STRETCH_MIN_FIRE_SEC, slot, parkBySec)) {
             step = "BACK TO SHOT";
@@ -209,6 +290,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         robot.setLauncherVelocity(0);
         robot.setIndexerPower(0);
         robot.setIntake(0);
+        if (poseLostOnce) {
+            afterPoseLost();
+            return;
+        }
         park();
     }
 
@@ -221,7 +306,11 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 follower.hold(pedro(AutoField.slot(slot).forAlliance(alliance())));
                 return;
             }
-            if (now() >= AutoPlanner.MATCH_SEC - 0.3 || poseLost()) {
+            if (poseLostOnce) {
+                afterPoseLost();
+                return;
+            }
+            if (now() >= AutoPlanner.MATCH_SEC - 0.3) {
                 return;
             }
             if (AutoPlanner.partlyInZone(redHere())) {         // blocked but PARK already counts: stay, don't back out
@@ -238,7 +327,14 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
      * parking), blocked (not while parking: there it waits and re-plans from where it is), or the end of AUTO.
      */
     private boolean drive(List<AutoPlanner.Leg> legs, boolean parking) {
+        if (!pedroDrives) {
+            return false;                                       // never follow a path on a lost pose
+        }
         for (AutoPlanner.Leg leg : legs) {
+            if (poseLost()) {                                   // never start a path from a bad pose
+                losePose();
+                return false;
+            }
             Pose target = leg.to.forAlliance(alliance());
             follower.follow(path(target, leg.speed));
             ElapsedTime legTimer = new ElapsedTime(), still = new ElapsedTime();
@@ -249,11 +345,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 if (!opModeIsActive()) {
                     return false;
                 }
-                follower.update();
+                pedroUpdate();
                 robot.setIntake(leg.action == AutoPlanner.Action.INTAKE ? GARDEN_INTAKE_POWER : 0);
                 if (poseLost()) {
-                    log.row(now(), "EVENT", "POSE LOST " + here());
-                    halt();
+                    losePose();
                     return false;
                 }
                 if (!parking && now() >= parkStart()) {
@@ -273,15 +368,23 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                         || Math.abs(AutoField.normalizeDeg(p.headingDeg - mark.headingDeg)) >= 3.0) {
                     mark = p;
                     still.reset();
+                } else if (leg.intoWall() && legTimer.seconds() > 0.5 && still.seconds() > AutoPlanner.WALL_SETTLE_SEC
+                        && AutoPlanner.atWall(redHere(), leg)) {
+                    log.row(now(), "EVENT", "AGAINST THE WALL on " + leg.label + " at " + p);
+                    break;                                      // aimed past the wall: the wall (or a POLLEN) stopped it
                 } else if ((legTimer.seconds() > 0.5 && still.seconds() > BLOCKED_SEC) || legTimer.seconds() > timeout) {
+                    if (AutoPlanner.atWall(redHere(), leg)) {
+                        log.row(now(), "EVENT", "LEG TIME UP against the wall on " + leg.label + " at " + p);
+                        break;
+                    }
                     log.row(now(), "EVENT", "BLOCKED on " + leg.label + " at " + p);
                     halt();
                     if (!parking) {
                         return false;
                     }
                     ElapsedTime wait = new ElapsedTime();
-                    while (opModeIsActive() && wait.seconds() < BLOCKED_WAIT_SEC) {
-                        follower.update();
+                    while (opModeIsActive() && wait.seconds() < BLOCKED_WAIT_SEC && pedroDrives) {
+                        holdTick();
                         loopTick();
                     }
                     return false;                               // park() re-plans from here
@@ -301,20 +404,22 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void gardenWiggle(double endSec) {
         log.row(now(), "EVENT", String.format("GARDEN WIGGLE %.1f in until %.1f s", AutoField.GARDEN_WIGGLE_IN, endSec));
         int moves = 0;
+        double deepest = redHere().x;                           // closest to the RED wall (wall contact, for calibration)
         while (opModeIsActive() && now() < endSec) {
-            for (AutoPlanner.Leg leg : AutoPlanner.gardenWiggle()) {
+            // out: GARDEN_WIGGLE_IN back from where the wall (or a POLLEN) stopped the robot; in: push past the wall
+            for (AutoPlanner.Leg leg : AutoPlanner.gardenWiggle(redHere())) {
                 follower.follow(path(leg.to.forAlliance(alliance()), leg.speed));
                 ElapsedTime move = new ElapsedTime();
                 step = leg.label;
                 while (opModeIsActive() && now() < endSec && move.seconds() < GARDEN_WIGGLE_MOVE_SEC
                         && (move.seconds() < 0.2 || follower.isBusy())) {
-                    follower.update();
+                    pedroUpdate();
                     robot.setIntake(GARDEN_INTAKE_POWER);
                     if (poseLost()) {
-                        log.row(now(), "EVENT", "POSE LOST " + here());
-                        halt();
+                        losePose();
                         return;
                     }
+                    deepest = Math.min(deepest, redHere().x);
                     loopTick();
                 }
                 moves++;
@@ -324,52 +429,81 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             }
         }
         halt();
-        log.row(now(), "EVENT", "GARDEN WIGGLE done: " + moves + " moves, at " + here());
+        log.row(now(), "EVENT", String.format("GARDEN WIGGLE done: %d moves, deepest x %.1f (bumper on the wall at "
+                + "x %.1f), at %s", moves, deepest, AutoField.GARDEN_CORNER_X, here()));
     }
 
     /** Camera aim (Pedro holds the spot and turns), CELL-up check, then fire. Sets preloadsGone after the first one. */
     private void volley(boolean preloads) {
-        step = preloads ? "AIM (pre-loads)" : "AIM (GARDEN POLLEN)";
-        HiveVision.Target seen = aim(Math.min(now() + AUTO_AIM_TIMEOUT_SEC, parkStart()));
-        if (seen != null) {
-            boolean up = seen.heightIn() >= CELL_UP_MIN_HEIGHT_IN;
-            log.row(now(), "EVENT", String.format("CELL %s %s: height %.1f in, floor %.1f in, bearing %.1f",
-                    seen.cell, up ? "UP" : "DOWN", seen.heightIn(), seen.horizontalIn(), seen.bearingDeg));
-            if (!up) {
-                return;                                         // G417: never launch into a downward CELL
-            }
-            launchTps = ShotSpeed.standard().tableSpeed(seen.horizontalIn());
-            robot.setLauncherVelocity(launchTps);
-        } else if (!preloads) {
-            log.row(now(), "EVENT", "no CELL in view: GARDEN POLLEN kept");
-            return;
-        } else {
-            log.row(now(), "EVENT", "no CELL in view: firing on the planned heading");
+        if (preloads) {
+            preloadsTried = true;
         }
-        fire(preloads);
+        step = preloads ? "AIM (pre-loads)" : "AIM (GARDEN POLLEN)";
+        HiveVision.Target seen = aim(Math.min(now() + AUTO_AIM_TIMEOUT_SEC, fireDeadline()));
+        if (!preloads && seen != null
+                && vision.targetCell(hiveAlliance(), HiveVision.startingUpCell(hiveAlliance())) == null) {
+            // the GARDEN POLLEN go only into a CELL in view now: an UP frame from earlier in the aim may be from before a TIP
+            log.row(now(), "EVENT", "our CELL out of view at the end of the aim: GARDEN POLLEN kept");
+            return;
+        }
+        if (cellAllowsFire(seen, preloads)) {
+            fire(preloads);
+        }
     }
 
-    /** Turns on the spot (Pedro hold) until the camera bearing is within AIM_TOLERANCE_DEG on 3 frames. */
+    /**
+     * G417 check on our CELL from the last aim (median height of its last frames, CellCheck). No CELL seen: the pre-loads
+     * still go on the planned heading, GARDEN POLLEN are kept. The speed stays AUTO_LAUNCH_VELOCITY: every AUTO shot is
+     * from the one shot spot, where the camera distance only adds noise (the floor distance is logged for calibration).
+     */
+    private boolean cellAllowsFire(HiveVision.Target seen, boolean preloads) {
+        if (seen == null) {
+            log.row(now(), "EVENT", preloads ? "no CELL in view: firing on the planned heading"
+                    : "no CELL in view: GARDEN POLLEN kept");
+            return preloads;
+        }
+        double h = CellCheck.median(aimHeights);
+        boolean up = CellCheck.up(aimHeights);
+        log.row(now(), "EVENT", String.format("CELL %s %s: height %.1f in (median of %d frames, last %.1f), floor %.1f in,"
+                + " bearing %.1f, launcher %.0f t/s", seen.cell, up ? "UP" : "DOWN", h,
+                Math.min(aimHeights.size(), CellCheck.FRAMES), seen.heightIn(), CellCheck.median(aimFloors),
+                seen.bearingDeg, launchTps));
+        return up;                                              // G417: never launch into a downward CELL
+    }
+
+    /**
+     * Turns on the spot until the camera bearing is within AIM_TOLERANCE_DEG on 3 frames: Pedro holds the spot and turns;
+     * without Pedro (or once the pose is lost) the drive turns on the camera bearing alone (fallbackAim).
+     */
     private HiveVision.Target aim(double endSec) {
+        aimHeights.clear();
+        aimFloors.clear();
         if (vision == null) {
             return null;
         }
+        double imu0 = robot.headingDeg();                       // the whole aim, with or without Pedro, turns from here
+        if (!pedroDrives) {
+            return fallbackAim(endSec, null, imu0);
+        }
         HiveVision.Cell ours = HiveVision.startingUpCell(hiveAlliance());
         com.pedropathing.math.Pose spot = follower.pose();
+        double planned = Math.toRadians(AutoField.SHOT.forAlliance(alliance()).headingDeg);
         double targetHeading = spot.heading();
         follower.hold(spot);
         HiveVision.Target last = null;
         int settled = 0;
         while (opModeIsActive() && now() < endSec) {
-            follower.update();
+            pedroUpdate();
+            if (poseLost()) {
+                losePose();
+                return fallbackAim(endSec, last, imu0);         // keep aiming on the camera alone
+            }
             if (vision.update()) {
-                HiveVision.Target t = vision.target(hiveAlliance(), ours);
-                if (t != null && t.cell != ours) {
-                    t = null;
-                }
+                HiveVision.Target t = vision.targetCell(hiveAlliance(), ours);
                 lastTarget = t;
                 if (t != null) {
                     last = t;
+                    noteAimFrame(t);
                     double headingErr = AutoField.normalizeDeg(Math.toDegrees(follower.pose().heading() - targetHeading));
                     if (Math.abs(t.bearingDeg) <= AIM_TOLERANCE_DEG) {
                         if (++settled >= 3) {
@@ -378,7 +512,15 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                     } else {
                         settled = 0;
                         if (Math.abs(headingErr) < AIM_TOLERANCE_DEG) {   // only re-aim on frames taken after the last turn
-                            targetHeading = follower.pose().heading() + Math.toRadians(t.bearingDeg);
+                            double want = follower.pose().heading() + Math.toRadians(t.bearingDeg);
+                            double next = clampAim(want, planned);
+                            if (next != want && Math.abs(AutoField.normalizeDeg(Math.toDegrees(next - targetHeading)))
+                                    < AIM_TOLERANCE_DEG) {
+                                log.row(now(), "EVENT", String.format("AIM LIMIT: %.0f deg from the planned heading, "
+                                        + "bearing still %.1f", AutoField.AIM_MAX_YAW_DEG, t.bearingDeg));
+                                break;                          // already at the limit: fire from here
+                            }
+                            targetHeading = next;
                             follower.hold(spot.withHeading(targetHeading));
                         }
                     }
@@ -389,12 +531,28 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         return last;
     }
 
-    /** The TeleOp pocket-by-pocket feed (ShotFeeder) while Pedro holds the aimed pose, until the park start. */
+    /** A heading (radians) limited to AutoField.AIM_MAX_YAW_DEG either side of the planned one. */
+    private static double clampAim(double headingRad, double plannedRad) {
+        double off = AutoField.normalizeDeg(Math.toDegrees(headingRad - plannedRad));
+        if (Math.abs(off) <= AutoField.AIM_MAX_YAW_DEG) {
+            return headingRad;
+        }
+        return plannedRad + Math.toRadians(Math.signum(off) * AutoField.AIM_MAX_YAW_DEG);
+    }
+
+    /**
+     * The TeleOp pocket-by-pocket feed (ShotFeeder) while Pedro holds the aimed pose (or, without Pedro, the drive
+     * stopped), until the park start (fallback: FALLBACK_FIRE_END_SEC).
+     */
     private void fire(boolean preloads) {
-        follower.hold(follower.pose());
-        double settleEnd = Math.min(now() + AUTO_FIRE_SETTLE_SEC, parkStart());
+        if (pedroDrives) {
+            follower.hold(follower.pose());
+        } else {
+            robot.stopDrive();
+        }
+        double settleEnd = Math.min(now() + AUTO_FIRE_SETTLE_SEC, fireDeadline());
         while (opModeIsActive() && now() < settleEnd) {
-            follower.update();
+            holdTick();
             step = "FIRE settle";
             loopTick();
         }
@@ -402,10 +560,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         BallCounter counter = BallCounter.forAuto();
         robot.setIntake(FEED_INTAKE_BOOST);
         double feedEnd = now() + AUTO_FEED_TIMEOUT_SEC;
-        while (opModeIsActive() && now() < Math.min(feedEnd, parkStart()) && feeder.shots() < AUTO_FEED_POCKETS
+        while (opModeIsActive() && now() < Math.min(feedEnd, fireDeadline()) && feeder.shots() < AUTO_FEED_POCKETS
                 && feeder.state() != ShotFeeder.State.JAMMED
                 && !(counter.balls() >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
-            follower.update();
+            holdTick();
             double t = now();
             int ticks = robot.indexerTicks();
             robot.setIndexerPower(feeder.update(t, ticks, robot.updateLauncherReady(), true));
@@ -431,20 +589,288 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 preloads ? (preloadsGone ? ", windmill empty" : ", balls may be left (no GARDEN)") : ""));
     }
 
-    /** Without Pedro: back straight off the wall on the wheel encoders (both starts face the wall): LEAVE. */
-    private void fallbackLeave() {
-        step = "FALLBACK LEAVE";
+    /**
+     * Without Pedro (no Pedro at START, or the pose lost before the robot left the start), on the wheel encoders and the
+     * camera. Both starts face the wall, so backing straight up leaves it. S1 with shoot ON: back up to the shot spot
+     * (SHOT_WALL_GAP_IN from the start), camera aim, G417 check, fire the pre-loads; then back up to FALLBACK_LEAVE_IN
+     * for LEAVE. Otherwise LEAVE only. No GARDEN, no PARK.
+     */
+    private void fallback() {
+        pedroDrives = false;
+        if (follower != null) {
+            halt();
+        }
+        boolean shootHere = shoot && start == Start.CELL_WALL && !preloadsTried;
+        step = "FALLBACK DELAY";
         while (opModeIsActive() && now() < delaySec) {
             loopTick();
         }
+        if (shootHere) {
+            robot.setLauncherVelocity(launchTps);               // after the delay: no long spin on a weak battery
+            step = "FALLBACK TO SHOT";
+            backOffTo(AutoField.SHOT_WALL_GAP_IN);
+            volley(true);
+        }
+        step = "FALLBACK LEAVE";
+        backOffTo(FALLBACK_LEAVE_IN);
+        robot.setLauncherVelocity(0);
+        robot.setIndexerPower(0);
+        robot.setIntake(0);
+        step = shootHere ? "FALLBACK DONE (shot + LEAVE)" : "FALLBACK DONE (LEAVE only)";
+        log.row(now(), "EVENT", String.format("%s: %.1f in back from the start (wheel encoders)%s", step, backedIn(),
+                backedIn() < FALLBACK_LEAVE_IN - 1 ? ": SHORT, LEAVE not sure" : ""));
+    }
+
+    /**
+     * The pose is gone (Pedro stopped): no GARDEN, no park. Still at the start with the pre-loads untried (S1): the
+     * fallback shot. Otherwise make LEAVE (team test plan: not touching a wall at 0:00) and stand still. Our routes only
+     * come near a wall with the intake (start, shot spot, GARDEN corner, park slot), so backing up clears it: from the
+     * start to FALLBACK_LEAVE_IN, elsewhere until the intake is CLEAR_WALL_IN off the wall in front of it (last trusted
+     * pose).
+     */
+    private void afterPoseLost() {
+        robot.setIndexerPower(0);
+        robot.setIntake(0);
+        if (!leftStart && !preloadsTried && shoot && start == Start.CELL_WALL) {
+            fallback();
+            return;
+        }
+        robot.setLauncherVelocity(0);
+        double back = 0;
+        if (!leftStart) {
+            back = FALLBACK_LEAVE_IN - backedIn();              // never left: it only backed straight up from START
+        } else if (lastGoodRed != null) {
+            back = CLEAR_WALL_IN - frontGapIn(lastGoodRed);
+        }
+        back = Math.min(back, FALLBACK_LEAVE_IN);
+        String moved = "";
+        if (back > 0.5) {
+            step = "POSE LOST: off the wall";
+            moved = String.format(", backed up %.1f of %.1f in (wheel encoders)", backOff(back), back);
+        }
+        step = "POSE LOST: stopped";
+        log.row(now(), "EVENT", "POSE LOST: no GARDEN, no PARK" + moved + ", stopped (last trusted pose "
+                + lastGoodRed + ")");
+    }
+
+    /** The pose can't be trusted (see poseLost): Pedro stops for the rest of AUTO. */
+    private void losePose() {
+        if (!poseLostOnce) {
+            log.row(now(), "EVENT", "POSE LOST " + here() + " (Pinpoint " + pinpointStatus() + "): Pedro stops");
+        }
+        poseLostOnce = true;
+        pedroDrives = false;
+        halt();
+    }
+
+    /** Without Pedro: backs straight up until the wheel encoders are this far back from START. */
+    private void backOffTo(double inches) {
+        backOff(inches - backedIn());
+    }
+
+    /**
+     * Without Pedro: backs straight up (launcher first) this far from where the robot is now, on the wheel encoders, at
+     * most BACK_OFF_MAX_SEC. Returns how far it got.
+     */
+    private double backOff(double inches) {
         double f0 = robot.forwardInches();
-        double end = now() + 2.0;
-        while (opModeIsActive() && now() < end && robot.forwardInches() - f0 > -FALLBACK_LEAVE_IN) {
+        double end = now() + BACK_OFF_MAX_SEC;
+        while (opModeIsActive() && now() < end && f0 - robot.forwardInches() < inches) {
             robot.drive(-0.3, 0, 0, 1.0);
             loopTick();
         }
         robot.stopDrive();
-        step = "FALLBACK DONE (LEAVE only)";
+        return f0 - robot.forwardInches();
+    }
+
+    /** How far the robot backed up since START, from the wheel encoders (Pinpoint-free). */
+    private double backedIn() {
+        return startForwardIn - robot.forwardInches();
+    }
+
+    /** Gap from the intake bumper (RED-frame pose) to the field wall straight ahead of it. */
+    private static double frontGapIn(Pose red) {
+        double ux = Math.cos(Math.toRadians(red.headingDeg)), uy = Math.sin(Math.toRadians(red.headingDeg));
+        double fx = red.x + AutoField.HALF_LENGTH_IN * ux, fy = red.y + AutoField.HALF_LENGTH_IN * uy;
+        double gap = Double.POSITIVE_INFINITY;
+        if (Math.abs(ux) > 1e-6) {
+            gap = Math.min(gap, ((ux > 0 ? AutoField.WALL_IN : -AutoField.WALL_IN) - fx) / ux);
+        }
+        if (Math.abs(uy) > 1e-6) {
+            gap = Math.min(gap, ((uy > 0 ? AutoField.WALL_IN : -AutoField.WALL_IN) - fy) / uy);
+        }
+        return gap;
+    }
+
+    /**
+     * Without Pedro: the TeleOp camera aim (HiveVision.aimTurnCw on the latest frame of our CELL, turning on the spot)
+     * until it needs no turn on 3 new frames. No recent frame of our CELL: the drive stops. All turning since the aim
+     * began ({@code imu0}, hub IMU, either sign) stays under AutoField.AIM_MAX_YAW_DEG - AIM_COAST_DEG so a robot corner can't
+     * reach the wall.
+     */
+    private HiveVision.Target fallbackAim(double endSec, HiveVision.Target seenBefore, double imu0) {
+        HiveVision.Cell ours = HiveVision.startingUpCell(hiveAlliance());
+        HiveVision.Target last = seenBefore;
+        int settled = 0;
+        while (opModeIsActive() && now() < endSec) {
+            boolean fresh = vision.update();
+            HiveVision.Target t = vision.targetCell(hiveAlliance(), ours);
+            lastTarget = t;
+            if (t == null) {
+                robot.stopDrive();
+            } else {
+                last = t;
+                double turned = Math.abs(AutoField.normalizeDeg(robot.headingDeg() - imu0));
+                double allowed = AutoField.AIM_MAX_YAW_DEG - AIM_COAST_DEG;
+                if (turned >= allowed) {
+                    log.row(now(), "EVENT", String.format("AIM LIMIT (no Pedro): turned %.0f deg, bearing still %.1f",
+                            turned, t.bearingDeg));
+                    break;
+                }
+                double turn = HiveVision.aimTurnCw(t.bearingDeg);
+                if (allowed - turned < AIM_SLOW_ZONE_DEG) {      // near the stop: slowest turn, so a loop + the coast stay short
+                    turn = Math.signum(turn) * Math.min(Math.abs(turn), AIM_MIN_TURN);
+                }
+                robot.drive(0, 0, turn, 1.0);
+                if (fresh) {
+                    noteAimFrame(t);
+                    settled = turn == 0 ? settled + 1 : 0;
+                    if (settled >= 3) {
+                        break;
+                    }
+                }
+            }
+            loopTick();
+        }
+        robot.stopDrive();
+        return last;
+    }
+
+    private void noteAimFrame(HiveVision.Target t) {
+        aimHeights.add(t.heightIn());
+        aimFloors.add(t.horizontalIn());
+    }
+
+    /** A loop of standing still: Pedro holds the pose (a lost pose stops it); without Pedro the drive stays off. */
+    private void holdTick() {
+        if (!pedroDrives) {
+            return;
+        }
+        pedroUpdate();
+        if (poseLost()) {
+            losePose();
+        }
+    }
+
+    /**
+     * One Pedro step. While the Pinpoint's last reading was not READY (the debounce in poseLost()) only the Pinpoint is
+     * read and the drive stays stopped: Pedro would compute its power from a frozen pose. Pedro steps again from the first
+     * READY reading (Follower.pose() reads the localizer).
+     */
+    private void pedroUpdate() {
+        if (!Double.isNaN(pinpointBadSince)) {
+            follower.localizer.update();
+            if (pinpointDev.getDeviceStatus() != GoBildaPinpointDriver.DeviceStatus.READY) {
+                follower.drivetrain.stop();
+                return;
+            }
+        }
+        follower.update();
+    }
+
+    /** Aim and fire end by then: the park start, or without Pedro FALLBACK_FIRE_END_SEC (time left to back up for LEAVE). */
+    private double fireDeadline() {
+        return pedroDrives ? parkStart() : FALLBACK_FIRE_END_SEC;
+    }
+
+    /**
+     * START: puts the start pose into the Pinpoint and checks it took (READY, at the start pose), retrying for up to
+     * PINPOINT_START_WAIT_SEC. Returns null when Pedro can drive, else why not (then: FALLBACK).
+     * SDK 12's Pinpoint driver takes a new reading only within 5000 mm of the last one it took (else it keeps the old one
+     * and reports FAULT_BAD_READ), and setPose only writes the device. After a TeleOp (own frame) the start pose could be
+     * refused for good: 13 Nov 21:47 BLUE x took the start x, y stayed 253 in off -> POSE LOST at 0.2 s, and the next two
+     * AUTOs saw FAULT_BAD_READ at START until a power cycle (code review, 14 Nov). So the first reading after setPose is
+     * taken unchecked (error detection NONE, as in INIT), then the checks go back on for the match.
+     */
+    private String startPedro() {
+        String why = pedroProblem();
+        if (follower == null || pinpointDev == null || !Constants.FORESIGHT_TUNED) {
+            return why;
+        }
+        Pose startPose = AutoField.start(start).forAlliance(alliance());
+        step = "START PINPOINT";
+        ElapsedTime wait = new ElapsedTime();
+        while (opModeIsActive()) {
+            why = null;
+            pinpointDev.setErrorDetectionType(GoBildaPinpointDriver.ErrorDetectionType.NONE);
+            follower.setPose(pedro(startPose));                 // no path: Pedro keeps the motors at 0
+            follower.update();
+            pinpointDev.setErrorDetectionType(GoBildaPinpointDriver.ErrorDetectionType.LOCAL_TEST);
+            for (int read = 0; read < 2 && why == null; read++) {   // twice in a row, checked again
+                follower.update();
+                Pose p = here();
+                why = pedroProblem();
+                if (why == null && !(p.distanceTo(startPose) <= START_POSE_TOL_IN
+                        && Math.abs(AutoField.normalizeDeg(p.headingDeg - startPose.headingDeg)) <= START_POSE_TOL_DEG)) {
+                    why = "Pinpoint pose " + p + " is not the start pose";
+                }
+            }
+            if (why == null) {
+                log.row(now(), "EVENT", String.format("Pinpoint READY at the start pose after %.2f s", wait.seconds()));
+                return null;
+            }
+            if (wait.seconds() >= PINPOINT_START_WAIT_SEC) {
+                return why;
+            }
+            loopTick();
+        }
+        return "stopped";
+    }
+
+    /**
+     * INIT: a Pinpoint not READY for PINPOINT_RESET_AFTER_SEC gets a reset (position + IMU; the robot stands still in
+     * INIT), again every PINPOINT_RESET_EVERY_SEC while it lasts. START sets the pose anyway.
+     */
+    private void recoverPinpointInInit() {
+        if (pinpointDev == null || follower == null) {
+            return;                                             // no follower.update(): the status is never refreshed
+        }
+        double t = clock.seconds();
+        if (pinpointDev.getDeviceStatus() == GoBildaPinpointDriver.DeviceStatus.READY) {
+            pinpointFaultSince = Double.NaN;
+            return;
+        }
+        if (Double.isNaN(pinpointFaultSince)) {
+            pinpointFaultSince = t;
+        } else if (t - pinpointFaultSince >= PINPOINT_RESET_AFTER_SEC && t - lastPinpointReset >= PINPOINT_RESET_EVERY_SEC) {
+            pinpointDev.resetPosAndIMU();
+            lastPinpointReset = t;
+            pinpointResets++;
+        }
+    }
+
+    private String pinpointStatus() {
+        return pinpointDev == null ? "none" : String.valueOf(pinpointDev.getDeviceStatus());
+    }
+
+    /** What AUTO does without Pedro (INIT screen and log). */
+    private String fallbackPlan() {
+        return shoot && start == Start.CELL_WALL
+                ? "FALLBACK: back up 2 in, camera aim, fire the pre-loads, back up (LEAVE); no GARDEN, no PARK"
+                : "FALLBACK: back up off the wall (LEAVE only)";
+    }
+
+    /** INIT: our CELL on the new frame, for the UP / DOWN line (median of the last CellCheck.FRAMES frames). */
+    private void noteInitCell() {
+        initCell = vision.targetCell(hiveAlliance(), HiveVision.startingUpCell(hiveAlliance()));
+        if (initCell == null) {
+            initHeights.clear();
+            return;
+        }
+        initHeights.add(initCell.heightIn());
+        if (initHeights.size() > CellCheck.FRAMES) {
+            initHeights.remove(0);
+        }
     }
 
     // ---------------- Helpers ----------------
@@ -481,10 +907,56 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         return here().forAlliance(alliance());
     }
 
+    /**
+     * The pose can't be trusted, so Pedro must not drive on it (reviews, 14 Nov):
+     * - NaN, or the robot centre farther out than it can get (a Pinpoint that restarts, or an I2C read of zeros, reads
+     *   Pedro (0, 0) = the field corner (-72, -72));
+     * - the Pinpoint not READY for PINPOINT_LOST_SEC: on a bad read the driver keeps the last pose and Pedro reads it
+     *   without looking at the status, so it would drive on a frozen pose. One bad read is normal and recovers on the
+     *   next loop; until then the drive is stopped (pedroUpdate() then only reads the Pinpoint);
+     * - between READY readings, a jump bigger than the robot can move in that time (checks start at the START pose).
+     * Once lost, always lost.
+     */
     private boolean poseLost() {
+        if (poseLostOnce || poseJumped || pinpointLost) {
+            return true;
+        }
         Pose p = here();
-        return Double.isNaN(p.x) || Double.isNaN(p.y) || Double.isNaN(p.headingDeg)
-                || Math.abs(p.x) > AutoField.WALL_IN + 6 || Math.abs(p.y) > AutoField.WALL_IN + 6;
+        double t = now();
+        double reach = AutoField.WALL_IN - AutoField.HALF_WIDTH_IN + 6;
+        if (Double.isNaN(p.x) || Double.isNaN(p.y) || Double.isNaN(p.headingDeg)
+                || Math.abs(p.x) > reach || Math.abs(p.y) > reach) {
+            return true;
+        }
+        if (pinpointDev != null && pinpointDev.getDeviceStatus() != GoBildaPinpointDriver.DeviceStatus.READY) {
+            if (Double.isNaN(pinpointBadSince)) {
+                pinpointBadSince = t;
+            }
+            if (t - pinpointBadSince >= PINPOINT_LOST_SEC) {
+                pinpointLost = true;
+                return true;
+            }
+            follower.drivetrain.stop();                         // never drive on a pose that may be frozen
+            return false;
+        }
+        pinpointBadSince = Double.NaN;
+        if (lastPose != null) {
+            double dt = Math.max(0, t - lastPoseSec);           // since the last READY reading (spans a short freeze)
+            double moved = p.distanceTo(lastPose);
+            double turned = Math.abs(AutoField.normalizeDeg(p.headingDeg - lastPose.headingDeg));
+            if (moved > POSE_JUMP_IN + 1.5 * AutoPlanner.TOP_SPEED_IN_PER_SEC * dt
+                    || turned > POSE_JUMP_DEG + HEADING_MAX_RATE_DPS * dt) {
+                poseJumped = true;
+                log.row(t, "EVENT", String.format("POSE JUMP %.1f in / %.0f deg in %.2f s: from %s to %s", moved, turned,
+                        dt, lastPose, p));
+                return true;
+            }
+        }
+        if (lastPose != null || p.distanceTo(AutoField.start(start).forAlliance(alliance())) <= POSE_ARM_IN) {
+            lastPose = p;
+            lastPoseSec = t;
+        }
+        return false;
     }
 
     /** Follower.stop() only zeroes the motors on a later update(): cut them here, at once. */
@@ -521,8 +993,17 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void loopTick() {
         double t = now();
         Pose p = follower == null ? null : here();
-        if (poseSet && !poseLost()) {
-            BioBuzzMatchState.recordAutoHeading(redHere().headingDeg);   // for TeleOp's field-centric start
+        if (pedroDrives && poseSet) {
+            if (poseLost()) {
+                losePose();                                     // wherever it shows first: Pedro stops at once
+            } else {
+                Pose r = redHere();
+                lastGoodRed = r;
+                BioBuzzMatchState.recordAutoHeading(r.headingDeg);   // for TeleOp's field-centric start
+                if (r.distanceTo(AutoField.start(start)) >= FALLBACK_LEAVE_IN) {
+                    leftStart = true;
+                }
+            }
         }
         HiveVision.Target target = lastTarget;
         if (log != null) {
@@ -534,7 +1015,11 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         }
         lastTarget = null;
         telemetry.addData("Step", step);
-        telemetry.addData("Time", "%.1f s   (park starts by %.1f s)", t, follower == null ? 0 : parkStart());
+        if (pedroDrives) {
+            telemetry.addData("Time", "%.1f s   (park starts by %.1f s)", t, parkStart());
+        } else {
+            telemetry.addData("Time", "%.1f s   (Pedro off: no GARDEN, no park)", t);
+        }
         if (p != null) {
             telemetry.addData("Where", "x %.1f  y %.1f in  heading %.0f", p.x, p.y, p.headingDeg);
         }
@@ -576,10 +1061,25 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void showInit(String visionError, String pedroError) {
         Pose s = AutoField.start(start);
         telemetry.addLine("BIOBUZZ AUTO " + alliance() + " - Pedro");
+        String why = pedroProblem();
+        if (why != null) {
+            telemetry.addLine("!! PEDRO NOT READY (" + why + ") -> " + fallbackPlan());
+        }
+        double volts = robot.battery.getVoltage();
+        if (volts < LOW_BATTERY_V) {
+            telemetry.addLine(String.format("!! BATTERY %.1f V: put in a charged one (13 Nov: from ~12 V the hubs dropped out"
+                    + " and the Pinpoint faulted)", volts));
+        }
+        double cellHeight = CellCheck.median(initHeights);
+        boolean cellUp = CellCheck.up(initHeights);
+        if (shoot && initCell != null && !cellUp) {
+            telemetry.addLine(String.format("!! OUR CELL %s looks DOWN (%.0f in): AUTO will not shoot (G417). Practice: set"
+                    + " the HIVE to the match start", initCell.cell, cellHeight));
+        }
         telemetry.addData("Start (D-pad L/R)", start.label);
         telemetry.addData("Park slot (Square/X)", slot.label);
         telemetry.addLine(">> Tell your partner: we park in slot " + slot + ", they take slot " + slot.other());
-        telemetry.addData("Shoot pre-loads (Cross/A)", shoot ? "ON" : "OFF");
+        telemetry.addData("Shoot pre-loads (Cross/A)", shoot ? String.format("ON (%.0f t/s)", launchTps) : "OFF");
         telemetry.addData("GARDEN POLLEN (Triangle/Y)", !garden ? "OFF" : shoot ? "ON" : "ON but needs shooting (G407)");
         telemetry.addData("Stretch: shoot again (Circle/B)", stretch ? "ON" : "OFF");
         telemetry.addData("Start delay (D-pad U/D)", "%d s", delaySec);
@@ -611,15 +1111,18 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             telemetry.addLine("WARNING: start delay too long, the park may not finish");
         }
 
-        String why = pedroProblem();
         telemetry.addData("Pedro", why == null ? "ready" : "NOT READY: " + why + (pedroError != null ? " (" + pedroError
-                + ")" : "") + " -> AUTO will only back off the wall (LEAVE)");
+                + ")" : "") + " -> " + fallbackPlan());
+        telemetry.addData("Pinpoint", "%s%s", pinpointStatus(),
+                pinpointResets > 0 ? String.format("  (reset %d x in INIT: keep the robot still)", pinpointResets) : "");
+        telemetry.addData("Battery", "%.1f V%s", volts, volts < LOW_BATTERY_V ? "  LOW" : "");
         if (vision == null) {
             telemetry.addData("Camera", "NOT FOUND: %s (fires pre-loads unaimed, no stretch)", visionError);
+        } else if (initCell == null) {
+            telemetry.addData("Camera", "our CELL %s not in view", HiveVision.startingUpCell(hiveAlliance()));
         } else {
-            HiveVision.Target tg = vision.target(hiveAlliance(), HiveVision.startingUpCell(hiveAlliance()));
-            telemetry.addData("Camera", tg == null ? "no CELL in view (normal at the wall)" : String.format(
-                    "%s %d tags, height %.0f in", tg.cell, tg.tagCount, tg.heightIn()));
+            telemetry.addData("Camera", "our CELL %s %s: height %.0f in, %d tags", initCell.cell,
+                    cellUp ? "UP" : "DOWN", cellHeight, initCell.tagCount);
         }
         telemetry.addLine("Place: " + (start == Start.CELL_WALL
                 ? "intake against the " + (alliance() == Alliance.RED ? "AUDIENCE" : "REAR")

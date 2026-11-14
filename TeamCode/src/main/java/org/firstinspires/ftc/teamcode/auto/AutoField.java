@@ -125,6 +125,12 @@ public final class AutoField {
     /** Straight-on shot (3 Nov shot review): intake 2 in off the audience wall, launcher facing the CELL opening. */
     public static final double SHOT_WALL_GAP_IN = 2.0;
     public static final Pose SHOT = new Pose(CELL_X, -WALL_IN + HALF_LENGTH_IN + SHOT_WALL_GAP_IN, FACE_AUDIENCE);
+    /**
+     * The camera aim at the shot spot never turns more than this from the SHOT heading. Our CELL is straight ahead there
+     * (logged bearings within +/-1.1 deg), and 2 in off the wall a robot corner reaches the wall at ~15 deg, at ~11 deg
+     * when the robot is 0.5 in closer (AutoPlannerTest checks it).
+     */
+    public static final double AIM_MAX_YAW_DEG = 8.0;
 
     /**
      * Lane beside the HIVE frame used to drive between the audience side and the LOADING ZONE: the middle of the gap
@@ -150,12 +156,21 @@ public final class AutoField {
     public static final double GARDEN_SWEEP_START_X = -36.0;
     /** The slow part starts with the intake bumper 5 in before the first POLLEN (x -60.6). */
     public static final double GARDEN_SWEEP_SLOW_X = GARDEN_BALL_X[GARDEN_BALL_X.length - 1] + HALF_LENGTH_IN + 5.0;
-    /** Intake bumper 1 in from the RED wall at the end of the sweep (the corner POLLEN is against that wall). */
-    public static final double GARDEN_SWEEP_END_X = -WALL_IN + HALF_LENGTH_IN + 1.0;
+    /** Intake bumper touching the RED wall at the GARDEN corner (the corner POLLEN is against that wall). */
+    public static final double GARDEN_CORNER_X = -WALL_IN + HALF_LENGTH_IN;
+    /**
+     * The sweep and every move in at the corner aim this far PAST the wall, so the intake bumper really reaches it (team,
+     * 13 Nov: it stopped ~2 in short of the wall when it aimed 1 in short: the robot is often 1-2 in off where it
+     * thinks it is, e.g. from the start placement). The wall stops the robot: the sweep counts as done once the robot
+     * stays still (AutoPlanner.WALL_SETTLE_SEC), a move in ends after BioBuzzPedroAutoBase.GARDEN_WIGGLE_MOVE_SEC.
+     */
+    public static final double GARDEN_PUSH_IN = 2.0;
+    /** Where the sweep and the moves in aim: GARDEN_PUSH_IN past the wall (the robot stops at GARDEN_CORNER_X). */
+    public static final double GARDEN_SWEEP_END_X = GARDEN_CORNER_X - GARDEN_PUSH_IN;
     /**
      * At the GARDEN corner (team, 12 Nov: the intake takes the POLLEN when the robot comes 1-2 in back and forth): the
-     * robot backs off this far along the wall and drives in to the sweep end again, over and over while the intake runs.
-     * CALIBRATE: 1-2 in.
+     * robot backs off this far along the wall from where the wall (or a POLLEN) stopped it, then pushes in again, over
+     * and over while the intake runs. CALIBRATE: 1-2 in.
      */
     public static final double GARDEN_WIGGLE_IN = 2.0;
     /** Back-off point between the shot spot and the GARDEN, where the robot turns. */

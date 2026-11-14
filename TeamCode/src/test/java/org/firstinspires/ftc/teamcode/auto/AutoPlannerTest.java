@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.auto;
 
 import static org.firstinspires.ftc.teamcode.auto.AutoField.*;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -77,20 +78,99 @@ public class AutoPlannerTest {
     @Test
     public void gardenWiggleIsShortStraightAndClear() {
         Pose corner = AutoPlanner.end(SHOT, AutoPlanner.toGarden());
-        List<AutoPlanner.Leg> wiggle = AutoPlanner.gardenWiggle();
+        assertEquals("the sweep ends with the intake bumper on the RED wall", -WALL_IN, corner.x - HALF_LENGTH_IN, 1e-9);
+        List<AutoPlanner.Leg> wiggle = AutoPlanner.gardenWiggle(corner);
         assertTrue("1-2 in", GARDEN_WIGGLE_IN >= 1.0 && GARDEN_WIGGLE_IN <= 2.0);
         Pose out = wiggle.get(0).to;
         assertEquals("straight back, away from the RED wall", corner.x + GARDEN_WIGGLE_IN, out.x, 1e-9);
         assertEquals(corner.y, out.y, 1e-9);
         assertEquals(corner.headingDeg, out.headingDeg, 1e-9);
         assertTrue("on the part of the lane the sweep already crossed", out.x <= GARDEN_SWEEP_SLOW_X);
+        assertTrue("the move out is a plain move", !wiggle.get(0).intoWall());
+        AutoPlanner.Leg in = wiggle.get(1);
+        assertTrue("the move in pushes into the wall", in.intoWall());
+        assertEquals(GARDEN_SWEEP_END_X, in.to.x, 1e-9);
         Pose back = AutoPlanner.end(corner, wiggle);
-        assertEquals("in to the sweep end again", corner.x, back.x, 1e-9);
+        assertEquals("the wall stops it at the corner again", corner.x, back.x, 1e-9);
         assertEquals(corner.y, back.y, 1e-9);
         for (AutoPlanner.Leg l : wiggle) {
             assertEquals(l.label, AutoPlanner.Action.INTAKE, l.action);
         }
         assertNull(AutoPlanner.routeProblem(corner, wiggle, null));
+    }
+
+    /** The back-off is measured from where the robot really stopped, and stays on the swept lane. */
+    @Test
+    public void gardenWiggleBacksOffFromWhereTheRobotStopped() {
+        Pose corner = AutoPlanner.gardenCorner();
+        Pose shortOfIt = new Pose(corner.x + 1.5, corner.y, corner.headingDeg);       // a POLLEN stopped it
+        assertEquals(shortOfIt.x + GARDEN_WIGGLE_IN, AutoPlanner.gardenWiggle(shortOfIt).get(0).to.x, 1e-9);
+        Pose pastTheAim = new Pose(GARDEN_SWEEP_END_X - 3, corner.y, corner.headingDeg); // odometry says through the wall
+        assertEquals(GARDEN_SWEEP_END_X + GARDEN_WIGGLE_IN, AutoPlanner.gardenWiggle(pastTheAim).get(0).to.x, 1e-9);
+        Pose farBack = new Pose(GARDEN_SWEEP_SLOW_X + 5, corner.y, corner.headingDeg);
+        assertEquals(GARDEN_SWEEP_SLOW_X, AutoPlanner.gardenWiggle(farBack).get(0).to.x, 1e-9);
+        Pose slightlyOffTheLane = new Pose(corner.x + 1, corner.y + 0.7, corner.headingDeg + 4);
+        Pose out = AutoPlanner.gardenWiggle(slightlyOffTheLane).get(0).to;
+        assertEquals("back on the lane", GARDEN_LANE_Y, out.y, 1e-9);
+        assertEquals("square to the wall", FACE_ALLIANCE_WALL, out.headingDeg, 1e-9);
+    }
+
+    /** Team, 13 Nov: the intake stopped ~2 in short of the wall; the sweep now aims past it and the wall stops it. */
+    @Test
+    public void gardenSweepPushesIntoTheWall() {
+        List<AutoPlanner.Leg> garden = AutoPlanner.toGarden();
+        AutoPlanner.Leg sweep = garden.get(garden.size() - 1);
+        assertTrue(sweep.intoWall());
+        assertEquals(AutoPlanner.Action.INTAKE, sweep.action);
+        assertEquals("aims past the wall", GARDEN_PUSH_IN, sweep.stop.x - sweep.to.x, 1e-9);
+        assertTrue("at least 2 in past the wall (it stopped 2 in short)", GARDEN_PUSH_IN >= 2.0);
+        assertEquals("stops with the intake bumper on the wall", -WALL_IN, sweep.stop.x - HALF_LENGTH_IN, 1e-9);
+        for (int i = 0; i < garden.size() - 1; i++) {
+            assertTrue(garden.get(i).label + " is a plain leg", !garden.get(i).intoWall());
+        }
+        assertTrue("the wall settle time is in the estimate", AutoPlanner.legSec(sweep.stop, sweep)
+                >= AutoPlanner.WALL_SETTLE_SEC + AutoPlanner.LEG_OVERHEAD_SEC - 1e-9);
+    }
+
+    /**
+     * Still on the sweep counts as AT THE WALL only near the corner (pose error, a wedged POLLEN). Stopped out on the lane
+     * (a robot in the way) it is BLOCKED like any other leg, and a plain leg is never "at a wall".
+     */
+    @Test
+    public void wallContactOnlyNearTheCorner() {
+        List<AutoPlanner.Leg> garden = AutoPlanner.toGarden();
+        AutoPlanner.Leg sweep = garden.get(garden.size() - 1);
+        Pose corner = AutoPlanner.gardenCorner();
+        assertTrue(AutoPlanner.atWall(corner, sweep));
+        assertTrue("2 in pose error", AutoPlanner.atWall(new Pose(corner.x - 2, corner.y, corner.headingDeg), sweep));
+        assertTrue("2 in short", AutoPlanner.atWall(new Pose(corner.x + 2, corner.y, corner.headingDeg), sweep));
+        assertTrue("a POLLEN wedged in front + 2 in pose error",
+                AutoPlanner.atWall(new Pose(corner.x + 2.9 + 2, corner.y, corner.headingDeg), sweep));
+        assertFalse("blocked out on the lane", AutoPlanner.atWall(new Pose(GARDEN_SWEEP_SLOW_X, corner.y, corner.headingDeg),
+                sweep));
+        assertFalse(AutoPlanner.atWall(new Pose(corner.x + 8, corner.y, corner.headingDeg), sweep));
+        AutoPlanner.Leg approach = garden.get(garden.size() - 2);
+        assertFalse("not a leg into a wall", AutoPlanner.atWall(approach.to, approach));
+        AutoPlanner.Leg in = AutoPlanner.gardenWiggle(corner).get(1);
+        assertTrue("the moves in at the corner end at the wall too", AutoPlanner.atWall(corner, in));
+    }
+
+    /**
+     * The camera aim's turn limit keeps the robot off the audience wall at the shot spot, even 0.5 in closer than planned
+     * and 1 deg more turned: the planner footprint and the CAD robot (intake 9.76 in ahead of the centre, sides 8.9 in).
+     */
+    @Test
+    public void aimLimitKeepsTheRobotOffTheWallAtTheShotSpot() {
+        double yaw = AIM_MAX_YAW_DEG + 1.0;
+        for (double sign : new double[]{-1, 1}) {
+            Pose p = new Pose(SHOT.x, SHOT.y - 0.5, SHOT.headingDeg + sign * yaw);   // RED: audience wall at y = -WALL_IN
+            for (double[] c : AutoPlanner.corners(p)) {
+                assertTrue("planner corner off the wall", c[1] > -WALL_IN);
+            }
+        }
+        double cadFront = 9.76, cadSide = 8.9, r = Math.toRadians(yaw);
+        assertTrue("CAD robot corner off the wall",
+                cadFront * Math.cos(r) + cadSide * Math.sin(r) < cadFront + SHOT_WALL_GAP_IN - 0.5);
     }
 
     /** Parking must work from wherever a step is cut short, without touching the partner in the other slot. */
@@ -101,8 +181,9 @@ public class AutoPlannerTest {
             from.addAll(samples(start(s), AutoPlanner.toShot(s)));
         }
         from.addAll(samples(SHOT, AutoPlanner.toGarden()));
-        from.addAll(samples(AutoPlanner.end(SHOT, AutoPlanner.toGarden()), AutoPlanner.gardenWiggle()));
-        from.addAll(samples(AutoPlanner.end(SHOT, AutoPlanner.toGarden()), AutoPlanner.gardenToShot()));
+        Pose corner = AutoPlanner.end(SHOT, AutoPlanner.toGarden());
+        from.addAll(samples(corner, AutoPlanner.gardenWiggle(corner)));
+        from.addAll(samples(corner, AutoPlanner.gardenToShot()));
         assertTrue(from.size() > 100);
         for (Slot slot : Slot.values()) {
             for (Pose p : from) {
@@ -227,16 +308,17 @@ public class AutoPlannerTest {
         assertTrue(!AutoPlanner.partlyInZone(new Pose(LANE_X, SLOT_A_Y, FACE_ALLIANCE_WALL)));
     }
 
+    /** Poses along the legs, up to where the robot really stops (the wall, on a leg into a wall). */
     private static List<Pose> samples(Pose from, List<AutoPlanner.Leg> legs) {
         List<Pose> out = new ArrayList<>();
         Pose p = from;
         for (AutoPlanner.Leg l : legs) {
-            double dh = normalizeDeg(l.to.headingDeg - p.headingDeg);
+            double dh = normalizeDeg(l.stop.headingDeg - p.headingDeg);
             for (int i = 0; i <= 10; i++) {
                 double t = i / 10.0;
-                out.add(new Pose(p.x + t * (l.to.x - p.x), p.y + t * (l.to.y - p.y), p.headingDeg + t * dh));
+                out.add(new Pose(p.x + t * (l.stop.x - p.x), p.y + t * (l.stop.y - p.y), p.headingDeg + t * dh));
             }
-            p = l.to;
+            p = l.stop;
         }
         return out;
     }
