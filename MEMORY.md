@@ -757,7 +757,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
 
 ## 10. Open items / backlog
 
-- [ ] **AUTO hardening (overnight 13→14 Nov; `auto-work` `cf9928c` + guide `9ed92bc`, pushed; NOT installed; APK MD5 `ad349580…`, 218 tests).** The team asked:
+- [ ] **AUTO hardening (overnight 13→14 Nov; `auto-work` `cf9928c` + guide `9ed92bc`, pushed; INSTALLED 14 Nov ~10:58; APK MD5 `ad349580…`, 218 tests).** The team asked:
   - "the intake stays 2 in behind the perimeter wall";
   - "reduce 10 rpm in the auto, it was slightly long";
   - "completely review the auto … no flaw … cannot afford losing points".
@@ -770,7 +770,12 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   - **Shot and CELL:** one shot speed, 1450 → 1440 t/s. G417 uses `targetCell` + `CellCheck` (median of 5 and the latest frame ≥ 39 in). The stretch needs the CELL in view. The aim turns at most 8°.
   - **INIT warnings:** !! Pedro / battery / CELL DOWN.
 
-  **Install (ask first), then check on the field:**
+  **Installed 14 Nov ~10:58** (coach: "upload the code"). Hub `base.apk` MD5 `ad349580…` = local APK; Robot Status running; crash buffer empty.
+  - Op modes: BioBuzz AUTO RED/BLUE, OLD AUTO RED/BLUE, TeleOp, Tune, Calibration, Field Tour, Arm Setup, Pinpoint Setup, Shot Log, System Check.
+  - Was `auto-hive` `9f6bd46` / `0474f31c…`, so the **HIVE AUTO is no longer on the robot**. Coach: "no need to fix for now"; it lives on `auto-hive` / `hive-auto-v2`.
+  - Local `master` fast-forwarded to `9ed92bc` (= `auto-work`), not pushed. The main checkout now builds the same code.
+
+  **Check on the field:**
   1. Battery ≥ 12.5 V (INIT warns). Practice HIVE at the match start (INIT: `Camera: our CELL … UP`).
   2. AUTO → TeleOp → AUTO **without a power cycle**: the second AUTO must drive normally (log `Pinpoint READY at the start pose`).
   3. S1 runs: log `CELL … UP: height ~46 in (median …)`. Do the 1440 t/s shots go in? Adjust `AUTO_LAUNCH_VELOCITY` in 10 t/s steps.
@@ -778,7 +783,7 @@ Each program reads the file when it is INIT-ed. The last known values (2 Nov) we
   5. Still parked by ~24 s (slot B)? The wall settle adds ~1 s.
   6. Any `POSE JUMP` in a normal run → raise `POSE_JUMP_IN`.
   - **Open question (this AUTO and the HIVE AUTO):** which CELL is up at the real match start. The AUTO assumes the CELL in front of S1 (`startingUpCell`: BLUE_REAR / RED_AUDIENCE). The 9 Nov practice agreed; the 13 Nov practice HIVE was in the other state. INIT now shows our CELL UP/DOWN: check it at the first real match setup.
-  - Then merge into `master` (fast-forward: `auto-work` = `master` + 2 commits).
+  - `master` = `auto-work` since 14 Nov (local fast-forward; push `master` when the coach says so).
 - [ ] Aim test (□ + 10 balls from the spot) to decide between camera offset and driver aim. Then set `aim_trim_deg` or retrain the drivers. (FIRE now waits for the aim when the CELL is in view: `AimGate`.)
 - [ ] Fit launcher hood v2 (PPL1, printed 4 Nov; `Launcher_Hood_Step_by_Step.pdf`, **6 inserts / 3 screws per tower**) and the floor parts PPR1–3 (PPR2 + PPR3 printed 5 Nov, PPR1 printing 5 Nov night; `Floor_Parts_Step_by_Step.pdf`).
   - **Installed: `master` `b1cee74` (7 Nov ~21:05)**, after `8967f09` (6 Nov 09:57). The robot no longer has `a80ff5c` with the old flywheel settings.
