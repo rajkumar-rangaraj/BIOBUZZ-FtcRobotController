@@ -11,7 +11,7 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 | 7–14 | Drive to our GARDEN, sweep slowly along the wall into the corner with the intake on. The sweep aims **2 in past** the alliance wall, so the intake really touches it; it ends once the wall has stopped the robot for 1 s (stopped more than 6 in before the wall = BLOCKED, e.g. by a robot: it parks instead) | (POLLEN for TeleOp) |
 | 14–18 | At the corner the intake keeps running for up to 4 s while the robot goes **2 in back** from where the wall stopped it **and pushes in again**, so the last POLLEN rolls in (cut short only when it must park) | |
 | ~18 | **PARK** in our LOADING ZONE: slot **B** (default) is parked by ~24 s, slot A by ~28 s | PARK +5 |
-| (off) | **Stretch** (○ in INIT, off by default): back to the spot and fire the GARDEN POLLEN; it fires only if the camera still sees our CELL **up** at the end of the aim | another TIP? |
+| (off) | **Stretch** (○ in INIT, off by default): back to the spot and fire the GARDEN POLLEN; it fires only if the camera still sees the CELL in front **up** at the end of the aim | another TIP? |
 
 **Parking always wins.** At the park time (24 s, or earlier when the drive to the slot is long), the robot stops whatever it is doing and parks. Drive times are measured from the 9 Nov runs (park drive about 6 s to B, 10 s to A).
 
@@ -21,7 +21,12 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 Rules the code keeps:
 
 - **G407 (max 4 balls):** it only goes to the GARDEN after the windmill is empty (4 balls counted, or 3 full windmill turns). Otherwise it parks.
-- **G417:** it never fires into a CELL the camera sees **down** (HIVE already tipped). It looks only at our up CELL: up reads about 46 in, down about 30 in. It fires only when both the median of the last 5 frames and the latest frame are above 39 in (a latest frame reading down stops it). If the camera doesn't see our CELL at all, the pre-loads still go on the planned heading. Once firing has started, all 4 pre-loads go (team decision, 13 Nov), even if the HIVE tips during the volley.
+- **G417:** it never fires into a CELL the camera sees **down** (HIVE already tipped).
+  - **Which CELL it checks:** the **CELL in front** of the robot. That's our alliance's nearest CELL within 47 in, whatever its name. The CELL in front reads 36–39 in away; the HIVE's far CELL reads 55–69 in and never counts.
+  - **Why not by name:** on 13–14 Nov the practice HIVE had the names the other way round from the manual's start-up CELL. AUTO aimed by name, so it waited 3.5 s for a CELL it never saw. When the far CELL (down) was in view, it read "our CELL DOWN" and parked without shooting. The log now notes when the CELL in front isn't the manual's start-up CELL.
+  - **Up or down:** up reads about 46 in high, down about 30 in. It fires only when both the median of the last 5 frames and the latest frame are above 39 in (a latest frame reading down stops it).
+  - **No CELL in front in view:** the pre-loads still go on the planned heading.
+  - **Once firing has started,** all 4 pre-loads go (team decision, 13 Nov), even if the HIVE tips during the volley.
 - **Aim limit:** the camera aim turns at most 8° from the planned heading (6.5° when turning without Pedro, which coasts on). Our CELL is straight ahead at the shot spot: logged bearings were within ±1.1°. 2 in from the wall, a robot corner would touch the wall at about 15°, or about 11° if the robot is 0.5 in closer.
 - **G402:** every route stays on our side of the field.
 - It never touches a FLOWER or the HIVE frame. A laptop test checks every route.
@@ -83,11 +88,11 @@ Rules the code keeps:
 | D-pad ↑ / ↓ | Start delay 0–10 s |
 | LB / RB | Park-by time 18–27 s (default 24) |
 
-The screen shows the plan times and **Route check: OK**. It also shows **Pedro: ready**, the Pinpoint status, the battery, and our CELL (**UP** / **DOWN** with its height). Warnings starting with **!!** come first:
+The screen shows the plan times and **Route check: OK**. It also shows **Pedro: ready**, the Pinpoint status, the battery, and the CELL in front (**UP** / **DOWN** with its height; at S1 only: from S2 both CELLs are about as near, so it is checked at the shot spot). Warnings starting with **!!** come first:
 
 - **!! PEDRO NOT READY:** the reason, and what the FALLBACK will do (see "If something goes wrong").
 - **!! BATTERY** below 12.5 V: put in a charged battery. On 13 Nov, from about 12 V, the hubs dropped out and the Pinpoint faulted.
-- **!! OUR CELL looks DOWN:** AUTO will not shoot (G417). In practice, set the HIVE to the match start first.
+- **!! THE CELL IN FRONT looks DOWN:** AUTO will not shoot (G417). In practice, set the HIVE to the match start first.
 
 **Team rule:** place the robot, press INIT, and don't touch it until START. The Pinpoint calibrates while the robot is still.
 
@@ -100,7 +105,7 @@ The screen shows the plan times and **Route check: OK**. It also shows **Pedro: 
    - The log line `GARDEN WIGGLE done: ... deepest x` shows how far the robot got. With the bumper on the wall it reads -61.5 (RED frame).
    - At the corner the robot backs up `GARDEN_WIGGLE_IN` (2 in; 1–2 in works) from where it stopped.
    - All three are in `auto/AutoField.java`.
-4. **CELL up/down:** at the shot spot, the log column `height_in` reads about 46 for an up CELL and about 30 for a down one. The code fires only when the median of the last 5 frames is above 39 (`CellCheck.UP_MIN_HEIGHT_IN`).
+4. **CELL up/down:** at the shot spot, the log column `height_in` reads about 46 for an up CELL and about 30 for a down one; `floor_in` about 36–39 for the CELL in front. The code fires only when the median of the last 5 frames is above 39 (`CellCheck.UP_MIN_HEIGHT_IN`). The `CELL in front` log line names the CELL; "HIVE turned around?" there means the practice HIVE doesn't match the manual's start state.
 5. **Parking:** run with slot A and with slot B while a partner (or a box) sits in the other slot. The robot must not touch it.
 6. **Battery:** 12.5 V or more before every match.
 
@@ -112,7 +117,7 @@ Logs: `/sdcard/BioBuzzLogs/pedroauto_*.csv`. Steps and `EVENT` lines show each l
 |---|---|
 | `auto/AutoField.java` | Places from the official field CAD (LOADING ZONE, GARDEN, CELL, FLOWERs), starts, shot spot, slots |
 | `auto/AutoPlanner.java` | Routes, time estimates, park deadline, robot-footprint check |
-| `auto/CellCheck.java` | G417 check: is our CELL up (median camera height) |
+| `auto/CellCheck.java` | G417 check: which CELL is in front (camera distance) and whether it is up (median camera height) |
 | `auto/BioBuzzPedroAutoBase.java` | The op mode (Pedro drive, camera aim, ShotFeeder fire, intake, park, FALLBACK) |
 | `auto/BioBuzzPedroAutoRed/Blue.java` | RED / BLUE entries |
 | `test/.../auto/AutoPlannerTest.java`, `CellCheckTest.java` | Laptop tests: legal starts, slots, every route clear, parking from anywhere, time budget, GARDEN push, CELL check |

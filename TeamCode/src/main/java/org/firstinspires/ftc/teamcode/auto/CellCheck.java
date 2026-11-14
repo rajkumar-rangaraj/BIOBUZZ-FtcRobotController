@@ -18,6 +18,16 @@ public final class CellCheck {
     public static final double UP_MIN_HEIGHT_IN = 39.0;
     /** The verdict uses the median of the last this-many frames of our CELL, so one odd frame can't flip it. */
     public static final int FRAMES = 5;
+    /**
+     * The CELL in front of the shot spot is at most this far (camera floor distance): the CELL in front read 36-39 in
+     * (9 and 13 Nov), the far CELL of our HIVE 55-69 in (13-14 Nov). AUTO shoots only at the CELL in front.
+     */
+    public static final double FRONT_MAX_FLOOR_IN = 47.0;
+
+    /** Is a CELL at this camera floor distance the one in front of the shot spot (NaN: no)? */
+    public static boolean front(double floorIn) {
+        return floorIn <= FRONT_MAX_FLOOR_IN;
+    }
 
     /** Median of the last {@link #FRAMES} heights (NaN when there are none). */
     public static double median(List<Double> heightsIn) {

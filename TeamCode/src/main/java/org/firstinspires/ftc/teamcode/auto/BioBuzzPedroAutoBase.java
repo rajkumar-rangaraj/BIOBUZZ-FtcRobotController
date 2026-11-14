@@ -31,7 +31,7 @@ import java.util.List;
  *   1. SHOT     drive to the straight-on spot in front of our up CELL, camera aim, fire the 4 pre-loads
  *   2. GARDEN   only when the pre-loads are gone (G407: max 4 balls): sweep our 4 GARDEN POLLEN with the intake, then
  *               2 in back and forth at the corner while the intake keeps running
- *   3. STRETCH  back to the spot, fire the GARDEN POLLEN (only if the camera sees our CELL still UP)
+ *   3. STRETCH  back to the spot, fire the GARDEN POLLEN (only if the camera sees the CELL in front still UP)
  *   4. PARK     in LOADING ZONE slot A (corner end) or B (middle end), intake 2 in off the wall: LEAVE 3 + PARK 5
  *
  * PARK ALWAYS WINS: every step is cut short at the park start (the INIT "park by" time, earlier when the drive to the
@@ -142,10 +142,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private Pose lastGoodRed;                                   // last trusted pose, RED frame
     private boolean leftStart = false;                          // at least FALLBACK_LEAVE_IN from the start (LEAVE)
     private double startForwardIn;                              // wheel encoders at START (fallback back-offs)
-    private final List<Double> aimHeights = new ArrayList<>();  // our CELL's height on each frame of the last aim
+    private final List<Double> aimHeights = new ArrayList<>();  // the CELL in front: its height on each frame of the last aim
     private final List<Double> aimFloors = new ArrayList<>();   // ... and its floor distance (log only)
-    private final List<Double> initHeights = new ArrayList<>(); // our CELL's height on the latest INIT frames
-    private HiveVision.Target initCell;                         // our CELL on the latest INIT frame
+    private final List<Double> initHeights = new ArrayList<>(); // the CELL in front: its height on the latest INIT frames
+    private HiveVision.Target initCell;                         // the CELL in front on the latest INIT frame
     private double pinpointFaultSince = Double.NaN;
     private double lastPinpointReset = -1e9;
     private int pinpointResets = 0;
@@ -440,10 +440,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         }
         step = preloads ? "AIM (pre-loads)" : "AIM (GARDEN POLLEN)";
         HiveVision.Target seen = aim(Math.min(now() + AUTO_AIM_TIMEOUT_SEC, fireDeadline()));
-        if (!preloads && seen != null
-                && vision.targetCell(hiveAlliance(), HiveVision.startingUpCell(hiveAlliance())) == null) {
+        if (!preloads && seen != null && frontCell() == null) {
             // the GARDEN POLLEN go only into a CELL in view now: an UP frame from earlier in the aim may be from before a TIP
-            log.row(now(), "EVENT", "our CELL out of view at the end of the aim: GARDEN POLLEN kept");
+            log.row(now(), "EVENT", "CELL in front out of view at the end of the aim: GARDEN POLLEN kept");
             return;
         }
         if (cellAllowsFire(seen, preloads)) {
@@ -452,22 +451,24 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     }
 
     /**
-     * G417 check on our CELL from the last aim (median height of its last frames, CellCheck). No CELL seen: the pre-loads
-     * still go on the planned heading, GARDEN POLLEN are kept. The speed stays AUTO_LAUNCH_VELOCITY: every AUTO shot is
-     * from the one shot spot, where the camera distance only adds noise (the floor distance is logged for calibration).
+     * G417 check on the CELL in front from the last aim (median height of its last frames, CellCheck). No CELL in front
+     * seen: the pre-loads still go on the planned heading, GARDEN POLLEN are kept. The speed stays AUTO_LAUNCH_VELOCITY:
+     * every AUTO shot is from the one shot spot, where the camera distance only adds noise (logged for calibration).
      */
     private boolean cellAllowsFire(HiveVision.Target seen, boolean preloads) {
         if (seen == null) {
-            log.row(now(), "EVENT", preloads ? "no CELL in view: firing on the planned heading"
-                    : "no CELL in view: GARDEN POLLEN kept");
+            log.row(now(), "EVENT", preloads ? "no CELL in front in view: firing on the planned heading"
+                    : "no CELL in front in view: GARDEN POLLEN kept");
             return preloads;
         }
         double h = CellCheck.median(aimHeights);
         boolean up = CellCheck.up(aimHeights);
-        log.row(now(), "EVENT", String.format("CELL %s %s: height %.1f in (median of %d frames, last %.1f), floor %.1f in,"
-                + " bearing %.1f, launcher %.0f t/s", seen.cell, up ? "UP" : "DOWN", h,
+        HiveVision.Cell manual = HiveVision.startingUpCell(hiveAlliance());
+        log.row(now(), "EVENT", String.format("CELL in front %s %s: height %.1f in (median of %d frames, last %.1f), floor"
+                + " %.1f in, bearing %.1f, launcher %.0f t/s%s", seen.cell, up ? "UP" : "DOWN", h,
                 Math.min(aimHeights.size(), CellCheck.FRAMES), seen.heightIn(), CellCheck.median(aimFloors),
-                seen.bearingDeg, launchTps));
+                seen.bearingDeg, launchTps, seen.cell == manual ? ""
+                        : " (the manual's start-up CELL is " + manual + ": HIVE turned around?)"));
         return up;                                              // G417: never launch into a downward CELL
     }
 
@@ -485,7 +486,6 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         if (!pedroDrives) {
             return fallbackAim(endSec, null, imu0);
         }
-        HiveVision.Cell ours = HiveVision.startingUpCell(hiveAlliance());
         com.pedropathing.math.Pose spot = follower.pose();
         double planned = Math.toRadians(AutoField.SHOT.forAlliance(alliance()).headingDeg);
         double targetHeading = spot.heading();
@@ -499,7 +499,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 return fallbackAim(endSec, last, imu0);         // keep aiming on the camera alone
             }
             if (vision.update()) {
-                HiveVision.Target t = vision.targetCell(hiveAlliance(), ours);
+                HiveVision.Target t = frontCell();
                 lastTarget = t;
                 if (t != null) {
                     last = t;
@@ -703,18 +703,17 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     }
 
     /**
-     * Without Pedro: the TeleOp camera aim (HiveVision.aimTurnCw on the latest frame of our CELL, turning on the spot)
-     * until it needs no turn on 3 new frames. No recent frame of our CELL: the drive stops. All turning since the aim
+     * Without Pedro: the TeleOp camera aim (HiveVision.aimTurnCw on the latest frame of the CELL in front, turning on the
+     * spot) until it needs no turn on 3 new frames. No recent frame of it: the drive stops. All turning since the aim
      * began ({@code imu0}, hub IMU, either sign) stays under AutoField.AIM_MAX_YAW_DEG - AIM_COAST_DEG so a robot corner can't
      * reach the wall.
      */
     private HiveVision.Target fallbackAim(double endSec, HiveVision.Target seenBefore, double imu0) {
-        HiveVision.Cell ours = HiveVision.startingUpCell(hiveAlliance());
         HiveVision.Target last = seenBefore;
         int settled = 0;
         while (opModeIsActive() && now() < endSec) {
             boolean fresh = vision.update();
-            HiveVision.Target t = vision.targetCell(hiveAlliance(), ours);
+            HiveVision.Target t = frontCell();
             lastTarget = t;
             if (t == null) {
                 robot.stopDrive();
@@ -768,6 +767,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
      * READY reading (Follower.pose() reads the localizer).
      */
     private void pedroUpdate() {
+        if (isStopRequested()) {                                // AUTO is ending: the I2C reads are zeros now
+            follower.drivetrain.stop();
+            return;
+        }
         if (!Double.isNaN(pinpointBadSince)) {
             follower.localizer.update();
             if (pinpointDev.getDeviceStatus() != GoBildaPinpointDriver.DeviceStatus.READY) {
@@ -860,17 +863,33 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 : "FALLBACK: back up off the wall (LEAVE only)";
     }
 
-    /** INIT: our CELL on the new frame, for the UP / DOWN line (median of the last CellCheck.FRAMES frames). */
+    /**
+     * INIT: the CELL in front on the new frame, for the UP / DOWN line (median of the last CellCheck.FRAMES frames). Only
+     * at S1: from S2 the camera looks at the HIVE side-on and both its CELLs are about equally near (one is always down).
+     */
     private void noteInitCell() {
-        initCell = vision.targetCell(hiveAlliance(), HiveVision.startingUpCell(hiveAlliance()));
-        if (initCell == null) {
-            initHeights.clear();
+        HiveVision.Target t = start == Start.CELL_WALL ? frontCell() : null;
+        if (t == null || (initCell != null && t.cell != initCell.cell)) {
+            initHeights.clear();                                // another CELL: don't mix their heights
+        }
+        initCell = t;
+        if (t == null) {
             return;
         }
-        initHeights.add(initCell.heightIn());
+        initHeights.add(t.heightIn());
         if (initHeights.size() > CellCheck.FRAMES) {
             initHeights.remove(0);
         }
+    }
+
+    /**
+     * Our ALLIANCE's CELL in front of the robot at S1 / the shot spot: the nearest one, if within
+     * CellCheck.FRONT_MAX_FLOOR_IN, whatever its name (null otherwise). That's the CELL AUTO shoots at; the far CELL of the
+     * HIVE (55-69 in) never counts.
+     */
+    private HiveVision.Target frontCell() {
+        HiveVision.Target t = vision.nearestCell(hiveAlliance());
+        return t != null && CellCheck.front(t.horizontalIn()) ? t : null;
     }
 
     // ---------------- Helpers ----------------
@@ -915,9 +934,14 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
      *   without looking at the status, so it would drive on a frozen pose. One bad read is normal and recovers on the
      *   next loop; until then the drive is stopped (pedroUpdate() then only reads the Pinpoint);
      * - between READY readings, a jump bigger than the robot can move in that time (checks start at the START pose).
-     * Once lost, always lost.
+     * Once lost, always lost. Not while AUTO is being stopped (STOP or the 30 s timer): the SDK then shuts the I2C device
+     * down and its last reads are zeros (14 Nov logs: "POSE LOST (-72, -72)" right at the end of runs).
      */
     private boolean poseLost() {
+        if (isStopRequested()) {
+            follower.drivetrain.stop();                         // the SDK's last reads are zeros: no power from them
+            return false;
+        }
         if (poseLostOnce || poseJumped || pinpointLost) {
             return true;
         }
@@ -993,7 +1017,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void loopTick() {
         double t = now();
         Pose p = follower == null ? null : here();
-        if (pedroDrives && poseSet) {
+        if (pedroDrives && poseSet && !isStopRequested()) {     // at STOP the last reads are zeros: record nothing
             if (poseLost()) {
                 losePose();                                     // wherever it shows first: Pedro stops at once
             } else {
@@ -1073,8 +1097,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         double cellHeight = CellCheck.median(initHeights);
         boolean cellUp = CellCheck.up(initHeights);
         if (shoot && initCell != null && !cellUp) {
-            telemetry.addLine(String.format("!! OUR CELL %s looks DOWN (%.0f in): AUTO will not shoot (G417). Practice: set"
-                    + " the HIVE to the match start", initCell.cell, cellHeight));
+            telemetry.addLine(String.format("!! THE CELL IN FRONT (%s) looks DOWN (%.0f in): AUTO will not shoot (G417)."
+                    + " Practice: set the HIVE to the match start", initCell.cell, cellHeight));
         }
         telemetry.addData("Start (D-pad L/R)", start.label);
         telemetry.addData("Park slot (Square/X)", slot.label);
@@ -1118,11 +1142,13 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         telemetry.addData("Battery", "%.1f V%s", volts, volts < LOW_BATTERY_V ? "  LOW" : "");
         if (vision == null) {
             telemetry.addData("Camera", "NOT FOUND: %s (fires pre-loads unaimed, no stretch)", visionError);
+        } else if (start != Start.CELL_WALL) {
+            telemetry.addData("Camera", "OK (the CELL in front is checked at the shot spot)");
         } else if (initCell == null) {
-            telemetry.addData("Camera", "our CELL %s not in view", HiveVision.startingUpCell(hiveAlliance()));
+            telemetry.addData("Camera", "no CELL in front in view (it fires straight ahead)");
         } else {
-            telemetry.addData("Camera", "our CELL %s %s: height %.0f in, %d tags", initCell.cell,
-                    cellUp ? "UP" : "DOWN", cellHeight, initCell.tagCount);
+            telemetry.addData("Camera", "CELL in front: %s, height %.0f in (%s, %d tags)", cellUp ? "UP" : "DOWN",
+                    cellHeight, initCell.cell, initCell.tagCount);
         }
         telemetry.addLine("Place: " + (start == Start.CELL_WALL
                 ? "intake against the " + (alliance() == Alliance.RED ? "AUDIENCE" : "REAR")

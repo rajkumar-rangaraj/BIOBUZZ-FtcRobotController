@@ -196,17 +196,20 @@ public class HiveVision {
     }
 
     /**
-     * Only this CELL of our ALLIANCE, or null when it is not in a recent frame. Unlike {@link #target}, another CELL with
-     * more visible tags can't hide it (AUTO aims at one CELL only).
+     * Our ALLIANCE's CELL nearest the camera (smallest floor distance), whatever its name, or null when none is in a recent
+     * frame. AUTO shoots at the CELL in front of the shot spot: on the practice HIVE (13-14 Nov) that CELL carried the
+     * other name than {@link #startingUpCell}, and the far CELL (down) had that name, so a name check aimed at nothing or
+     * at the far CELL.
      */
-    public Target targetCell(Alliance alliance, Cell cell) {
-        if (latest == null || sinceFrame.seconds() > TARGET_MAX_AGE_SEC || !cell.belongsTo(alliance)) {
+    public Target nearestCell(Alliance alliance) {
+        if (latest == null || sinceFrame.seconds() > TARGET_MAX_AGE_SEC) {
             return null;
         }
         Target best = null;
         for (AprilTagDetection det : latest) {
             Target t = toTarget(det);
-            if (t != null && t.cell == cell && (best == null || t.tagCount > best.tagCount)) {
+            if (t != null && t.cell.belongsTo(alliance) && !Double.isNaN(t.horizontalIn())
+                    && (best == null || t.horizontalIn() < best.horizontalIn())) {
                 best = t;
             }
         }

@@ -60,4 +60,21 @@ public class CellCheckTest {
         assertFalse(CellCheck.up(Arrays.asList(46.0, 30.2, 30.5, 46.1)));           // median DOWN
         assertFalse(CellCheck.up(Arrays.asList(30.0, 31.0, 32.0)));
     }
+
+    /**
+     * Only the CELL in front of the shot spot counts, whatever its name: measured floor distances of the CELL in front
+     * (36.2 / 37.1 in on 13 Nov, 38.9 / 39.4 in on 9 Nov) and of the far CELL (55.5-69.0 in, 13-14 Nov).
+     */
+    @Test
+    public void onlyTheCellInFrontCounts() {
+        for (double near : new double[]{36.2, 37.1, 38.9, 39.4}) {
+            assertTrue(near + " in is in front", CellCheck.front(near));
+            assertTrue("at least 7 in of margin", CellCheck.FRONT_MAX_FLOOR_IN - near >= 7.0);
+        }
+        for (double far : new double[]{55.5, 67.1, 67.2, 68.7, 69.0}) {
+            assertFalse(far + " in is the far CELL", CellCheck.front(far));
+            assertTrue("at least 8 in of margin", far - CellCheck.FRONT_MAX_FLOOR_IN >= 8.0);
+        }
+        assertFalse(CellCheck.front(Double.NaN));
+    }
 }
