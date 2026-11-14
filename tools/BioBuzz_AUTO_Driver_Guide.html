@@ -194,7 +194,7 @@
         <div class="k"><span class="c">as agreed</span>Start (D-pad L/R) : CELL wall: side wall in front of our up CELL (shoots from here)</div>
         <div class="k"><span class="c">as agreed</span>Park slot (Square/X) : B = MIDDLE end of the LOADING ZONE (toward the FLOWER)</div>
         <div>&gt;&gt; Tell your partner: we park in slot B, they take slot A</div>
-        <div class="k"><span class="c">ON</span>Shoot pre-loads (Cross/A) : ON</div>
+        <div class="k"><span class="c">ON</span>Shoot pre-loads (Cross/A) : ON (1440 t/s)</div>
         <div class="k"><span class="c">ON</span>GARDEN POLLEN (Triangle/Y) : ON</div>
         <div>Stretch: shoot again (Circle/B) : OFF</div>
         <div>Start delay (D-pad U/D) : 0 s</div>
@@ -204,21 +204,24 @@
         <div>Plan : PARK B starts by 23 s, takes ~6 s</div>
         <div class="k"><span class="c">must be OK</span>Route check : OK</div>
         <div class="k"><span class="c">must be ready</span>Pedro : ready</div>
-        <div class="k"><span class="c">ok</span>Camera : no CELL in view (normal at the wall)</div>
+        <div class="k"><span class="c">READY</span>Pinpoint : READY</div>
+        <div class="k"><span class="c">12.5 V or more</span>Battery : 12.9 V</div>
+        <div class="k"><span class="c">UP</span>Camera : our CELL RED_AUDIENCE UP: height 46 in</div>
         <div class="k"><span class="c">robot there?</span>Place: intake against the AUDIENCE wall, centred on our up CELL, square to the wall</div>
       </div>
-      <div class="small" style="margin:2px 0 3px">RED, all defaults. BLUE: AUTO BLUE, REAR wall. Plan times are estimates.</div>
+      <div class="small" style="margin:2px 0 3px">RED, all defaults (BLUE: REAR wall). Camera "not in view" is OK too.</div>
       <table class="bad">
         <tr><th>Bad line</th><th>What happens · what you do</th></tr>
-        <tr><td>Pedro : NOT READY …</td><td>No Pinpoint or Pedro not tuned: AUTO only backs 8 in off the wall (LEAVE, 3 points). Keep still; tell the coach.</td></tr>
-        <tr><td>Camera : NOT FOUND …</td><td>Fires the pre-loads unaimed, no stretch. Tell the coach.</td></tr>
-        <tr><td>GARDEN POLLEN : ON but needs shooting (G407)</td><td>Shoot is OFF, so no GARDEN. ✕ turns Shoot ON.</td></tr>
-        <tr><td>Route check : PROBLEM …</td><td>Tell the coach.</td></tr>
-        <tr><td>GARDEN ON but no "GARDEN done" Plan line</td><td>Not enough time: it will skip the GARDEN.</td></tr>
+        <tr><td>!! BATTERY 12.1 V …</td><td>Put in a charged battery (12.5 V+).</td></tr>
+        <tr><td>!! OUR CELL … DOWN</td><td>Won't shoot (G417). Practice: reset the HIVE.</td></tr>
+        <tr><td>!! PEDRO NOT READY …</td><td>FALLBACK: S1 still shoots, then LEAVE. No GARDEN, no PARK. Tell the coach.</td></tr>
+        <tr><td>Camera : NOT FOUND …</td><td>Fires unaimed, no stretch. Tell the coach.</td></tr>
+        <tr><td>GARDEN … needs shooting</td><td>Shoot is OFF, so no GARDEN (G407). ✕ = Shoot ON.</td></tr>
+        <tr><td>no "GARDEN done" Plan line</td><td>No time: it skips the GARDEN.</td></tr>
       </table>
     </div>
   </div>
-  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code master c29d480 (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
+  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code auto-work cf9928c (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
 </div>
 
 <!-- ======================= PAGE 2: IN THE MATCH ======================= -->
@@ -229,8 +232,8 @@
   <div class="tl">
     <div class="ts"><span class="n">1</span><span class="time">0–1 s</span><span class="em">🚀</span><span class="h">LEAVE</span>Leaves the wall, spins up the flywheel.<span class="pts">LEAVE +3 (counted at the end)</span></div>
     <div class="ts"><span class="n">2</span><span class="time">1–7 s</span><span class="em">🎯</span><span class="h">SHOOT</span>Camera aims at our up CELL, fires the 4 pre-loads.<span class="pts">HIVE TIP +20 if it tips</span></div>
-    <div class="ts"><span class="n">3</span><span class="time">7–14 s</span><span class="em">🌼</span><span class="h">GARDEN</span>Sweeps slowly along the wall into the GARDEN corner, intake on.<span class="pts">POLLEN for TeleOp</span></div>
-    <div class="ts"><span class="n">4</span><span class="time">14–18 s</span><span class="em">↔️</span><span class="h">CORNER</span>Intake on up to 4 s, going 2 in back and forth, so the last POLLEN rolls in.</div>
+    <div class="ts"><span class="n">3</span><span class="time">7–14 s</span><span class="em">🌼</span><span class="h">GARDEN</span>Sweeps slowly along the wall into the GARDEN corner, intake on, until it touches the wall.<span class="pts">POLLEN for TeleOp</span></div>
+    <div class="ts"><span class="n">4</span><span class="time">14–18 s</span><span class="em">↔️</span><span class="h">CORNER</span>Intake on up to 4 s: backs 2 in off the wall and pushes in again, so the last POLLEN rolls in.</div>
     <div class="ts"><span class="n">5</span><span class="time">~18 s</span><span class="em">🅿️</span><span class="h">PARK</span>In our LOADING ZONE. Slot B: parked by ~24 s. Slot A: by ~28 s.<span class="pts">PARK +5</span></div>
     <div class="ts off"><span class="time" style="font-size:15px">STRETCH (○)</span><span class="em" style="font-size:15px">🔁</span><span class="pts" style="color:#666; margin:0 0 1px">OFF by default</span>Back to the spot, fires the GARDEN POLLEN only if the camera sees our CELL still <b>up</b>.</div>
   </div>
@@ -266,23 +269,23 @@
       <h2>🛠️ If this happens in AUTO</h2>
       <table class="prob">
         <tr><th>If…</th><th>the robot…</th></tr>
-        <tr><td>No CELL in view</td><td>fires the pre-loads on the planned heading.</td></tr>
-        <tr><td>Our CELL is already <b>down</b> (HIVE tipped)</td><td>never fires into it (G417). No GARDEN; it parks.</td></tr>
-        <tr><td>Windmill not empty after shooting (e.g. a jam)</td><td>skips the GARDEN (G407: max 4 balls) and parks.</td></tr>
-        <tr><td>Blocked 1 s before the park (e.g. by our partner)</td><td>drops that step and goes to park.</td></tr>
-        <tr><td>Blocked while parking</td><td>waits and tries again until AUTO ends (stays if partly in the zone).</td></tr>
+        <tr><td>No CELL in view</td><td>fires the pre-loads straight ahead.</td></tr>
+        <tr><td>Our CELL already <b>down</b></td><td>never fires into it (G417). No GARDEN; it parks.</td></tr>
+        <tr><td>Balls left after shooting (jam)</td><td>no GARDEN (G407: max 4 balls); it parks.</td></tr>
+        <tr><td>Blocked 1 s (e.g. by our partner)</td><td>drops that step and parks; while parking it tries again until AUTO ends.</td></tr>
+        <tr><td>The Pinpoint fails (low battery)</td><td>stops; backs off the wall (LEAVE). No PARK.</td></tr>
       </table>
-      <div class="card tip small" style="margin:4px 0 6px"><b>💡 Practice:</b> set our HIVE to the match start first: <b>our CELL up</b>
-        (the CELL that points at a FLOWER is the down one). If our CELL is down, <b>AUTO won't shoot</b> (G417).</div>
+      <div class="card tip small" style="margin:4px 0 6px"><b>💡 Practice:</b> set our HIVE to the match start first (<b>our CELL up</b>).
+        If our CELL is down, <b>AUTO won't shoot</b> (G417).</div>
       <h2>📺 The Step line during AUTO</h2>
       <table class="stepl">
         <tr><th>Step says</th><th>It is…</th></tr>
-        <tr><td>DELAY</td><td>waiting (start delay)</td></tr>
         <tr><td>SHOT SPOT · AIM … · FIRE …</td><td>shooting the pre-loads</td></tr>
         <tr><td>GARDEN …</td><td>in the GARDEN</td></tr>
         <tr><td>PARK: …</td><td>driving to the slot</td></tr>
         <tr><td>PARKED B / PARKED A</td><td><b>done ✓</b></td></tr>
-        <tr><td>FALLBACK DONE (LEAVE only)</td><td>Pedro was not ready</td></tr>
+        <tr><td>FALLBACK DONE (…)</td><td>Pedro was not ready</td></tr>
+        <tr><td>POSE LOST: stopped</td><td>the Pinpoint failed</td></tr>
       </table>
     </div>
 
@@ -291,13 +294,12 @@
       <div class="ttl">✅ PRE-MATCH CHECKLIST</div>
       <div class="i"><span class="box">☐</span><b>Partner agreed:</b> who has S1 · A or B · our GARDEN · our lane</div>
       <div class="i"><span class="box">☐</span><b>Op mode:</b> BioBuzz AUTO RED / BLUE = our colour</div>
-      <div class="i"><span class="box">☐</span><b>4 pre-loads</b>, one in each pocket</div>
+      <div class="i"><span class="box">☐</span><b>Battery 12.5 V+</b> · <b>4 pre-loads</b>, one per pocket</div>
       <div class="i"><span class="box">☐</span><b>Robot at S1 or S2:</b> intake against the wall, centred, square</div>
-      <div class="i"><span class="box">☐</span><b>INIT</b>, then hands off the robot</div>
-      <div class="i"><span class="box">☐</span>Title line = <b>our colour</b></div>
+      <div class="i"><span class="box">☐</span><b>INIT</b>, hands off · title = <b>our colour</b></div>
       <div class="i"><span class="box">☐</span><b>Start</b> and <b>Park slot</b> as agreed</div>
       <div class="i"><span class="box">☐</span><b>Shoot ON, GARDEN ON</b> · stretch, delay, park by as agreed</div>
-      <div class="i"><span class="box">☐</span><b>Route check: OK</b> · <b>Pedro: ready</b> · Camera not NOT FOUND</div>
+      <div class="i"><span class="box">☐</span><b>No !! line</b> · <b>Route check: OK</b> · <b>Pedro: ready</b></div>
       <div class="i"><span class="box">☐</span><b>Place</b> line = where the robot is</div>
       <div class="i"><span class="box">☐</span>Last look, then <b>▶ START</b> when the match starts. Hands off.</div>
     </div>
