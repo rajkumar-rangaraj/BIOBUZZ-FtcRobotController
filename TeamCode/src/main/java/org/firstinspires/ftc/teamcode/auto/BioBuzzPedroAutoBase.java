@@ -69,6 +69,13 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double GARDEN_WIGGLE_MOVE_SEC = 1.0;
     /** Stretch only when at least this much time is left for aim + settle + a few pockets at the spot. */
     static final double STRETCH_MIN_FIRE_SEC = 4.0;
+    /**
+     * A volley's feed ends after this long (or at the park start). The pre-loads must prove the windmill empty for the
+     * GARDEN (G407): 4 balls counted, or AUTO_FEED_POCKETS pockets. The 4th ball often makes no flywheel dip, so it takes
+     * all 12 pockets: ~0.5 s each, ~0.8 s when the windmill sticks. With BioBuzzConstants.AUTO_FEED_TIMEOUT_SEC (8 s)
+     * 14 Nov 13:58 BLUE (4 sticks, 1 jam) and 9 Nov 18:04 BLUE stopped at 10 pockets: not proven empty, no GARDEN.
+     */
+    static final double VOLLEY_FEED_SEC = 12.0;
     /** Fallback without Pedro: back straight off the wall this far (LEAVE). */
     static final double FALLBACK_LEAVE_IN = 8.0;
     /**
@@ -559,7 +566,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         ShotFeeder feeder = ShotFeeder.fromSettings(settings);
         BallCounter counter = BallCounter.forAuto();
         robot.setIntake(FEED_INTAKE_BOOST);
-        double feedEnd = now() + AUTO_FEED_TIMEOUT_SEC;
+        double feedEnd = now() + VOLLEY_FEED_SEC;
         while (opModeIsActive() && now() < Math.min(feedEnd, fireDeadline()) && feeder.shots() < AUTO_FEED_POCKETS
                 && feeder.state() != ShotFeeder.State.JAMMED
                 && !(counter.balls() >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
