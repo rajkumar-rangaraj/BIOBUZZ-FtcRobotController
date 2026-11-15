@@ -308,6 +308,24 @@ public class AutoPlannerTest {
         assertTrue(!AutoPlanner.partlyInZone(new Pose(LANE_X, SLOT_A_Y, FACE_ALLIANCE_WALL)));
     }
 
+    /** GPT review 14 Nov: the bounding box of a turned robot reached into the zone while no part of the robot did. */
+    @Test
+    public void partlyInZoneUsesTheRealFootprint() {
+        Pose turnedShort = new Pose(-50.1, SLOT_B_Y, 165);
+        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        for (double[] k : AutoPlanner.corners(turnedShort)) {
+            minX = Math.min(minX, k[0]);
+            minY = Math.min(minY, k[1]);
+            maxY = Math.max(maxY, k[1]);
+        }
+        assertTrue("its box reaches into the zone", ZONE_INNER_X - minX >= AutoPlanner.PARKED_MIN_OVERLAP_IN
+                && Math.min(maxY, ZONE_Y_MAX) - Math.max(minY, ZONE_Y_MIN) >= AutoPlanner.PARKED_MIN_OVERLAP_IN);
+        assertFalse("but the robot doesn't", AutoPlanner.partlyInZone(turnedShort));
+        assertTrue("6 in further a corner is in", AutoPlanner.partlyInZone(new Pose(-56.0, SLOT_B_Y, 165)));
+        assertFalse(AutoPlanner.partlyInZone(new Pose(-52.0, SLOT_B_Y, FACE_ALLIANCE_WALL)));   // square: 1.9 in, as before
+        assertTrue(AutoPlanner.partlyInZone(new Pose(-52.2, SLOT_B_Y, FACE_ALLIANCE_WALL)));    // 2.1 in
+    }
+
     /** Poses along the legs, up to where the robot really stops (the wall, on a leg into a wall). */
     private static List<Pose> samples(Pose from, List<AutoPlanner.Leg> legs) {
         List<Pose> out = new ArrayList<>();

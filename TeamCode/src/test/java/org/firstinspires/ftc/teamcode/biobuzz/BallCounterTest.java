@@ -94,7 +94,7 @@ public class BallCounterTest {
     }
 
     @Test
-    public void onlyOneBallPerPocketInAuto() {
+    public void maxPerPocketCapsTheCount() {
         BallCounter c = auto();
         run(c, 0.0, 0.3, false, 1150, t -> 1150);
         run(c, 0.3, 0.46, true, 1150, t -> 1150);
@@ -104,6 +104,36 @@ public class BallCounterTest {
         assertEquals(1, run(c, 1.16, 1.6, false, 1150, ballDip(1.2, 1150, 60)));
         assertEquals(2, c.balls());
         assertEquals(1, c.ignoredDips());
+    }
+
+    @Test
+    public void autoCountsTwoBallsFromOnePocket() {
+        // 13-14 Nov AUTO logs: a pocket fed two balls sends both (second dip 0.3-0.4 s later, 120-220 t/s deep); with one
+        // per pocket the 4th ball was never counted in 5 volleys and the windmill turned all 12 pockets
+        BallCounter c = BallCounter.forAuto();
+        run(c, 0.0, 0.3, false, 1440, t -> 1440);
+        run(c, 0.3, 0.46, true, 1440, t -> 1440);
+        assertEquals(1, run(c, 0.46, 0.76, false, 1440, ballDip(0.48, 1440, 200)));
+        assertEquals(1, run(c, 0.76, 1.06, false, 1440, ballDip(0.80, 1440, 200)));
+        assertEquals(2, c.balls());
+    }
+
+    @Test
+    public void aFlywheelHeldDownCountsOneBallAtMostUntilItRecovers() {
+        // GPT review 14 Nov: one uninterrupted 1440 -> 1390 drop started a new dip after each MAX_DIP_SEC, so every
+        // pocket counted a "ball": 4 balls, "windmill empty", GARDEN with a ball still inside (G407)
+        BallCounter c = BallCounter.forAuto();
+        run(c, 0.0, 0.3, false, 1440, t -> 1440);
+        int counted = 0;
+        double t0 = 0.3;
+        for (int pocket = 0; pocket < 6; pocket++, t0 += 0.6) {
+            counted += run(c, t0, t0 + 0.16, true, 1440, t -> 1390);
+            counted += run(c, t0 + 0.16, t0 + 0.6, false, 1440, t -> 1390);
+        }
+        assertEquals(1, counted);
+        run(c, t0, t0 + 0.3, false, 1440, t -> 1440);                   // the flywheel is back up
+        run(c, t0 + 0.3, t0 + 0.46, true, 1440, t -> 1440);
+        assertEquals("real balls count again", 1, run(c, t0 + 0.46, t0 + 1.0, false, 1440, ballDip(t0 + 0.5, 1440, 200)));
     }
 
     @Test

@@ -101,8 +101,10 @@ public final class BioBuzzConstants {
     // the tread speed). ONE wheel since 7 Nov: the drivers trimmed to 1435-1495 t/s (median 1450) at 32-44 in and
     // 1585 at 57 in (robot logs 7 Nov 12:51-13:12, good battery; 75 % scored) -> ball speed ~0.70 x half the tread speed.
     // TeleOp normally sets the speed from the camera distance (AUTO_SPEED_* below); NEAR / FAR are the presets for no
-    // camera distance or a driver's manual choice, and AUTO's speed when no SHOT SPOT is saved.
-    public static final double LAUNCHER_NEAR_VELOCITY = 1450;                    // one wheel (was 1150 with two)
+    // camera distance or a driver's manual choice. 14 Nov: 1440 at the usual spot (~33 in) went long in TeleOp (team; the
+    // drivers trimmed down) -> NEAR and the table's 30-40 in part 1400 (was 1450 / 1440). The Pedro AUTO keeps
+    // AUTO_LAUNCH_VELOCITY.
+    public static final double LAUNCHER_NEAR_VELOCITY = 1400;                    // one wheel (was 1150 with two)
     public static final double LAUNCHER_FAR_VELOCITY = 1570;                     // one wheel (was 1240); few FAR shots yet
     public static final double LAUNCHER_TRIM_STEP = 10;                          // D-pad RIGHT/LEFT (15 until 9 Nov, 5 on
                                                                                  // 10 Nov: one press was too small)
@@ -112,8 +114,9 @@ public final class BioBuzzConstants {
     // ~0.6 %/in). 36-44 in lowered 10 Nov from 51 labelled TeleOp shots (tools/shot_results.py: IN balls 10-26 t/s
     // under the table there; 1450 at ~40 in went IN 8 of 10). 48 in and up: not enough labelled shots at auto speed
     // yet (10 Nov: 1450 at 48-52 in went IN 5, SHORT 4 of 14). TeleOp only: the Pedro AUTO fires at AUTO_LAUNCH_VELOCITY.
+    // 14 Nov: 30-40 in 1440 -> 1400 (team: 1440 went long at the usual spot); 44 in and up unchanged.
     public static final double[] AUTO_SPEED_DIST_IN = {30, 36, 40, 44, 48, 52, 56, 60, 64};
-    public static final double[] AUTO_SPEED_TPS = {1440, 1440, 1440, 1465, 1525, 1555, 1585, 1610, 1640};
+    public static final double[] AUTO_SPEED_TPS = {1400, 1400, 1400, 1465, 1525, 1555, 1585, 1610, 1640};
     public static final double AUTO_SPEED_KEEP_SEC = 3.0;                        // keep the auto speed after the CELL is lost
     public static final double AUTO_SPEED_HYSTERESIS = 10;                       // t/s: camera jitter can't move the target
     // Two of our CELLs in view (6 Nov logs: REAR at 31 in and AUDIENCE at 66 in, both ~1 deg) made the "best" CELL flip
@@ -153,7 +156,7 @@ public final class BioBuzzConstants {
     public static final double SHOT_MIN_INTERVAL_SEC = 0.35;                     // CALIBRATE with BioBuzz Shot Log
     public static final double SHOT_POCKET_TIMEOUT_SEC = 1.0;                    // a pocket taking longer = jam
     public static final double SHOT_UNJAM_SEC = 0.25;                            // back-off time after a jam (stops after a quarter pocket)
-    public static final int SHOT_MAX_JAMS = 3;
+    public static final int SHOT_MAX_JAMS = 3;                                   // in a row on one pocket: JAMMED
     // TeleOp and Tune: no pause after a pocket that launched nothing (the flywheel stayed ready while it turned and for
     // the empty wait after); a dip during a pocket started that early stops the windmill until the flywheel is back.
     // 7 Nov logs (one wheel, printed windmill): 2.7 pockets per ball, and the pause after every pocket was 42 % of FIRE
@@ -224,8 +227,9 @@ public final class BioBuzzConstants {
     public static final double AUTO_WALL_GAP_IN = 4;                             // stay off the wall for LEAVE
     public static final double AUTO_PARK_STRAFE_IN = 14;                         // CALIBRATE; strafe right into zone
     // AUTO's one shot speed: every Pedro AUTO shot is from the one shot spot (AutoField.SHOT, ~39 in camera floor distance).
-    // 13 Nov: 1450 (= LAUNCHER_NEAR_VELOCITY) from there went slightly LONG (team) -> 1440, one D-pad trim step lower
-    // (also the TeleOp table speed at 39 in). CALIBRATE at the shot spot in LAUNCHER_TRIM_STEP steps.
+    // 13 Nov: 1450 (the NEAR preset then) from there went slightly LONG (team) -> 1440, one D-pad trim step lower; 14 Nov:
+    // it shoots well (team), so it stays when TeleOp's near speed went to 1400. CALIBRATE at the shot spot in
+    // LAUNCHER_TRIM_STEP steps.
     public static final double AUTO_LAUNCH_VELOCITY = 1440;
     public static final int AUTO_FEED_POCKETS = 12;                              // up to 3 full turns (not every pocket launches)
     public static final double AUTO_FIRE_SETTLE_SEC = 0.5;                       // still robot before firing: balls settle

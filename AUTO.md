@@ -13,7 +13,7 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 | ~18 | **PARK** in our LOADING ZONE: slot **B** (default) is parked by ~24 s, slot A by ~28 s | PARK +5 |
 | (off) | **Stretch** (○ in INIT, off by default): back to the spot and fire the GARDEN POLLEN; it fires only if the camera still sees the CELL in front **up** at the end of the aim | another TIP? |
 
-**Parking always wins.** At the park time (24 s, or earlier when the drive to the slot is long), the robot stops whatever it is doing and parks. Drive times are measured from the 9 Nov runs (park drive about 6 s to B, 10 s to A).
+**Parking always wins.** At the park time (24 s, or earlier when the drive to the slot is long), the robot stops whatever it is doing and parks. Drive times are measured from the 9 Nov runs (park drive about 6 s to B, 10 s to A). The park is planned to end **2 s** before the end of AUTO: on a weak battery (13 Nov, ~10.3 V under load) parks took up to 1.2× the estimate.
 
 - If the robot is blocked for 1 s before parking (for example by our partner), it drops that step and goes to park.
 - If it is blocked while parking, it waits and tries again until the end of AUTO.
@@ -21,6 +21,9 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 Rules the code keeps:
 
 - **G407 (max 4 balls):** it only goes to the GARDEN after the windmill is empty (4 balls counted, or 3 full windmill turns). Otherwise it parks.
+  - A pocket fed two balls sends both; both count (14 Nov: before, the 4th ball's dip was ignored in 8 logged volleys, which then turned all 12 pockets, ~3 s).
+  - The volley may take up to 12 s (still ending at the park time). 8 s was too short when pockets stuck: 14 Nov 13:58 BLUE reached only 10 pockets, so it parked without the GARDEN.
+  - It gives up (JAMMED, balls may be left: no GARDEN) only after 3 jams **in a row on one pocket**. Before 14 Nov, 3 jams anywhere in the volley did it (12:20 and 12:21 BLUE).
 - **G417:** it never fires into a CELL the camera sees **down** (HIVE already tipped).
   - **Which CELL it checks:** the **CELL in front** of the robot. That's our alliance's nearest CELL within 47 in, whatever its name. The CELL in front reads 36–39 in away; the HIVE's far CELL reads 55–69 in and never counts.
   - **Why not by name:** on 13–14 Nov the practice HIVE had the names the other way round from the manual's start-up CELL. AUTO aimed by name, so it waited 3.5 s for a CELL it never saw. When the far CELL (down) was in view, it read "our CELL DOWN" and parked without shooting. The log now notes when the CELL in front isn't the manual's start-up CELL.
@@ -38,13 +41,14 @@ Rules the code keeps:
   - **S2 or shoot off:** back up 8 in (LEAVE only).
   - There is no GARDEN and no PARK in the fallback.
 - **Pose lost while driving:** Pedro stops at once and never drives again in this AUTO. The pose counts as lost when:
-  - it is NaN, or farther out than the robot can get (a Pinpoint that restarts reads the field corner);
-  - it jumps farther between two checks than the robot can move in that time;
-  - the Pinpoint is not READY for 0.25 s. On a bad read the Pinpoint driver keeps the last pose, and Pedro would drive on that frozen pose, so the motors are cut on every bad reading. One bad read is normal: the robot pauses for a moment and carries on.
+  - the Pinpoint is not READY for 0.25 s. This is checked first. A failed I2C read gives all zeros (NOT_READY at the field corner): before 14 Nov that one read was POSE LOST at once (12:25 BLUE at the GARDEN wall: no PARK). Now the motors are cut on every bad reading, the plan keeps using the last trusted pose, and the robot carries on when the Pinpoint reads again (log: `PINPOINT NOT_READY` ... `PINPOINT READY again after 0.05 s`);
+  - on a READY reading, it is NaN or farther out than the robot can get (a Pinpoint that restarted reads the field corner);
+  - it jumps farther between two checks than the robot can move in that time.
 
   Then:
   - If the robot was still at S1 and hadn't fired yet, it runs the same FALLBACK.
   - Otherwise it makes LEAVE (team test plan: not touching a wall at 0:00) and stands still. Near the start, it backs up to 8 in. Elsewhere, it backs up until the intake is 4 in off the wall in front of it (GARDEN corner, shot spot, park slot), going by the last trusted pose.
+  - Without Pedro, TeleOp's field-centric start heading follows the hub IMU's turns (the fallback aim can turn up to 6.5°).
 - **Pinpoint stuck in INIT:** if it is not READY for 2 s, AUTO resets it (again every 5 s while the problem lasts). Keep the robot still.
 - **AUTO right after a TeleOp, without a power cycle** (13 Nov 21:47: POSE LOST at 0.2 s, then NO PEDRO twice until a power cycle): the SDK's Pinpoint driver refuses a reading more than 5000 mm from the last one it took, and the start pose is written only to the device. After a TeleOp, which tracks in its own frame, the start pose could be refused for good. Fixed: INIT reads the Pinpoint unchecked, and START takes the first reading after the start pose unchecked and checks the pose is right.
 
@@ -88,13 +92,15 @@ Rules the code keeps:
 | D-pad ↑ / ↓ | Start delay 0–10 s |
 | LB / RB | Park-by time 18–27 s (default 24) |
 
-The screen shows the plan times and **Route check: OK**. It also shows **Pedro: ready**, the Pinpoint status, the battery, and the CELL in front (**UP** / **DOWN** with its height; at S1 only: from S2 both CELLs are about as near, so it is checked at the shot spot). Warnings starting with **!!** come first:
+The screen shows the plan times and **Route check: OK**. It also shows **Pedro: ready**, the Pinpoint status, the battery, the windmill **feed power and pause from BioBuzz Tune** (AUTO fires with them), and the CELL in front (**UP** / **DOWN** with its height; at S1 only: from S2 both CELLs are about as near, so it is checked at the shot spot). Warnings starting with **!!** come first:
 
 - **!! PEDRO NOT READY:** the reason, and what the FALLBACK will do (see "If something goes wrong").
 - **!! BATTERY** below 12.5 V: put in a charged battery. On 13 Nov, from about 12 V, the hubs dropped out and the Pinpoint faulted.
+- **!! (other alliance's CELL) CELL IN FRONT ... the right one?:** the nearest CELL in front belongs to the other alliance. You probably started the wrong AUTO (RED / BLUE).
+- **!! FEED FROM TUNE:** the windmill power / pause saved in BioBuzz Tune are far from what AUTO was run with (0.40, 0.25–0.35 s). Set them back in Tune.
 - **!! THE CELL IN FRONT looks DOWN:** AUTO will not shoot (G417). In practice, set the HIVE to the match start first.
 
-**Team rule:** place the robot, press INIT, and don't touch it until START. The Pinpoint calibrates while the robot is still.
+**Team rule:** place the robot, press INIT, and don't touch it until START. The Pinpoint calibrates while the robot is still. If the robot was moved meanwhile, INIT sees the Pinpoint gyro drift against the hub IMU (as TeleOp does) and recalibrates it; the Pinpoint line then says `gyro drifted: recalibrated 1 x`.
 
 ## Things to check on the field (first practice)
 
@@ -109,7 +115,7 @@ The screen shows the plan times and **Route check: OK**. It also shows **Pedro: 
 5. **Parking:** run with slot A and with slot B while a partner (or a box) sits in the other slot. The robot must not touch it.
 6. **Battery:** 12.5 V or more before every match.
 
-Logs: `/sdcard/BioBuzzLogs/pedroauto_*.csv`. Steps and `EVENT` lines show each leg, each ball, any BLOCKED, AGAINST THE WALL, POSE LOST, the FALLBACK, and when PARK started. The `CONFIG` line has the battery, Pinpoint status and launcher speed at START.
+Logs: `/sdcard/BioBuzzLogs/pedroauto_*.csv`. Steps and `EVENT` lines show each leg, each ball, any BLOCKED, AGAINST THE WALL, PINPOINT faults, POSE LOST, the FALLBACK, and when PARK started. The `CONFIG` line has the battery, Pinpoint status, launcher speed, gyro recalibrations, Tune's feed settings and the other alliance's CELL (if one was in front) at START.
 
 ## Code
 

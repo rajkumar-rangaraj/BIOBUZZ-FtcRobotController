@@ -18,6 +18,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.BioBuzzMatchState;
 import org.firstinspires.ftc.teamcode.biobuzz.BioBuzzRobot;
 import org.firstinspires.ftc.teamcode.biobuzz.CsvLog;
 import org.firstinspires.ftc.teamcode.biobuzz.HiveVision;
+import org.firstinspires.ftc.teamcode.biobuzz.PinpointInitCheck;
 import org.firstinspires.ftc.teamcode.biobuzz.ShotFeeder;
 import org.firstinspires.ftc.teamcode.biobuzz.TeleOpSettings;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
@@ -118,6 +119,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double PINPOINT_RESET_EVERY_SEC = 5.0;
     /** INIT warning below this (13 Nov: from ~11.9 V on, the Expansion Hub dropped out and the hubs cut the motors). */
     static final double LOW_BATTERY_V = 12.5;
+    /** INIT warning: Tune's feed settings (AUTO fires with them) far from what AUTO was run with (0.40, 0.25-0.35 s). */
+    static final double FEED_PAUSE_WARN_SEC = 0.5;
+    static final double FEED_POWER_WARN_MIN = 0.3, FEED_POWER_WARN_MAX = 0.5;
 
     private Start start = Start.CELL_WALL;
     private Slot slot = Slot.B;                                 // B: no driving past a partner parked in the other slot
@@ -156,6 +160,11 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private double pinpointFaultSince = Double.NaN;
     private double lastPinpointReset = -1e9;
     private int pinpointResets = 0;
+    private final PinpointInitCheck gyroCheck = PinpointInitCheck.standard();
+    private int gyroRecalibrations = 0;                         // INIT: the Pinpoint gyro drifted and was recalibrated
+    private HiveVision.Target otherCell;                        // INIT: the other ALLIANCE's CELL in front (wrong AUTO?)
+    private double handoffHeadingRed = Double.NaN;              // without Pedro: TeleOp's heading, turned with ...
+    private double handoffImuPrev;                              // ... the hub IMU (its last reading)
 
     @Override
     public void runOpMode() {
@@ -191,6 +200,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             readInitButtons();
             if (follower != null) {
                 follower.update();                              // idle: motors 0, keeps the Pinpoint status fresh
+                checkGyroInInit();
             }
             recoverPinpointInInit();
             if (vision != null && vision.update()) {
@@ -214,7 +224,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 "delay=" + delaySec, "park_by=" + parkBySec, "camera=" + (vision != null),
                 String.format("aim_trim=%.1f", settings.aimTrimDeg), String.format("battery=%.1f", robot.battery.getVoltage()),
                 "pinpoint=" + pinpointStatus(), "pinpoint_resets=" + pinpointResets,
-                String.format("launcher=%.0f", launchTps));
+                String.format("launcher=%.0f", launchTps), "gyro_recal=" + gyroRecalibrations,
+                String.format("feed_power=%.2f", settings.feedPower), String.format("feed_pause=%.2f", settings.feedPauseSec),
+                "other_cell=" + (otherCell == null ? "none" : otherCell.cell));
         matchStart = clock.seconds();
         startForwardIn = robot.forwardInches();
         // TeleOp field-centric start: the robot's heading relative to its drivers. The RED frame's heading is exactly
@@ -320,6 +332,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             if (now() >= AutoPlanner.MATCH_SEC - 0.3) {
                 return;
             }
+            if (!waitPoseOk()) {
+                afterPoseLost();
+                return;
+            }
             if (AutoPlanner.partlyInZone(redHere())) {         // blocked but PARK already counts: stay, don't back out
                 step = "PARKED (blocked) " + slot;
                 log.row(now(), "EVENT", "blocked inside the LOADING ZONE: holding at " + here());
@@ -338,8 +354,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             return false;                                       // never follow a path on a lost pose
         }
         for (AutoPlanner.Leg leg : legs) {
-            if (poseLost()) {                                   // never start a path from a bad pose
-                losePose();
+            if (!waitPoseOk()) {                                // never start a path from a bad pose
                 return false;
             }
             Pose target = leg.to.forAlliance(alliance());
@@ -348,6 +363,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             Pose mark = here();
             double timeout = AutoPlanner.legSec(redHere(), leg) * 2 + 2;
             log.row(now(), "EVENT", "LEG " + leg.label + " -> " + target);
+            boolean refollow = false;                           // a Pinpoint fault on this leg (see below)
             while (true) {
                 if (!opModeIsActive()) {
                     return false;
@@ -357,6 +373,21 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 if (poseLost()) {
                     losePose();
                     return false;
+                }
+                if (pinpointFault()) {                          // drive stopped until it reads again (see poseLost)
+                    refollow = true;
+                    loopTick();
+                    continue;
+                }
+                if (refollow) {
+                    // Pedro took the fault's first (bad) reading and may count the path as done: the leg starts again
+                    // from where the robot is, and the blocked timer too (the stop was ours)
+                    refollow = false;
+                    follower.follow(path(target, leg.speed));
+                    mark = here();
+                    still.reset();
+                    loopTick();
+                    continue;
                 }
                 if (!parking && now() >= parkStart()) {
                     log.row(now(), "EVENT", "PARK TIME during " + leg.label);
@@ -413,8 +444,14 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         int moves = 0;
         double deepest = redHere().x;                           // closest to the RED wall (wall contact, for calibration)
         while (opModeIsActive() && now() < endSec) {
+            if (!waitPoseOk()) {
+                return;
+            }
             // out: GARDEN_WIGGLE_IN back from where the wall (or a POLLEN) stopped the robot; in: push past the wall
             for (AutoPlanner.Leg leg : AutoPlanner.gardenWiggle(redHere())) {
+                if (!waitPoseOk()) {
+                    return;
+                }
                 follower.follow(path(leg.to.forAlliance(alliance()), leg.speed));
                 ElapsedTime move = new ElapsedTime();
                 step = leg.label;
@@ -490,7 +527,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             return null;
         }
         double imu0 = robot.headingDeg();                       // the whole aim, with or without Pedro, turns from here
-        if (!pedroDrives) {
+        if (!pedroDrives || !waitPoseOk()) {
             return fallbackAim(endSec, null, imu0);
         }
         com.pedropathing.math.Pose spot = follower.pose();
@@ -504,6 +541,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             if (poseLost()) {
                 losePose();
                 return fallbackAim(endSec, last, imu0);         // keep aiming on the camera alone
+            }
+            if (pinpointFault()) {                              // no turn on a heading that may be a bad read
+                loopTick();
+                continue;
             }
             if (vision.update()) {
                 HiveVision.Target t = frontCell();
@@ -552,7 +593,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
      * stopped), until the park start (fallback: FALLBACK_FIRE_END_SEC).
      */
     private void fire(boolean preloads) {
-        if (pedroDrives) {
+        if (pedroDrives && waitPoseOk()) {
             follower.hold(follower.pose());
         } else {
             robot.stopDrive();
@@ -607,6 +648,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         if (follower != null) {
             halt();
         }
+        handOffHeadingToImu();
         boolean shootHere = shoot && start == Start.CELL_WALL && !preloadsTried;
         step = "FALLBACK DELAY";
         while (opModeIsActive() && now() < delaySec) {
@@ -663,11 +705,57 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     /** The pose can't be trusted (see poseLost): Pedro stops for the rest of AUTO. */
     private void losePose() {
         if (!poseLostOnce) {
-            log.row(now(), "EVENT", "POSE LOST " + here() + " (Pinpoint " + pinpointStatus() + "): Pedro stops");
+            log.row(now(), "EVENT", "POSE LOST " + rawHere() + " (Pinpoint " + pinpointStatus() + "; last trusted "
+                    + lastGoodRed + ", RED frame): Pedro stops");
+            handOffHeadingToImu();
         }
         poseLostOnce = true;
         pedroDrives = false;
         halt();
+    }
+
+    /**
+     * Rides out a short Pinpoint fault (poseLost: not READY for less than PINPOINT_LOST_SEC, drive stopped) before a path
+     * or a hold starts from the pose. False when the pose is lost (losePose done).
+     */
+    private boolean waitPoseOk() {
+        while (opModeIsActive() && pinpointFault()) {
+            pedroUpdate();
+            if (poseLost()) {
+                losePose();
+                return false;
+            }
+            loopTick();
+        }
+        if (poseLost()) {
+            losePose();
+            return false;
+        }
+        return true;
+    }
+
+    /** The Pinpoint's last reading was not READY: a short fault is being ridden out (see poseLost). */
+    private boolean pinpointFault() {
+        return !Double.isNaN(pinpointBadSince);
+    }
+
+    /** Pedro stops (or never started): TeleOp's heading goes on from the last trusted one, turned with the hub IMU. */
+    private void handOffHeadingToImu() {
+        handoffHeadingRed = lastGoodRed != null ? lastGoodRed.headingDeg : AutoField.start(start).headingDeg;
+        handoffImuPrev = robot.headingDeg();
+        BioBuzzMatchState.recordAutoHeading(handoffHeadingRed);
+    }
+
+    /** Without Pedro: the hub IMU's turn, added up loop by loop (its yaw flips by 180 at +-90 deg), for TeleOp. */
+    private void followHeadingOnImu() {
+        double imu = robot.headingDeg();
+        double step = AutoField.normalizeDeg(imu - handoffImuPrev);
+        if (Math.abs(step) > 90) {
+            step = AutoField.normalizeDeg(step + 180);          // a yaw flip, not a turn (as PinpointInitCheck)
+        }
+        handoffImuPrev = imu;
+        handoffHeadingRed = AutoField.normalizeDeg(handoffHeadingRed + step);
+        BioBuzzMatchState.recordAutoHeading(handoffHeadingRed);
     }
 
     /** Without Pedro: backs straight up until the wheel encoders are this far back from START. */
@@ -863,6 +951,22 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         return pinpointDev == null ? "none" : String.valueOf(pinpointDev.getDeviceStatus());
     }
 
+    /**
+     * INIT: a Pinpoint gyro calibrated while the robot moved (Pedro recalibrates it at INIT) drifts all match and turns
+     * every path; TeleOp's check caught that in 2 of 100 INITs (logs to 14 Nov). Its heading is compared with the hub
+     * IMU's while the robot stands still (PinpointInitCheck, as in TeleOp) and recalibrated when it drifts.
+     */
+    private void checkGyroInInit() {
+        if (pinpointDev == null) {
+            return;
+        }
+        boolean ok = pinpointDev.getDeviceStatus() == GoBildaPinpointDriver.DeviceStatus.READY;
+        if (gyroCheck.update(ok, Math.toDegrees(follower.pose().heading()), robot.headingDeg())) {
+            pinpointDev.resetPosAndIMU();                       // START sets the pose anyway
+            gyroRecalibrations++;
+        }
+    }
+
     /** What AUTO does without Pedro (INIT screen and log). */
     private String fallbackPlan() {
         return shoot && start == Start.CELL_WALL
@@ -876,6 +980,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
      */
     private void noteInitCell() {
         HiveVision.Target t = start == Start.CELL_WALL ? frontCell() : null;
+        HiveVision.Target other = start == Start.CELL_WALL ? vision.nearestCell(otherHiveAlliance()) : null;
+        otherCell = other != null && CellCheck.front(other.horizontalIn())
+                && (t == null || other.horizontalIn() < t.horizontalIn()) ? other : null;
         if (t == null || (initCell != null && t.cell != initCell.cell)) {
             initHeights.clear();                                // another CELL: don't mix their heights
         }
@@ -923,7 +1030,19 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         return new com.pedropathing.math.Pose(p.x + 72, p.y + 72, Math.toRadians(p.headingDeg));
     }
 
+    /**
+     * Where we are (field frame). During a short Pinpoint fault (see poseLost) its reading may be all zeros: then the last
+     * trusted pose, so nothing (park time, GARDEN fit, wiggle, paths, holds) is planned from a bad read.
+     */
     private Pose here() {
+        if (pinpointFault() && lastPose != null) {
+            return lastPose;
+        }
+        return rawHere();
+    }
+
+    /** The pose as Pedro last read it from the Pinpoint (field frame). */
+    private Pose rawHere() {
         com.pedropathing.math.Pose p = follower.pose();
         return new Pose(p.x() - 72, p.y() - 72, Math.toDegrees(p.heading()));
     }
@@ -935,11 +1054,13 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
 
     /**
      * The pose can't be trusted, so Pedro must not drive on it (reviews, 14 Nov):
-     * - NaN, or the robot centre farther out than it can get (a Pinpoint that restarts, or an I2C read of zeros, reads
-     *   Pedro (0, 0) = the field corner (-72, -72));
-     * - the Pinpoint not READY for PINPOINT_LOST_SEC: on a bad read the driver keeps the last pose and Pedro reads it
-     *   without looking at the status, so it would drive on a frozen pose. One bad read is normal and recovers on the
-     *   next loop; until then the drive is stopped (pedroUpdate() then only reads the Pinpoint);
+     * - the Pinpoint not READY for PINPOINT_LOST_SEC. Checked first: a failed I2C read is all zeros (NOT_READY at Pedro
+     *   (0, 0), the field corner, a position the SDK takes), and on a bad read the driver keeps the last pose, which Pedro
+     *   reads without looking at the status. One bad read recovers on the next loop; until then the drive is stopped
+     *   (pedroUpdate() only reads the Pinpoint) and here() is the last trusted pose. 14 Nov 12:25 BLUE: one
+     *   I2C_TIMEOUT_SDA_STUCK read at the GARDEN wall was POSE LOST at once (the reach check came first): no PARK;
+     * - on a READY reading: NaN, or the robot centre farther out than it can get (a Pinpoint that restarted reads its
+     *   origin, the field corner (-72, -72));
      * - between READY readings, a jump bigger than the robot can move in that time (checks start at the START pose).
      * Once lost, always lost. Not while AUTO is being stopped (STOP or the 30 s timer): the SDK then shuts the I2C device
      * down and its last reads are zeros (14 Nov logs: "POSE LOST (-72, -72)" right at the end of runs).
@@ -952,16 +1073,12 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         if (poseLostOnce || poseJumped || pinpointLost) {
             return true;
         }
-        Pose p = here();
         double t = now();
-        double reach = AutoField.WALL_IN - AutoField.HALF_WIDTH_IN + 6;
-        if (Double.isNaN(p.x) || Double.isNaN(p.y) || Double.isNaN(p.headingDeg)
-                || Math.abs(p.x) > reach || Math.abs(p.y) > reach) {
-            return true;
-        }
         if (pinpointDev != null && pinpointDev.getDeviceStatus() != GoBildaPinpointDriver.DeviceStatus.READY) {
             if (Double.isNaN(pinpointBadSince)) {
                 pinpointBadSince = t;
+                log.row(t, "EVENT", "PINPOINT " + pinpointStatus() + ": drive stopped (reads " + rawHere()
+                        + "), last trusted pose " + lastPose);
             }
             if (t - pinpointBadSince >= PINPOINT_LOST_SEC) {
                 pinpointLost = true;
@@ -970,7 +1087,16 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             follower.drivetrain.stop();                         // never drive on a pose that may be frozen
             return false;
         }
-        pinpointBadSince = Double.NaN;
+        if (pinpointFault()) {
+            log.row(t, "EVENT", String.format("PINPOINT READY again after %.2f s at %s", t - pinpointBadSince, rawHere()));
+            pinpointBadSince = Double.NaN;
+        }
+        Pose p = rawHere();
+        double reach = AutoField.WALL_IN - AutoField.HALF_WIDTH_IN + 6;
+        if (Double.isNaN(p.x) || Double.isNaN(p.y) || Double.isNaN(p.headingDeg)
+                || Math.abs(p.x) > reach || Math.abs(p.y) > reach) {
+            return true;
+        }
         if (lastPose != null) {
             double dt = Math.max(0, t - lastPoseSec);           // since the last READY reading (spans a short freeze)
             double moved = p.distanceTo(lastPose);
@@ -1014,6 +1140,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         return alliance() == Alliance.RED ? HiveVision.Alliance.RED : HiveVision.Alliance.BLUE;
     }
 
+    private HiveVision.Alliance otherHiveAlliance() {
+        return alliance() == Alliance.RED ? HiveVision.Alliance.BLUE : HiveVision.Alliance.RED;
+    }
+
     private void closeVision() {
         if (vision != null) {
             vision.close();
@@ -1023,11 +1153,11 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
 
     private void loopTick() {
         double t = now();
-        Pose p = follower == null ? null : here();
+        Pose p = follower == null ? null : rawHere();
         if (pedroDrives && poseSet && !isStopRequested()) {     // at STOP the last reads are zeros: record nothing
             if (poseLost()) {
                 losePose();                                     // wherever it shows first: Pedro stops at once
-            } else {
+            } else if (!pinpointFault()) {                      // a READY reading that passed the checks
                 Pose r = redHere();
                 lastGoodRed = r;
                 BioBuzzMatchState.recordAutoHeading(r.headingDeg);   // for TeleOp's field-centric start
@@ -1035,6 +1165,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                     leftStart = true;
                 }
             }
+        } else if (!pedroDrives && !Double.isNaN(handoffHeadingRed) && !isStopRequested()) {
+            followHeadingOnImu();                               // fallback / pose lost: the camera aim may turn
         }
         HiveVision.Target target = lastTarget;
         if (log != null) {
@@ -1101,6 +1233,15 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             telemetry.addLine(String.format("!! BATTERY %.1f V: put in a charged one (13 Nov: from ~12 V the hubs dropped out"
                     + " and the Pinpoint faulted)", volts));
         }
+        if (otherCell != null) {
+            telemetry.addLine(String.format("!! %s CELL IN FRONT (%.0f in): this is the %s AUTO - the right one?",
+                    otherCell.cell, otherCell.horizontalIn(), alliance()));
+        }
+        if (settings.feedPauseSec > FEED_PAUSE_WARN_SEC || settings.feedPower < FEED_POWER_WARN_MIN
+                || settings.feedPower > FEED_POWER_WARN_MAX) {
+            telemetry.addLine(String.format("!! FEED FROM TUNE: power %.2f, pause %.2f s (AUTO was run with 0.40 and"
+                    + " 0.25-0.35 s): set it back in BioBuzz Tune", settings.feedPower, settings.feedPauseSec));
+        }
         double cellHeight = CellCheck.median(initHeights);
         boolean cellUp = CellCheck.up(initHeights);
         if (shoot && initCell != null && !cellUp) {
@@ -1144,9 +1285,12 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
 
         telemetry.addData("Pedro", why == null ? "ready" : "NOT READY: " + why + (pedroError != null ? " (" + pedroError
                 + ")" : "") + " -> " + fallbackPlan());
-        telemetry.addData("Pinpoint", "%s%s", pinpointStatus(),
-                pinpointResets > 0 ? String.format("  (reset %d x in INIT: keep the robot still)", pinpointResets) : "");
+        telemetry.addData("Pinpoint", "%s%s%s", pinpointStatus(),
+                pinpointResets > 0 ? String.format("  (reset %d x in INIT: keep the robot still)", pinpointResets) : "",
+                gyroRecalibrations > 0 ? String.format("  (gyro drifted: recalibrated %d x - keep the robot STILL)",
+                        gyroRecalibrations) : "");
         telemetry.addData("Battery", "%.1f V%s", volts, volts < LOW_BATTERY_V ? "  LOW" : "");
+        telemetry.addData("Feed (from Tune)", "power %.2f, pause %.2f s", settings.feedPower, settings.feedPauseSec);
         if (vision == null) {
             telemetry.addData("Camera", "NOT FOUND: %s (fires pre-loads unaimed, no stretch)", visionError);
         } else if (start != Start.CELL_WALL) {

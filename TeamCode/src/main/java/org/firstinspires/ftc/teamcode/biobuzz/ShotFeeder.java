@@ -3,7 +3,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 /**
  * Fires one ball at a time: turn the windmill exactly one pocket, then wait until the flywheel is back at speed (and a
  * minimum gap has passed) before the next pocket. A pocket that doesn't finish in time is a jam: back off briefly and
- * retry the same pocket; after too many jams it stops and waits for the fire request to be released.
+ * retry the same pocket; after too many jams in a row on that pocket it stops and waits for the fire request to be
+ * released. Jams on different pockets don't add up (14 Nov 12:21 BLUE AUTO: 2 jams on pocket 4, which then went, and 1
+ * on pocket 7 = "JAMMED", balls left in the robot, no GARDEN).
  * A windmill that stops moving during a pocket (the ramp's low power near the end can't push a ball past a tight spot)
  * gets more power, step by step, until it moves again. A pocket cut short (jam, unjam) is finished first; only a windmill
  * more than MAX_PUSH_POCKETS behind its next pocket goes to the first boundary ahead (no catch-up over many pockets).
@@ -66,7 +68,8 @@ public class ShotFeeder {
     private double lastShotTime = -1e9;                         // the pause runs from here (normally the pocket end)
     private double lastDoneTime = -1e9;                         // end of the last finished pocket
     private int shots = 0;
-    private int jams = 0;
+    private int jams = 0;                                       // all jams since the last reset (log, telemetry)
+    private int pocketJams = 0;                                 // jams in a row on the pocket being fed (maxJams)
     private double power = 0;
     private String event = null;
     private boolean skipEmptyPause = false;                     // see skipEmptyPockets()
@@ -243,6 +246,7 @@ public class ShotFeeder {
                 power = Math.min(Math.max(ramp, feedPower), ramp + extraPower * fade);
                 if (remaining <= STOP_TOLERANCE_TICKS) {
                     shots++;
+                    pocketJams = 0;
                     lastShotTime = resumed && !dipAfterResume ? holdStart : t;   // a held pocket's ball dipped at holdStart:
                     lastDoneTime = t;                                            // its pause already ran during the hold
                     lastPocketDone = true;
@@ -251,8 +255,10 @@ public class ShotFeeder {
                     go(wantFire ? State.WAIT_READY : State.IDLE, t);
                 } else if (t - stateStart > pocketTimeoutSec) {         // even 1 tick short: its ball may not have left
                     jams++;
+                    pocketJams++;
                     event = "JAM " + jams + " (windmill moved " + Math.abs(indexerTicks - pocketStartTicks)
-                            + " of " + Math.round(targetTicks - pocketStartTicks) + " ticks)";
+                            + " of " + Math.round(targetTicks - pocketStartTicks) + " ticks"
+                            + (pocketJams > 1 ? ", " + pocketJams + " in a row on this pocket)" : ")");
                     power = -unjamPower;
                     unjamStartTicks = indexerTicks;
                     go(State.UNJAM, t);
@@ -262,8 +268,8 @@ public class ShotFeeder {
                 power = -unjamPower;
                 if (t - stateStart >= unjamSec || unjamStartTicks - indexerTicks >= UNJAM_MAX_POCKETS * pocketTicks) {
                     power = 0;
-                    if (jams >= maxJams) {
-                        event = "JAMMED - gave up after " + jams + " tries";
+                    if (pocketJams >= maxJams) {
+                        event = "JAMMED - gave up after " + pocketJams + " tries on one pocket";
                         go(State.JAMMED, t);
                     } else {
                         go(wantFire ? State.WAIT_READY : State.IDLE, t);
@@ -274,6 +280,7 @@ public class ShotFeeder {
                 power = 0;
                 if (!wantFire) {                                // release FIRE to reset and try again
                     jams = 0;
+                    pocketJams = 0;
                     go(State.IDLE, t);
                 }
                 break;
@@ -317,6 +324,7 @@ public class ShotFeeder {
         }
         state = State.IDLE;
         jams = 0;
+        pocketJams = 0;
         power = 0;
         holding = false;
         noPausePocket = false;
@@ -345,6 +353,7 @@ public class ShotFeeder {
         return shots;
     }
 
+    /** All jams since the last reset (JAMMED released, or reset()), on any pocket. */
     public int jams() {
         return jams;
     }

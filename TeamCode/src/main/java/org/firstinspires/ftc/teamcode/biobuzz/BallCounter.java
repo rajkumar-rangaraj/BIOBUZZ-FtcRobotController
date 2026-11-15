@@ -14,7 +14,10 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  *       are two hub samples, not one read twice. With 55-60 ms loops (TeleOp while firing, 10 Nov logs) a real dip
  *       gives only two low readings ~55 ms apart: 6 of 34 shots weren't counted, and their LB + D-pad labels lost;</li>
  *   <li>it starts while the windmill feeds a pocket or within {@code windowSec} after it, at most {@code maxPerPocket}
- *       per pocket: spin-up, speed changes and anything between pockets never count.</li>
+ *       per pocket: spin-up, speed changes and anything between pockets never count;</li>
+ *   <li>a slowdown longer than a ball's (MAX_DIP_SEC) is no ball, and nothing counts until the speed is back up: a
+ *       flywheel held down (e.g. by a stuck ball) would otherwise count a "ball" on every pocket (GPT review 14 Nov:
+ *       one 1440 -> 1390 drop counted 4).</li>
  * </ul>
  * A missed ball only costs AUTO an extra pocket; a phantom ball could leave a preload behind.
  * No FTC SDK dependency: unit-tested.
@@ -22,7 +25,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 public class BallCounter {
 
     private static final double BASELINE_ALPHA = 0.2;          // per loop: ~0.1 s at 20 ms loops
-    private static final double MAX_DIP_SEC = 1.0;             // longer than this is not a ball's dip: re-learn
+    private static final double MAX_DIP_SEC = 1.0;             // longer than this is not a ball's dip
     static final double TWO_SAMPLES_MIN_SEC = 0.045;           // two different low readings this far apart: a ball
 
     private final double dipTps;
@@ -44,6 +47,7 @@ public class BallCounter {
     private boolean runDistinct = false;                       // a later reading of the run differs from it
     private boolean runArmed = false;
     private boolean decided = false;                           // this dip was already counted or ignored
+    private boolean waitRecovery = false;                      // a dip ran past MAX_DIP_SEC: none until the speed is back
 
     public BallCounter(double dipTps, double windowSec, double minDipSec, int maxPerPocket) {
         this(dipTps, windowSec, minDipSec, maxPerPocket, false);
@@ -58,10 +62,14 @@ public class BallCounter {
         this.twoSamples = twoSamples;
     }
 
-    /** AUTO: one ball per pocket at most (an extra pocket is cheaper than leaving a preload behind). */
+    /**
+     * AUTO: up to two balls per pocket. A pocket fed two balls at once sends both (13-14 Nov AUTO logs: a second dip
+     * 0.3-0.4 s after the first, 120-220 t/s deep, in 5 volleys); with one per pocket the 4th ball was never counted and
+     * the windmill turned all 12 pockets (~3 s) to prove itself empty. AUTO keeps the 60 ms rule (no twoSamples).
+     */
     public static BallCounter forAuto() {
         return new BallCounter(BioBuzzConstants.AUTO_SHOT_DIP_TPS, BioBuzzConstants.AUTO_DIP_WINDOW_SEC,
-                BioBuzzConstants.AUTO_DIP_MIN_SEC, 1);
+                BioBuzzConstants.AUTO_DIP_MIN_SEC, 2);
     }
 
     /**
@@ -88,6 +96,7 @@ public class BallCounter {
             armedUntil = Double.NEGATIVE_INFINITY;
             baseline = Double.NaN;
             dipSince = Double.NaN;
+            waitRecovery = false;
         }
         if (feeding && !wasFeeding) {
             thisPocket = 0;                                     // a new pocket may count its own ball
@@ -107,13 +116,23 @@ public class BallCounter {
         if (Double.isNaN(dipSince)) {
             if (!low) {
                 baseline += BASELINE_ALPHA * (velocityTps - baseline);   // the speed this flywheel really holds
+                if (waitRecovery && velocityTps > Math.min(targetTps, baseline) - dipTps / 2) {
+                    waitRecovery = false;                       // back up: dips count again
+                }
                 return false;
+            }
+            if (waitRecovery) {
+                return false;                                   // still held down after a dip too long for a ball
             }
             dipSince = t;
             runSince = Double.NaN;
             decided = false;
-        } else if (velocityTps > reference - dipTps / 2 || t - dipSince > MAX_DIP_SEC) {
-            dipSince = Double.NaN;                              // recovered (or not a ball's dip at all)
+        } else if (velocityTps > reference - dipTps / 2) {
+            dipSince = Double.NaN;                              // recovered
+            return false;
+        } else if (t - dipSince > MAX_DIP_SEC) {
+            dipSince = Double.NaN;                              // not a ball's dip: nothing counts until the speed is back
+            waitRecovery = true;
             return false;
         }
         if (!low) {
@@ -160,5 +179,6 @@ public class BallCounter {
         baseline = Double.NaN;
         dipSince = Double.NaN;
         runSince = Double.NaN;
+        waitRecovery = false;
     }
 }

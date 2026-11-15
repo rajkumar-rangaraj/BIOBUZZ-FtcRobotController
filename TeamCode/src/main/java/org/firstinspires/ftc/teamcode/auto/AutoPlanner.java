@@ -21,8 +21,12 @@ public final class AutoPlanner {
     }
 
     public static final double MATCH_SEC = 30.0;
-    /** The park should be finished this long before the end of AUTO. */
-    public static final double PARK_MARGIN_SEC = 1.0;
+    /**
+     * The park should be finished this long before the end of AUTO (by the estimate). Parks took 0.80-0.90 x the estimate
+     * on a good battery (13-14 Nov) but up to 1.22 x at ~10.3 V under load (13 Nov 21:50): from the corner (estimate
+     * ~5.8 s) a park started at the deadline then ends ~1.3 s late, so 2 s (was 1 s: past the 29.7 s stop).
+     */
+    public static final double PARK_MARGIN_SEC = 2.0;
     /** Pedro Foresight forward top speed (pedro.Constants, AutoTune 4 Nov), in/s. */
     public static final double TOP_SPEED_IN_PER_SEC = 61.4;
     /**
@@ -63,16 +67,15 @@ public final class AutoPlanner {
     /** PARK counts once this much of the robot is inside the LOADING ZONE (both directions). */
     public static final double PARKED_MIN_OVERLAP_IN = 2.0;
 
-    /** True when the robot already overlaps our LOADING ZONE by PARKED_MIN_OVERLAP_IN (PARK would score). */
+    /**
+     * True when the robot already overlaps our LOADING ZONE by PARKED_MIN_OVERLAP_IN (PARK would score): its real
+     * footprint against the zone made that much smaller on its inner sides. Not its bounding box: turned (e.g. 9 in short
+     * of slot B at 165 deg, GPT review 14 Nov) the box reached into the zone while no part of the robot did.
+     */
     public static boolean partlyInZone(Pose p) {
-        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (double[] k : corners(p)) {
-            minX = Math.min(minX, k[0]);
-            minY = Math.min(minY, k[1]);
-            maxY = Math.max(maxY, k[1]);
-        }
-        double overlapY = Math.min(maxY, ZONE_Y_MAX) - Math.max(minY, ZONE_Y_MIN);
-        return ZONE_INNER_X - minX >= PARKED_MIN_OVERLAP_IN && overlapY >= PARKED_MIN_OVERLAP_IN;
+        double x0 = -WALL_IN - 2 * HALF_LENGTH_IN, x1 = ZONE_INNER_X - PARKED_MIN_OVERLAP_IN;   // no outer limit: the wall
+        double y0 = ZONE_Y_MIN + PARKED_MIN_OVERLAP_IN, y1 = ZONE_Y_MAX - PARKED_MIN_OVERLAP_IN;
+        return overlapsBox(corners(p), (x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2);
     }
 
     public enum Action { DRIVE, INTAKE }

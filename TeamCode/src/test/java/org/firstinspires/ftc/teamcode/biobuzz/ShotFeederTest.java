@@ -151,6 +151,28 @@ public class ShotFeederTest {
     }
 
     @Test
+    public void jamsOnDifferentPocketsDoNotAddUp() {
+        // 14 Nov 12:21 BLUE AUTO: 2 jams on pocket 4 (it then went) and 1 on pocket 7 were "JAMMED - gave up after 3
+        // tries": balls left in the robot, no GARDEN. Each pocket here wedges once and goes on the retry.
+        Sim s = new Sim();
+        for (int pocket = 0; pocket < 3; pocket++) {
+            s.jamAt = pocket * POCKET + 50;
+            int jamsBefore = s.f.jams();
+            while (s.f.jams() == jamsBefore && s.t < 30) {
+                s.step(true);
+            }
+            s.jamAt = Double.NaN;                                     // the back-off frees it
+            int shotsBefore = s.f.shots();
+            while (s.f.shots() == shotsBefore && s.t < 30) {
+                s.step(true);
+            }
+        }
+        assertEquals(3, s.f.jams());
+        assertEquals(3, s.f.shots());
+        assertFalse(s.f.state() == ShotFeeder.State.JAMMED);
+    }
+
+    @Test
     public void jamBacksOffHalfAPocketAtMostThenRetriesTheSamePocket() {
         Sim s = new Sim();
         s.jamAt = 50;                                                 // a ball wedges the windmill 50 ticks into the pocket
