@@ -374,6 +374,17 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                     losePose();
                     return false;
                 }
+                // the deadlines first: a Pinpoint that keeps faulting (each fault shorter than PINPOINT_LOST_SEC) must
+                // not hold a leg past them (here() is the last trusted pose during a fault)
+                if (!parking && now() >= parkStart()) {
+                    log.row(now(), "EVENT", "PARK TIME during " + leg.label);
+                    halt();
+                    return false;
+                }
+                if (parking && now() >= AutoPlanner.MATCH_SEC - 0.3) {
+                    halt();
+                    return false;
+                }
                 if (pinpointFault()) {                          // drive stopped until it reads again (see poseLost)
                     refollow = true;
                     loopTick();
@@ -388,15 +399,6 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                     still.reset();
                     loopTick();
                     continue;
-                }
-                if (!parking && now() >= parkStart()) {
-                    log.row(now(), "EVENT", "PARK TIME during " + leg.label);
-                    halt();
-                    return false;
-                }
-                if (parking && now() >= AutoPlanner.MATCH_SEC - 0.3) {
-                    halt();
-                    return false;
                 }
                 if (legTimer.seconds() > 0.2 && !follower.isBusy()) {
                     break;
