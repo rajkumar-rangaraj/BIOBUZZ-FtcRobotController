@@ -102,8 +102,8 @@ public final class BioBuzzConstants {
     // 1585 at 57 in (robot logs 7 Nov 12:51-13:12, good battery; 75 % scored) -> ball speed ~0.70 x half the tread speed.
     // TeleOp normally sets the speed from the camera distance (AUTO_SPEED_* below); NEAR / FAR are the presets for no
     // camera distance or a driver's manual choice. 14 Nov: 1440 at the usual spot (~33 in) went long in TeleOp (team; the
-    // drivers trimmed down) -> NEAR and the table's 30-40 in part 1400 (was 1450 / 1440). The Pedro AUTO keeps
-    // AUTO_LAUNCH_VELOCITY.
+    // drivers trimmed down) -> NEAR and the table's 30-40 in part 1400 (was 1450 / 1440). The Pedro AUTO has its own
+    // AUTO_LAUNCH_VELOCITY (also 1400 since 14 Nov evening).
     public static final double LAUNCHER_NEAR_VELOCITY = 1400;                    // one wheel (was 1150 with two)
     public static final double LAUNCHER_FAR_VELOCITY = 1570;                     // one wheel (was 1240); few FAR shots yet
     public static final double LAUNCHER_TRIM_STEP = 10;                          // D-pad RIGHT/LEFT (15 until 9 Nov, 5 on
@@ -226,11 +226,11 @@ public final class BioBuzzConstants {
     public static final double AUTO_AIM_HEADING_DEG = -50;                       // camera found the BLUE CELL at about -50 (31 Oct); + is CCW
     public static final double AUTO_WALL_GAP_IN = 4;                             // stay off the wall for LEAVE
     public static final double AUTO_PARK_STRAFE_IN = 14;                         // CALIBRATE; strafe right into zone
-    // AUTO's one shot speed: every Pedro AUTO shot is from the one shot spot (AutoField.SHOT, ~39 in camera floor distance).
-    // 13 Nov: 1450 (the NEAR preset then) from there went slightly LONG (team) -> 1440, one D-pad trim step lower; 14 Nov:
-    // it shoots well (team), so it stays when TeleOp's near speed went to 1400. CALIBRATE at the shot spot in
-    // LAUNCHER_TRIM_STEP steps.
-    public static final double AUTO_LAUNCH_VELOCITY = 1440;
+    // AUTO's one shot speed: every Pedro AUTO shot is from the one shot spot (AutoField.SHOT; camera floor distance to the
+    // CELL in front 32.8-36.4 in on 14 Nov). 13 Nov: 1450 (the NEAR preset then) from there went slightly LONG (team) ->
+    // 1440; 14 Nov evening: 1440 still sent a few balls long (team), and TeleOp's 1400 is good from the same distance
+    // (its SHOT SPOT: 32.8 in) -> 1400. CALIBRATE at the shot spot in LAUNCHER_TRIM_STEP steps.
+    public static final double AUTO_LAUNCH_VELOCITY = 1400;
     public static final int AUTO_FEED_POCKETS = 12;                              // up to 3 full turns (not every pocket launches)
     public static final double AUTO_FIRE_SETTLE_SEC = 0.5;                       // still robot before firing: balls settle
     public static final double AUTO_FEED_POWER = 0.3;                            // ContinuousFeeder power (not used by AUTO now)

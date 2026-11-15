@@ -298,7 +298,7 @@ The spot and the last alliance are saved in `/sdcard/biobuzz_teleop.txt`, so the
 - **One wheel.** Since 7 Nov noon the flywheel has one wheel (the other was removed) and the windmill is the printed PPW1.
   - One wheel throws the ball slower at the same motor speed.
   - In the 7 Nov diag logs (78 shots, good battery), the drivers trimmed to about 1440 t/s at 30–36 in, 1480 at 36–44 in and 1585–1600 at 52–60 in. With two wheels it was 1150–1240.
-- **Presets:** NEAR **1400 t/s** (14 Nov; 1450 from 7 Nov, 1150 with two wheels), FAR **1570 t/s** (was 1240). The Pedro AUTO fires at its own `AUTO_LAUNCH_VELOCITY` (1440) from its one shot spot.
+- **Presets:** NEAR **1400 t/s** (14 Nov; 1450 from 7 Nov, 1150 with two wheels), FAR **1570 t/s** (was 1240). The Pedro AUTO fires at its own `AUTO_LAUNCH_VELOCITY` (1400 since 14 Nov evening; was 1440) from its one shot spot.
 - **Auto shot speed (TeleOp, ON by default).** The camera's floor distance to our CELL picks the speed from `AUTO_SPEED_DIST_IN` / `AUTO_SPEED_TPS` in `BioBuzzConstants`: 1400 t/s from 30 to 40 in, 1465 at 44 in, 1525 at 48 in, 1640 at 64 in (`ShotSpeed.java`). The Pedro AUTO doesn't use the table.
   - **14 Nov: 30–40 in lowered 1440 → 1400** (team: 1440 went long from the usual spot, ~33 in; the drivers trimmed down). NEAR went 1450 → 1400 with it. 44 in and up are unchanged.
   - **10 Nov: 36–44 in lowered** (36 in 1450 → 1440, 40 in 1465 → 1440, 44 in 1490 → 1465) from 51 shots the drivers labelled with LB + D-pad (`tools/shot_results.py`): the IN balls were 10–26 t/s under the table there, and 1450 at ~40 in went IN 8 of 10. 48 in and up are unchanged: nearly all shots there were at MANUAL NEAR 1450 (IN 5, SHORT 4 of 14), so label some at auto speed first.

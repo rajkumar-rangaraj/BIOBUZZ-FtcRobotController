@@ -7,7 +7,7 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 | When (s) | Step | Points |
 |---|---|---|
 | 0–1 | Leave the wall, spin up the flywheel | LEAVE +3 (counted at the end) |
-| 1–7 | Camera aim at our up CELL, fire the 4 pre-loads at **1440 t/s** | HIVE TIP +20 if it tips |
+| 1–7 | Camera aim at our up CELL, fire the 4 pre-loads at **1400 t/s** | HIVE TIP +20 if it tips |
 | 7–14 | Drive to our GARDEN, sweep slowly along the wall into the corner with the intake on. The sweep aims **2 in past** the alliance wall, so the intake really touches it; it ends once the wall has stopped the robot for 1 s (stopped more than 6 in before the wall = BLOCKED, e.g. by a robot: it parks instead) | (POLLEN for TeleOp) |
 | 14–18 | At the corner the intake keeps running for up to 4 s while the robot goes **2 in back** from where the wall stopped it **and pushes in again**, so the last POLLEN rolls in (cut short only when it must park) | |
 | ~18 | **PARK** in our LOADING ZONE: slot **B** (default) is parked by ~24 s, slot A by ~28 s | PARK +5 |
@@ -105,7 +105,7 @@ The screen shows the plan times and **Route check: OK**. It also shows **Pedro: 
 ## Things to check on the field (first practice)
 
 1. **Robot size:** measure from the robot centre to the intake bumper, and from the centre to the side. Set `HALF_LENGTH_IN` / `HALF_WIDTH_IN` in `auto/AutoField.java` (now 9 / 9).
-2. **Shot spot:** from S1, do the 4 pre-loads score? AUTO fires at one speed, `AUTO_LAUNCH_VELOCITY` in `biobuzz/BioBuzzConstants.java`: 1440 t/s, after 1450 went slightly long on 13 Nov. If shots land short or long, change it in 10 t/s steps (one D-pad trim step). The log's `CELL ... UP` line shows the camera floor distance (about 39 in).
+2. **Shot spot:** from S1, do the 4 pre-loads score? AUTO fires at one speed, `AUTO_LAUNCH_VELOCITY` in `biobuzz/BioBuzzConstants.java`: 1400 t/s (13 Nov: 1450 went slightly long → 1440; 14 Nov: 1440 still sent a few balls long, and TeleOp's 1400 is good from the same distance). If shots land short or long, change it in 10 t/s steps (one D-pad trim step). The log's `CELL ... UP` line shows the camera floor distance (about 33–36 in).
 3. **GARDEN sweep:** does the intake catch the POLLEN against the wall? If it misses, change `GARDEN_SIDE_GAP_IN` (smaller = closer to the wall).
    - The sweep and every push at the corner aim `GARDEN_PUSH_IN` (2 in) past the wall.
    - The log line `GARDEN WIGGLE done: ... deepest x` shows how far the robot got. With the bumper on the wall it reads -61.5 (RED frame).
