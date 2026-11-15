@@ -191,8 +191,8 @@
       <h2>📺 INIT screen: a good one</h2>
       <div class="hub">
         <div class="k t"><span class="c">our colour?</span>BIOBUZZ AUTO RED - Pedro</div>
-        <div class="k"><span class="c">as agreed</span>Start (D-pad L/R) : CELL wall: side wall in front of our up CELL (shoots from here)</div>
-        <div class="k"><span class="c">as agreed</span>Park slot (Square/X) : B = MIDDLE end of the LOADING ZONE (toward the FLOWER)</div>
+        <div class="k"><span class="c">as agreed</span>Start (D-pad L/R) : CELL wall: side wall in front of …</div>
+        <div class="k"><span class="c">as agreed</span>Park slot (Square/X) : B = MIDDLE end of the …</div>
         <div>&gt;&gt; Tell your partner: we park in slot B, they take slot A</div>
         <div class="k"><span class="c">ON</span>Shoot pre-loads (Cross/A) : ON (1440 t/s)</div>
         <div class="k"><span class="c">ON</span>GARDEN POLLEN (Triangle/Y) : ON</div>
@@ -201,13 +201,14 @@
         <div>Park by (LB/RB) : 24 s at the latest</div>
         <div>Plan : shot spot + 4 pre-loads done ~6 s</div>
         <div>Plan : GARDEN done ~17 s (intake on, 2 in back and forth …)</div>
-        <div>Plan : PARK B starts by 23 s, takes ~6 s</div>
+        <div>Plan : PARK B starts by 22 s, takes ~6 s</div>
         <div class="k"><span class="c">must be OK</span>Route check : OK</div>
         <div class="k"><span class="c">must be ready</span>Pedro : ready</div>
         <div class="k"><span class="c">READY</span>Pinpoint : READY</div>
         <div class="k"><span class="c">12.5 V or more</span>Battery : 12.9 V</div>
+        <div class="k"><span class="c">0.40 · 0.25</span>Feed (from Tune) : power 0.40, pause 0.25 s</div>
         <div class="k"><span class="c">UP</span>Camera : CELL in front: UP, height 46 in (…)</div>
-        <div class="k"><span class="c">robot there?</span>Place: intake against the AUDIENCE wall, centred on our up CELL, square to the wall</div>
+        <div class="k"><span class="c">robot there?</span>Place: intake against the AUDIENCE wall, centred …</div>
       </div>
       <div class="small" style="margin:2px 0 3px">RED, all defaults (BLUE: REAR wall). "No CELL in front" is OK too.</div>
       <table class="bad">
@@ -215,13 +216,15 @@
         <tr><td>!! BATTERY 12.1 V …</td><td>Put in a charged battery (12.5 V+).</td></tr>
         <tr><td>!! CELL IN FRONT … DOWN</td><td>Won't shoot (G417). Practice: reset the HIVE.</td></tr>
         <tr><td>!! PEDRO NOT READY …</td><td>FALLBACK: S1 still shoots, then LEAVE. No GARDEN, no PARK. Tell the coach.</td></tr>
+        <tr><td>!! … right one?</td><td>Wrong colour: start the other AUTO.</td></tr>
+        <tr><td>!! FEED FROM TUNE …</td><td>Reset it in Tune: 0.40, 0.25 s.</td></tr>
         <tr><td>Camera : NOT FOUND …</td><td>Fires unaimed, no stretch. Tell the coach.</td></tr>
         <tr><td>GARDEN … needs shooting</td><td>Shoot is OFF, so no GARDEN (G407). ✕ = Shoot ON.</td></tr>
         <tr><td>no "GARDEN done" Plan line</td><td>No time: it skips the GARDEN.</td></tr>
       </table>
     </div>
   </div>
-  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code auto-work 5854796 (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
+  <div class="foot">BioBuzz AUTO Driver Guide · page 1 of 2 · robot code auto-work 8bb3dc2 (auto/BioBuzzPedroAutoBase, AutoField, AutoPlanner) · details: AUTO.md</div>
 </div>
 
 <!-- ======================= PAGE 2: IN THE MATCH ======================= -->
@@ -271,9 +274,9 @@
         <tr><th>If…</th><th>the robot…</th></tr>
         <tr><td>No CELL in view</td><td>fires the pre-loads straight ahead.</td></tr>
         <tr><td>Our CELL already <b>down</b></td><td>never fires into it (G417). No GARDEN; it parks.</td></tr>
-        <tr><td>Balls left after shooting (jam)</td><td>no GARDEN (G407: max 4 balls); it parks.</td></tr>
+        <tr><td>Windmill jams 3× on one pocket</td><td>balls may be left: no GARDEN (G407); it parks.</td></tr>
         <tr><td>Blocked 1 s (e.g. by our partner)</td><td>drops that step and parks; while parking it tries again until AUTO ends.</td></tr>
-        <tr><td>The Pinpoint fails (low battery)</td><td>stops; backs off the wall (LEAVE). No PARK.</td></tr>
+        <tr><td>The Pinpoint fails 0.25 s+ (battery, cable)</td><td>stops; backs off the wall (LEAVE). No PARK. One bad read: it just pauses.</td></tr>
       </table>
       <div class="card tip small" style="margin:4px 0 6px"><b>💡 Practice:</b> set our HIVE to the match start first (<b>the CELL in front of S1 up</b>).
         If it is down, <b>AUTO won't shoot</b> (G417).</div>
