@@ -17,7 +17,7 @@ import java.util.List;
  *
  *   PART 1 Wheels    robot on a box: each drive motor alone -> right wheel? right direction? encoder counting?
  *   PART 2 Floor     forward, back, SLIDE RIGHT, SLIDE LEFT, turn clockwise, turn counter-clockwise
- *   PART 3 Mechanisms intake, windmill, launcher, flower arm (if calibrated)
+ *   PART 3 Mechanisms intake (+ centring wheels), queue, gate, both queue beams, launcher (both motors), flower arm
  */
 @TeleOp(name = "BioBuzz System Check", group = "BioBuzz Test")
 public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
@@ -136,39 +136,61 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
         robot.setIntake(0.6);
         pause(1.0, "Intake running IN");
         robot.setIntake(0);
-        record(ask("Did the intake roller and BOTH corner wheels pull INWARD?"), "intake pulls in",
-                "intake: flip the motor or a corner-servo direction");
+        record(ask("Did the intake roller, BOTH corner wheels and BOTH centring wheels (lane mouth) pull INWARD?"),
+                "intake pulls in", "intake: flip the motor, a corner-servo or a centring-servo direction");
 
+        // Indexer v2: the queue (same motor and name as the old windmill)
         int start = robot.indexerTicks();
         ElapsedTime t = new ElapsedTime();
-        while (opModeIsActive() && t.seconds() < 2.0
-                && Math.abs(robot.indexerTicks() - start) < INDEXER_TICKS_PER_POCKET) {
+        while (opModeIsActive() && t.seconds() < 0.6) {
             robot.setIndexerPower(0.3);
-            telemetry.addLine("Windmill turning one pocket");
+            telemetry.addLine("Queue running forward (toward the launcher)");
             telemetry.update();
         }
         robot.setIndexerPower(0);
         int moved = robot.indexerTicks() - start;
-        record(Math.abs(moved) >= INDEXER_TICKS_PER_POCKET * 0.9, "windmill encoder: one pocket = " + moved + " ticks",
-                "windmill encoder only moved " + moved + " ticks: check cable / jam");
-        record(ask("Did the windmill turn about a quarter turn TOWARD the launcher?"), "windmill FIRE direction",
-                "windmill direction: change INDEXER_DIRECTION");
+        record(moved >= QUEUE_TICKS_PER_BALL / 2, "queue encoder: +" + moved + " ticks in 0.6 s at 0.3 power",
+                "queue encoder moved " + moved + " ticks: " + (moved < -50 ? "counts DOWN - motor or encoder reversed"
+                        : "check the encoder cable / a jam"));
+        record(ask("Did the queue belts and Gecko row move balls TOWARD the launcher?"), "queue FIRE direction",
+                "queue direction: change INDEXER_DIRECTION");
+
+        if (!BioBuzzRobot.gateCalibrated()) {
+            results.add("SKIP gate: not calibrated (GATE_OPEN / GATE_CLOSED; jog it in BioBuzz Calibration)");
+            log.row(clock.seconds(), "SKIP", "gate not calibrated");
+        } else if (ask("Gate test: keep fingers out of the gate. A = run, B = skip")) {
+            robot.setGateOpen(false);
+            pause(0.5, "Gate CLOSED");
+            robot.setGateOpen(true);
+            pause(0.8, "Gate OPEN");
+            robot.setGateOpen(false);
+            pause(0.5, "Gate CLOSED");
+            record(ask("Did the gate paddle swing OPEN (lane clear) and back CLOSED (it would hold a ball), no buzzing?"),
+                    "gate opens and closes", "re-calibrate GATE_OPEN / GATE_CLOSED");
+        }
+        checkBeam("beam_staged", "Put a ball at the GATE (ball 1's spot)", true);
+        checkBeam("beam_full", "Put a ball just behind the INTAKE roller (ball 4's spot)", false);
 
         robot.setLauncherVelocity(LAUNCHER_NEAR_VELOCITY);
         t.reset();
-        while (opModeIsActive() && t.seconds() < 3.0 && !robot.launcherReady()) {
-            telemetry.addData("Launcher", "%.0f / %.0f t/s", robot.launcherVelocity(), LAUNCHER_NEAR_VELOCITY);
+        // 5 s (was 3): the steel disc of indexer v2 roughly doubles the flywheel inertia
+        while (opModeIsActive() && t.seconds() < 5.0 && !robot.launcherReady() && robot.launcherFault() == null) {
+            telemetry.addData("Launcher", "%.0f / %.0f t/s  (launcher %.0f, launcher2 %.0f)", robot.launcherVelocity(),
+                    LAUNCHER_NEAR_VELOCITY, robot.launcher1Velocity(), robot.launcher2Velocity());
             telemetry.update();
         }
         boolean ready = robot.launcherReady();
         double spinUp = t.seconds();
         pause(0.5, "Holding launcher speed");
+        robot.launcherReady();                                  // runs the two-encoder check again
         String warning = robot.launcherWarning();
         double velocity = robot.launcherVelocity();
+        double v1 = robot.launcher1Velocity(), v2 = robot.launcher2Velocity();
         robot.setLauncherVelocity(0);
         record(ready && warning == null,
-                "launcher reached " + fmt(velocity) + " t/s in " + fmt(spinUp) + " s",
-                "launcher " + (warning != null ? warning : "did not reach speed in 3 s (" + fmt(velocity) + " t/s)"));
+                "launcher reached " + fmt(velocity) + " t/s in " + fmt(spinUp) + " s (launcher " + fmt(v1)
+                        + ", launcher2 " + fmt(v2) + ")",
+                "launcher " + (warning != null ? warning : "did not reach speed in 5 s (" + fmt(velocity) + " t/s)"));
 
         if (!BioBuzzRobot.armCalibrated()) {
             results.add("SKIP flower arm: not calibrated (run BioBuzz Calibration)");
@@ -186,6 +208,19 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
     }
 
     // ---------------- helpers ----------------
+
+    /** Indexer v2: the driver holds a ball in the beam; it must read BALL (BEAM_BROKEN_IS_LOW, wiring, alignment). */
+    private void checkBeam(String name, String prompt, boolean staged) {
+        if (!ask(name + ": " + prompt + ", then A. B = skip")) {
+            results.add("SKIP " + name);
+            log.row(clock.seconds(), "SKIP", name);
+            return;
+        }
+        boolean broken = staged ? robot.stagedBroken() : robot.fullBroken();
+        record(broken, name + " reads BALL with a ball in it", name + " reads clear with a ball in it: flip "
+                + "BEAM_BROKEN_IS_LOW (if it also read BROKEN with no ball), else the receiver cable / emitter power / "
+                + "alignment");
+    }
 
     /** Waits for A (true) or B (false). */
     private boolean ask(String question) {

@@ -16,7 +16,7 @@ public final class BioBuzzConstants {
 
     // ---------------- Robot configuration names ----------------
     // Wiring: LEFT side -> Control Hub, RIGHT side -> Expansion Hub (port table in README_2.md).
-    // Control Hub: motors 0 left_front_drive, 1 left_back_drive, 2 launcher;
+    // Control Hub: motors 0 left_front_drive, 1 left_back_drive, 2 launcher, 3 launcher2 (indexer v2);
     //              servo 0 left_intake_servo; built-in imu; USB Webcam 1
     // Expansion Hub: motors 0 right_front_drive, 1 right_back_drive, 2 intake, 3 indexer;
     //                servos 0 right_intake_servo, 1 flower_arm
@@ -30,6 +30,15 @@ public final class BioBuzzConstants {
     public static final String LEFT_INTAKE_SERVO = "left_intake_servo";
     public static final String RIGHT_INTAKE_SERVO = "right_intake_servo";
     public static final String FLOWER_ARM = "flower_arm";
+    // Indexer v2 (linear queue, Nov 2026): second flywheel motor, gate servo, two IR break beams, two centring wheels.
+    // Suggested ports (README_2.md "Indexer v2"): launcher2 = Control Hub motor 3 (the spare); gate, center_left,
+    // center_right = free servo ports; beam_staged / beam_full = digital ports configured as "Digital Device".
+    public static final String LAUNCHER2 = "launcher2";
+    public static final String GATE = "gate";
+    public static final String BEAM_STAGED = "beam_staged";
+    public static final String BEAM_FULL = "beam_full";
+    public static final String CENTER_LEFT = "center_left";
+    public static final String CENTER_RIGHT = "center_right";
     public static final String IMU_NAME = "imu";
     public static final String WEBCAM = "Webcam 1";
 
@@ -137,7 +146,22 @@ public final class BioBuzzConstants {
     public static final double LAUNCHER_READY_HOLD_SEC = 0.10;
     public static final double LAUNCHER_FALLBACK_MARGIN = 60;
     public static final double LAUNCHER_READY_FALLBACK_SEC = 1.0;
-    public static final double LAUNCHER_ENCODER_WARNING_SEC = 1.0;
+    // 1.0 -> 2.0 s (indexer v2): the steel disc roughly doubles the flywheel inertia, so spin-up takes longer.
+    public static final double LAUNCHER_ENCODER_WARNING_SEC = 2.0;
+    // Indexer v2: a SECOND 6000 rpm motor ("launcher2", 5203-2402-0001, 28 t/rev) belted 1:1 to the same flywheel shaft
+    // from the opposite side. It must turn the OPPOSITE way to "launcher" for the same flywheel direction, so it gets
+    // the opposite direction setting. CALIBRATE with BioBuzz Wiring Check: spinning "launcher" alone back-drives
+    // launcher2, and its encoder must count UP too (else flip this). Both run in velocity mode with LAUNCHER_PIDF and
+    // the same target; speed and READY use the average of both encoders.
+    public static final DcMotorSimple.Direction LAUNCHER2_DIRECTION = DcMotorSimple.Direction.REVERSE;
+    // Both encoders see the same shaft, so they must agree. One reading ~0 (LAUNCHER_PAIR_DEAD_TPS) while the other is
+    // above LAUNCHER_PAIR_MIN_TPS, or the two differing by more than LAUNCHER_PAIR_MAX_DIFF_TPS, for
+    // LAUNCHER_PAIR_FAULT_SEC = an unplugged / reversed encoder (its velocity loop would then drive at full power
+    // against the other motor): both motors stop and launcherWarning() says which one (FlywheelPairCheck).
+    public static final double LAUNCHER_PAIR_DEAD_TPS = 50;
+    public static final double LAUNCHER_PAIR_MIN_TPS = 300;
+    public static final double LAUNCHER_PAIR_MAX_DIFF_TPS = 150;                // hub steps are ~20 t/s
+    public static final double LAUNCHER_PAIR_FAULT_SEC = 0.3;
 
     // ---------------- Indexer: polycarbonate windmill on a 5203-2402-0014 (435 RPM) ----------------
     public static final double INDEXER_TICKS_PER_REV = 384.5;
@@ -166,6 +190,76 @@ public final class BioBuzzConstants {
     // 1.6 %; 0.15 s = 3 %, none.
     public static final boolean SHOT_SKIP_EMPTY_PAUSE = true;
     public static final double SHOT_EMPTY_WAIT_SEC = 0.10;
+    // (The windmill values above are kept for ShotFeeder / ContinuousFeeder and their tests, BioBuzz Shot Log and the
+    // OLD AUTO. TeleOp, Tune and the Pedro AUTO use the queue below.)
+
+    // ---------------- Indexer v2: linear queue + gate (QueueFeeder, Nov 2026) ----------------
+    // A single-file lane at 40 deg holds 4 balls: ball 1 "staged" against the gate paddle, ball 4 just behind the
+    // intake roller. Bottom belts + a top Gecko row on the SAME motor and name as the windmill ("indexer", 435 rpm,
+    // 384.5 t/rev); positive power (INDEXER_DIRECTION) moves the balls toward the flywheel. Full power ~0.58-0.63 m/s
+    // = one 73 mm ball every ~0.12 s. The loop is 33-76 ms, so balls can't be spaced in software: the spacing comes from
+    // the queue speed (QUEUE_FIRE_POWER).
+    public static final int QUEUE_CAPACITY = 4;
+    // 2787 t/s at full power (435 rpm x 384.5) for ~0.6 m/s -> ~4.6 ticks per mm of ball travel. CALIBRATE: run the
+    // queue in BioBuzz Calibration and measure the ticks for one ball length (73 mm).
+    public static final double QUEUE_TICKS_PER_BALL = 340;
+    public static final double QUEUE_LOAD_POWER = 0.35;                         // CALIBRATE: brings balls up to the gate
+    public static final double QUEUE_FIRE_POWER = 0.60;                         // CALIBRATE: ~0.36 m/s = a ball every ~0.2 s
+    // After ball 1 reaches beam_staged the queue stops; while the intake runs it then gives short packing pulses
+    // (QUEUE_PACK_OFF_SEC off, QUEUE_PACK_ON_SEC on) so balls behind come up, and ball 1 is pressed into the closed
+    // gate only for a moment at a time. QUEUE_PACK_ON_SEC = 0 turns the pulses off.
+    public static final double QUEUE_PACK_ON_SEC = 0.25;                        // CALIBRATE
+    public static final double QUEUE_PACK_OFF_SEC = 0.25;
+    public static final double QUEUE_LOAD_LINGER_SEC = 0.75;                    // loading goes on this long after the intake stops
+    // FULL (4 held, G407): both beams broken while the queue pushes forward for this long (a ball only passing the
+    // beam_full spot moves off it sooner).
+    public static final double QUEUE_FULL_CONFIRM_SEC = 0.5;
+    // TeleOp: intake power while FULL and the driver pulls IN. 0 = the roller stops (ball 4 sits just behind it; a
+    // reverse may drag it out). Negative = push a 5th ball back out. CALIBRATE on the robot.
+    public static final double QUEUE_FULL_INTAKE_POWER = 0;
+    // Firing: EMPTY = beam_staged and beam_full clear for at least this long while the queue runs, AND the queue moved
+    // QUEUE_EMPTY_FLUSH_TICKS since they cleared: 3 balls of travel carries a ball resting between the two beams
+    // (positions 2-3, which no beam sees) up through beam_staged, and the last ball (past the beam, not yet in the
+    // flywheel) into the flywheel, before the queue stops. At QUEUE_FIRE_POWER that is ~0.6 s.
+    public static final double QUEUE_EMPTY_CLEAR_SEC = 0.30;
+    public static final double QUEUE_EMPTY_FLUSH_TICKS = 3 * QUEUE_TICKS_PER_BALL;
+    // Ball count debounce: a beam_staged broken run counts only if the queue moved this far during it (a ball resting
+    // at the beam's edge and flickering, e.g. during a hold, never counts).
+    public static final double QUEUE_BEAM_MIN_RUN_TICKS = 0.2 * QUEUE_TICKS_PER_BALL;
+    // Only HOLD the queue when the flywheel dips this far below its target (resume when READY again). A smaller dip
+    // between balls is normal and doesn't stop the volley.
+    public static final double QUEUE_HOLD_DIP_TPS = 80;                         // CALIBRATE with the volley logs
+    // JAM: queue running forward with the gate open and the encoder moving < QUEUE_JAM_MIN_TICKS for QUEUE_JAM_SEC
+    // (stalled), or beam_staged broken without a break while the queue moved QUEUE_JAM_BEAM_TICKS (a ball stuck at the
+    // gate, belts slipping). Touching balls can keep the beam broken for the whole volley, so the beam rule uses queue
+    // travel: more than the whole queue (4 balls) plus one ball.
+    public static final double QUEUE_JAM_SEC = 0.35;
+    public static final int QUEUE_JAM_MIN_TICKS = 20;
+    public static final double QUEUE_JAM_BEAM_TICKS = (QUEUE_CAPACITY + 1) * QUEUE_TICKS_PER_BALL;
+    public static final double QUEUE_UNJAM_POWER = 0.40;
+    public static final double QUEUE_UNJAM_SEC = 0.20;
+    public static final int QUEUE_MAX_JAMS = 3;                                  // in a row (a counted ball resets): JAMMED
+    // Closing the gate (EMPTY, FIRE let go, JAMMED let go): a ball can sit between beam_staged and the flywheel, where
+    // the beam can't see it but the paddle would hit it. So the queue first stops, then backs off at least
+    // QUEUE_CLOSE_BACKOFF_TICKS (any ball in the paddle's path comes back past beam_staged) and until beam_staged is
+    // clear, at QUEUE_BACKOFF_POWER for at most QUEUE_CLOSE_BACKOFF_SEC; only then, stopped for a loop, the gate closes.
+    // Can't get clear in time: the gate stays open (reported). CALIBRATE: at least the distance from beam_staged's
+    // lower edge to where the flywheel grabs a ball.
+    public static final double QUEUE_CLOSE_BACKOFF_TICKS = 1.5 * QUEUE_TICKS_PER_BALL;
+    public static final double QUEUE_BACKOFF_POWER = 0.30;
+    public static final double QUEUE_CLOSE_BACKOFF_SEC = 1.2;
+
+    // Gate: goBILDA 2000-0025-0003 in SERVO mode ("gate"): a paddle holds ball 1 when CLOSED. Negative = not
+    // calibrated: FIRE is refused (like ARM_DEPLOY_POSITION). CALIBRATE with BioBuzz Calibration (Options = gate jog).
+    public static final double GATE_OPEN = -1;                                  // CALIBRATE
+    public static final double GATE_CLOSED = -1;                                // CALIBRATE
+    public static final double GATE_OPEN_SEC = 0.15;                            // CALIBRATE: 0.10-0.2 s to swing open / closed
+    public static final double GATE_PWM_MIN_US = 500;
+    public static final double GATE_PWM_MAX_US = 2500;
+    // IR break beams (Adafruit 2167, digital inputs): "beam_staged" = ball 1 at the gate, "beam_full" = ball 4 just
+    // behind the intake. The 2167 receiver pulls its output LOW when the beam is broken. CALIBRATE in BioBuzz
+    // Calibration: a ball in the beam must show BROKEN.
+    public static final boolean BEAM_BROKEN_IS_LOW = true;
 
     // ---------------- Intake ----------------
     public static final double FEED_INTAKE_BOOST = 0.5;
@@ -185,7 +279,7 @@ public final class BioBuzzConstants {
     public static final int CAMERA_HEIGHT = 480;
     public static final double TARGET_MAX_AGE_SEC = 0.30;
     public static final double CAMERA_TILT_DEG = 30.0;                           // CALIBRATE: bracket setting
-    public static final double CAMERA_LENS_HEIGHT_IN = 12.2;                     // CAD v1 mount; RE-MEASURE on the current mount
+    public static final double CAMERA_LENS_HEIGHT_IN = 16.1;                     // CAD camera mount v4 (above the flywheel); RE-MEASURE
     public static final double AIM_KP = 0.015;                                  // turn power per degree
     public static final double AIM_MAX_TURN = 0.30;
     public static final double AIM_MIN_TURN = 0.10;                                   // 0.06 stalled 4 deg short (31 Oct AUTO)

@@ -96,6 +96,17 @@ public class TeleOpSettingsTest {
     }
 
     @Test
+    public void queueFirePowerRoundTripsAndDefaults() {
+        TeleOpSettings s = new TeleOpSettings();
+        s.queueFirePower = 0.75;
+        assertEquals(0.75, TeleOpSettings.parse(s.format()).queueFirePower, 1e-9);
+        assertEquals("bad value: the default", BioBuzzConstants.QUEUE_FIRE_POWER,
+                TeleOpSettings.parse("queue_fire_power=3\n").queueFirePower, 0);
+        assertEquals("a windmill-era file gets the default", BioBuzzConstants.QUEUE_FIRE_POWER,
+                TeleOpSettings.parse("feed_power=0.40\nfeed_pause_sec=0.25\n").queueFirePower, 0);
+    }
+
+    @Test
     public void spotSavedBeforeFloorDistanceIsDropped() {
         // 31 Oct saves measured to the visible-tag average; 1-4 Nov saves to the SDK range with the old hood's speeds:
         // both must be saved again

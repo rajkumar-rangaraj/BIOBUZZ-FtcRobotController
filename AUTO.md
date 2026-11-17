@@ -20,7 +20,7 @@ Op modes **BioBuzz AUTO RED** and **BioBuzz AUTO BLUE**. The old AUTO is still o
 
 Rules the code keeps:
 
-- **G407 (max 4 balls):** it only goes to the GARDEN after the windmill is empty (4 balls counted, or 3 full windmill turns). Otherwise it parks.
+- **G407 (max 4 balls):** it only goes to the GARDEN after the pre-load volley ended **EMPTY** (indexer v2: both queue beams clear while the queue ran, see "Indexer v2" below). Otherwise it parks. The windmill notes below are history (the 4-pocket windmill until Nov 2026).
   - A pocket fed two balls sends both; both count (14 Nov: before, the 4th ball's dip was ignored in 8 logged volleys, which then turned all 12 pockets, ~3 s).
   - The volley may take up to 12 s (still ending at the park time). 8 s was too short when pockets stuck: 14 Nov 13:58 BLUE reached only 10 pockets, so it parked without the GARDEN.
   - It gives up (JAMMED, balls may be left: no GARDEN) only after 3 jams **in a row on one pocket**. Before 14 Nov, 3 jams anywhere in the volley did it (12:20 and 12:21 BLUE).
@@ -34,6 +34,16 @@ Rules the code keeps:
 - **G402:** every route stays on our side of the field.
 - It never touches a FLOWER or the HIVE frame. A laptop test checks every route.
 
+## Indexer v2 (linear queue + gate, Nov 2026)
+
+The windmill is replaced by a **single-file queue** (40°, 4 balls: ball 1 against the gate, ball 4 just behind the intake). AUTO uses it like this (`biobuzz/QueueFeeder.java`, updated every loop):
+
+- **Fire:** wait once for the flywheel (up to 4 s), open the gate, run the queue at the fire power. It only holds if the flywheel dips too deep. The volley ends **EMPTY** (both beams clear while the queue ran ~3 ball lengths), **JAMMED** (3 jams in a row), or **2.5 s** after the gate opened (`VOLLEY_FEED_SEC`, was 12 s). A volley takes ~1.5 s. Stretch needs only 2 s left (`STRETCH_MIN_FIRE_SEC`, was 4).
+- **GARDEN:** the queue loads while the intake runs; the corner back-and-forth **ends early once the queue is FULL** (4 held). The intake never pulls a 5th ball in while FULL.
+- **Gate safety:** the gate closes only after the queue stopped, backed off ~1.5 ball lengths and the staged beam is clear (never on a ball).
+- **Log:** `QUEUE ...` events (GATE OPEN, BALL n, HOLD/RESUME, JAM, EMPTY, GATE CLOSED); the CSV has `queue`, `gate_open`, `beam_staged`, `beam_full`, `launcher1_tps`, `launcher2_tps`. `BALL (flywheel dip)` lines are only a cross-check.
+
+Configuration names: `launcher2` (second flywheel motor), `gate` (servo), `beam_staged` / `beam_full` (digital), `center_left` / `center_right` (CR servos); the queue motor keeps the name `indexer`. Calibrate before the first AUTO (README_2.md "Indexer v2"): gate positions, beam polarity, `LAUNCHER2_DIRECTION`, queue direction.
 ## If something goes wrong
 
 - **Pinpoint not ready at START:** AUTO puts the start pose into the Pinpoint and gives it up to 1 s to be READY there. If it still isn't, AUTO runs the **FALLBACK** on the wheel encoders and the camera:
@@ -97,7 +107,8 @@ The screen shows the plan times and **Route check: OK**. It also shows **Pedro: 
 - **!! PEDRO NOT READY:** the reason, and what the FALLBACK will do (see "If something goes wrong").
 - **!! BATTERY** below 12.5 V: put in a charged battery. On 13 Nov, from about 12 V, the hubs dropped out and the Pinpoint faulted.
 - **!! (other alliance's CELL) CELL IN FRONT ... the right one?:** the nearest CELL in front belongs to the other alliance. You probably started the wrong AUTO (RED / BLUE).
-- **!! FEED FROM TUNE:** the windmill power / pause saved in BioBuzz Tune are far from what AUTO was run with (0.40, 0.25–0.35 s). Set them back in Tune.
+- **!! QUEUE GATE NOT CALIBRATED:** `GATE_OPEN` / `GATE_CLOSED` are not set: AUTO can't fire (so no GARDEN). See "Indexer v2" below.
+- **!! QUEUE FIRE POWER FROM TUNE:** the queue fire power saved in BioBuzz Tune is outside 0.40–0.90. Set it back in Tune.
 - **!! THE CELL IN FRONT looks DOWN:** AUTO will not shoot (G417). In practice, set the HIVE to the match start first.
 
 **Team rule:** place the robot, press INIT, and don't touch it until START. The Pinpoint calibrates while the robot is still. If the robot was moved meanwhile, INIT sees the Pinpoint gyro drift against the hub IMU (as TeleOp does) and recalibrates it; the Pinpoint line then says `gyro drifted: recalibrated 1 x`.
@@ -115,7 +126,7 @@ The screen shows the plan times and **Route check: OK**. It also shows **Pedro: 
 5. **Parking:** run with slot A and with slot B while a partner (or a box) sits in the other slot. The robot must not touch it.
 6. **Battery:** 12.5 V or more before every match.
 
-Logs: `/sdcard/BioBuzzLogs/pedroauto_*.csv`. Steps and `EVENT` lines show each leg, each ball, any BLOCKED, AGAINST THE WALL, PINPOINT faults, POSE LOST, the FALLBACK, and when PARK started. The `CONFIG` line has the battery, Pinpoint status, launcher speed, gyro recalibrations, Tune's feed settings and the other alliance's CELL (if one was in front) at START.
+Logs: `/sdcard/BioBuzzLogs/pedroauto_*.csv`. Steps and `EVENT` lines show each leg, each ball, any BLOCKED, AGAINST THE WALL, PINPOINT faults, POSE LOST, the FALLBACK, and when PARK started. The `CONFIG` line has the battery, Pinpoint status, launcher speed, gyro recalibrations, Tune's queue fire power, whether the gate is calibrated and the other alliance's CELL (if one was in front) at START.
 
 ## Code
 
@@ -124,6 +135,6 @@ Logs: `/sdcard/BioBuzzLogs/pedroauto_*.csv`. Steps and `EVENT` lines show each l
 | `auto/AutoField.java` | Places from the official field CAD (LOADING ZONE, GARDEN, CELL, FLOWERs), starts, shot spot, slots |
 | `auto/AutoPlanner.java` | Routes, time estimates, park deadline, robot-footprint check |
 | `auto/CellCheck.java` | G417 check: which CELL is in front (camera distance) and whether it is up (median camera height) |
-| `auto/BioBuzzPedroAutoBase.java` | The op mode (Pedro drive, camera aim, ShotFeeder fire, intake, park, FALLBACK) |
+| `auto/BioBuzzPedroAutoBase.java` | The op mode (Pedro drive, camera aim, QueueFeeder volley, intake, park, FALLBACK) |
 | `auto/BioBuzzPedroAutoRed/Blue.java` | RED / BLUE entries |
 | `test/.../auto/AutoPlannerTest.java`, `CellCheckTest.java` | Laptop tests: legal starts, slots, every route clear, parking from anywhere, time budget, GARDEN push, CELL check |

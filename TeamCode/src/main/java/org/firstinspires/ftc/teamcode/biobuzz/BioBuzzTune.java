@@ -8,20 +8,21 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 /*
- * BioBuzz Tune - tune AIM and WINDMILL FEED on the robot, no code change. SHARE saves; TeleOp and AUTO use the values.
+ * BioBuzz Tune - tune AIM and the QUEUE FIRE POWER on the robot, no code change. SHARE saves; TeleOp and AUTO use them.
  *
  *   Sticks, LB                 drive (LB = slow)
  *   Square / X (hold)          aim at our CELL (+ drive to the SHOT SPOT distance if one is saved)
  *   Triangle / Y               flywheel ON / OFF (SHOT SPOT speed, or NEAR)
- *   R1 / RB (hold)             FIRE with the values below          Triggers: intake in / out
- *   Circle / B (hold)          unjam (windmill backwards)
+ *   R1 / RB (hold)             FIRE a volley with the values below (QueueFeeder: gate opens once the flywheel is
+ *                              ready, the queue runs at the fire power, holds only on a deep dip)
+ *   Triggers                   intake in / out (the queue loads while the intake pulls in)
+ *   Circle / B (hold)          unjam (queue backwards)
  *   D-pad LEFT / RIGHT         AIM TRIM: shots go more LEFT / RIGHT (0.5 deg per press)
- *   LB + D-pad LEFT / RIGHT    EMPTY WAIT -/+ 0.05 s: after a pocket that launched nothing, the next one turns after
- *                              this instead of the pause (shorter = faster, but more often right behind a late ball)
- *   D-pad UP / DOWN            PAUSE between pockets +/- 0.1 s
- *   LB + D-pad UP / DOWN       WINDMILL POWER +/- 0.05
- *   Cross / A                  reset the ball counter
- *   SHARE / Back               SAVE trim, power, pause and empty wait on the robot
+ *   D-pad UP / DOWN            QUEUE FIRE POWER +/- 0.05 (faster = balls closer together; the flywheel must keep up)
+ *   Cross / A                  reset the ball counters
+ *   SHARE / Back               SAVE trim and fire power on the robot
+ *
+ * The windmill's pause / empty wait (ShotFeeder) are gone with indexer v2: a volley has no per-ball pause.
  */
 @TeleOp(name = "BioBuzz Tune", group = "BioBuzz Test")
 public class BioBuzzTune extends OpMode {
@@ -29,46 +30,45 @@ public class BioBuzzTune extends OpMode {
     private BioBuzzRobot robot;
     private HiveVision vision;
     private TeleOpSettings settings;
-    private ShotFeeder feeder;
-    private double trim, power, pause, emptyWait;
+    private QueueFeeder queue;
+    private double trim, firePower;
     private boolean launcherOn = false;
-    private int pockets = 0, jams = 0;
-    private int feederShotsSeen = 0;
-    private final BallCounter ballCounter = BallCounter.forTuning();
+    private int volleys = 0, jams = 0, beamBalls = 0;
+    private final BallCounter ballCounter = BallCounter.forQueue();   // flywheel dips: cross-check of the beam count
     private String note = "";
     private final ElapsedTime noteTimer = new ElapsedTime();
     private final ElapsedTime clock = new ElapsedTime();
 
     @Override
     public void init() {
-        robot = new BioBuzzRobot(hardwareMap);
+        robot = new BioBuzzRobot(hardwareMap, true);            // MANUAL bulk cache: cleared at the top of every loop
         settings = TeleOpSettings.load();
         trim = settings.aimTrimDeg;
-        power = settings.feedPower;
-        pause = settings.feedPauseSec;
-        emptyWait = settings.feedEmptyWaitSec;
+        firePower = settings.queueFirePower;
         try {
             vision = new HiveVision(hardwareMap);
         } catch (Exception e) {
             vision = null;
         }
-        rebuildFeeder();
+        rebuildQueue();
     }
 
     @Override
     public void init_loop() {
+        robot.clearBulkCache();
         telemetry.addData("Alliance", "%s (from the last TeleOp / AUTO)", settings.alliance);
-        telemetry.addData("Saved", "trim %+.1f deg, power %.2f, pause %.2f s, empty wait %.2f s", trim, power, pause,
-                emptyWait);
+        telemetry.addData("Saved", "trim %+.1f deg, queue fire power %.2f", trim, firePower);
+        telemetry.addData("Gate", BioBuzzRobot.gateCalibrated() ? "calibrated" : "NOT CALIBRATED - FIRE refused");
         telemetry.addData("Camera", vision == null ? "NOT FOUND" : "ok");
     }
 
-    private void rebuildFeeder() {
-        settings.feedPower = power;
-        settings.feedPauseSec = pause;
-        settings.feedEmptyWaitSec = emptyWait;
-        feeder = ShotFeeder.fromSettings(settings).skipEmptyPockets(SHOT_SKIP_EMPTY_PAUSE, emptyWait);
-        feederShotsSeen = 0;
+    /** A new fire power (Tune's D-pad) applies from the next loop. */
+    private void rebuildQueue() {
+        settings.queueFirePower = firePower;
+        if (queue == null) {
+            queue = QueueFeeder.fromSettings(settings);
+        }
+        queue.setFirePower(firePower);
         if (vision != null) {
             vision.setAimTrimDeg(trim);
         }
@@ -85,6 +85,7 @@ public class BioBuzzTune extends OpMode {
 
     @Override
     public void loop() {
+        robot.clearBulkCache();                                 // one bulk read per hub per loop
         if (vision != null) {
             vision.update();
         }
@@ -93,54 +94,36 @@ public class BioBuzzTune extends OpMode {
         // ---------------- Settings ----------------
         boolean changed = false;
         if (gamepad1.dpadLeftWasPressed()) {
-            if (gamepad1.left_bumper) {
-                emptyWait = Range.clip(round2(emptyWait - 0.05), TeleOpSettings.FEED_EMPTY_WAIT_MIN,
-                        TeleOpSettings.FEED_EMPTY_WAIT_MAX);
-            } else {
-                trim = Range.clip(trim + 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
-            }
+            trim = Range.clip(trim + 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
             changed = true;
         } else if (gamepad1.dpadRightWasPressed()) {
-            if (gamepad1.left_bumper) {
-                emptyWait = Range.clip(round2(emptyWait + 0.05), TeleOpSettings.FEED_EMPTY_WAIT_MIN,
-                        TeleOpSettings.FEED_EMPTY_WAIT_MAX);
-            } else {
-                trim = Range.clip(trim - 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
-            }
+            trim = Range.clip(trim - 0.5, -TeleOpSettings.AIM_TRIM_MAX_DEG, TeleOpSettings.AIM_TRIM_MAX_DEG);
             changed = true;
         } else if (gamepad1.dpadUpWasPressed()) {
-            if (gamepad1.left_bumper) {
-                power = Range.clip(round2(power + 0.05), TeleOpSettings.FEED_POWER_MIN, TeleOpSettings.FEED_POWER_MAX);
-            } else {
-                pause = Range.clip(round2(pause + 0.1), TeleOpSettings.FEED_PAUSE_MIN, TeleOpSettings.FEED_PAUSE_MAX);
-            }
+            firePower = Range.clip(round2(firePower + 0.05), TeleOpSettings.QUEUE_FIRE_POWER_MIN,
+                    TeleOpSettings.QUEUE_FIRE_POWER_MAX);
             changed = true;
         } else if (gamepad1.dpadDownWasPressed()) {
-            if (gamepad1.left_bumper) {
-                power = Range.clip(round2(power - 0.05), TeleOpSettings.FEED_POWER_MIN, TeleOpSettings.FEED_POWER_MAX);
-            } else {
-                pause = Range.clip(round2(pause - 0.1), TeleOpSettings.FEED_PAUSE_MIN, TeleOpSettings.FEED_PAUSE_MAX);
-            }
+            firePower = Range.clip(round2(firePower - 0.05), TeleOpSettings.QUEUE_FIRE_POWER_MIN,
+                    TeleOpSettings.QUEUE_FIRE_POWER_MAX);
             changed = true;
         }
         if (changed) {
-            rebuildFeeder();
+            rebuildQueue();
         }
         if (gamepad1.aWasPressed()) {
-            pockets = 0;
+            volleys = 0;
+            beamBalls = 0;
             ballCounter.reset();
             jams = 0;
-            say("Counter reset");
+            say("Counters reset");
         }
         if (gamepad1.backWasPressed()) {
             TeleOpSettings saved = TeleOpSettings.load();          // keep alliance + SHOT SPOT as they are on the robot
             saved.aimTrimDeg = trim;
-            saved.feedPower = power;
-            saved.feedPauseSec = pause;
-            saved.feedEmptyWaitSec = emptyWait;
+            saved.queueFirePower = firePower;
             boolean ok = saved.trySave();
-            say(ok ? String.format("SAVED: trim %+.1f, power %.2f, pause %.2f, empty wait %.2f", trim, power, pause,
-                    emptyWait) : "SAVE FAILED");
+            say(ok ? String.format("SAVED: trim %+.1f, queue fire power %.2f", trim, firePower) : "SAVE FAILED");
             gamepad1.rumble(ok ? 600 : 200);
         }
 
@@ -170,39 +153,54 @@ public class BioBuzzTune extends OpMode {
         }
         robot.drive(forward, strafe, turn, 1.0);
 
-        // ---------------- Windmill ----------------
+        // ---------------- Queue ----------------
         double intake = gamepad1.right_trigger - gamepad1.left_trigger;
+        boolean intakeIn = intake > 0.05;
+        boolean staged = robot.stagedBroken();
+        boolean fullBeam = robot.fullBroken();
         if (gamepad1.b) {
-            feeder.reset();
-            robot.setIndexerPower(-INDEXER_UNJAM_POWER);
+            queue.reset();
+            robot.setIndexerPower(-QUEUE_UNJAM_POWER);
         } else {
-            robot.setIndexerPower(feeder.update(clock.seconds(), robot.indexerTicks(), ready, fire));
-            String ev = feeder.event();
-            if (ev != null && ev.startsWith("JAM ")) {
-                jams++;
+            robot.setIndexerPower(queue.update(clock.seconds(), fire, true, intakeIn, staged, fullBeam, ready,
+                    robot.launcherDipTooDeep(), robot.indexerTicks()));
+            String ev = queue.event();
+            if (ev != null) {
+                if (ev.contains("JAM ")) {
+                    jams++;
+                }
+                if (ev.contains("GATE OPEN")) {
+                    volleys++;
+                }
+                if (ev.contains("BALL ")) {
+                    beamBalls++;
+                }
+                say(ev);
             }
         }
-        if (feeder.shots() != feederShotsSeen) {
-            pockets += feeder.shots() - feederShotsSeen;
-            feederShotsSeen = feeder.shots();
-        }
-        if (fire) {
+        robot.setGateOpen(queue.gateOpen());
+        if (fire && queue.firing()) {
             intake = Math.max(intake, 0) + FEED_INTAKE_BOOST;
+        }
+        if (!queue.firing() && (queue.isFull() || staged && fullBeam) && intake > 0) {
+            intake = QUEUE_FULL_INTAKE_POWER;                   // G407: no 5th ball
         }
         robot.setIntake(intake);
         double vel = robot.launcherVelocity();
-        ballCounter.update(clock.seconds(), feeder.feeding(), robot.isLauncherOn() ? speed() : 0, vel);
+        ballCounter.update(clock.seconds(), queue.firing(), robot.isLauncherOn() ? speed() : 0, vel);
 
         // ---------------- Screen ----------------
         telemetry.addData("AIM TRIM", "%+.1f deg   (D-pad LEFT = shots more left, RIGHT = more right, seen from behind the launcher)", trim);
-        telemetry.addData("PAUSE", "%.2f s between pockets   (D-pad UP / DOWN)", pause);
-        telemetry.addData("EMPTY WAIT", "%.2f s after a pocket that launched nothing%s   (LB + D-pad LEFT / RIGHT)",
-                emptyWait, emptyWait >= pause ? " = OFF (not below the pause)" : "");
-        telemetry.addData("WINDMILL", "power %.2f   (LB + D-pad UP / DOWN)", power);
-        telemetry.addData("Balls / pockets", "%d / %d  = %s   jams %d   (A resets)", ballCounter.balls(), pockets,
-                pockets == 0 ? "-" : String.format("%.0f%%", 100.0 * ballCounter.balls() / pockets), jams);
-        telemetry.addData("Launcher", "%s %.0f / %.0f t/s %s", robot.isLauncherOn() ? "ON" : "OFF (Y)", vel, speed(),
-                ready ? "READY" : "");
+        telemetry.addData("QUEUE FIRE POWER", "%.2f   (D-pad UP / DOWN)", firePower);
+        telemetry.addData("Balls", "beam %d, flywheel dips %d, volleys %d, jams %d   (A resets)", beamBalls,
+                ballCounter.balls(), volleys, jams);
+        telemetry.addData("Launcher", "%s %.0f / %.0f t/s %s  (launcher %.0f, launcher2 %.0f)",
+                robot.isLauncherOn() ? "ON" : "OFF (Y)", vel, speed(), ready ? "READY" : "",
+                robot.launcher1Velocity(), robot.launcher2Velocity());
+        String warning = robot.launcherWarning();
+        if (warning != null) {
+            telemetry.addData("WARNING", warning);
+        }
         if (target != null) {
             telemetry.addData("CELL", "%s %d tags  camera %.1f  aim %.1f deg  floor %.0f in%s", target.cell,
                     target.tagCount, target.rawBearingDeg, target.bearingDeg, target.horizontalIn(),
@@ -210,11 +208,13 @@ public class BioBuzzTune extends OpMode {
         } else {
             telemetry.addData("CELL", vision == null ? "camera missing" : "no " + settings.alliance + " CELL in view");
         }
-        telemetry.addData("Windmill", "%s", gamepad1.b ? "UNJAM" : feeder.state().toString());
+        telemetry.addData("Queue", "%s%s  staged %s, full %s%s", gamepad1.b ? "UNJAM" : queue.state().toString(),
+                queue.holding() ? " (HOLD)" : "", staged ? "BALL" : "clear", fullBeam ? "BALL" : "clear",
+                BioBuzzRobot.gateCalibrated() ? "" : "   GATE NOT CALIBRATED");
         if (noteTimer.seconds() < 4 && !note.isEmpty()) {
             telemetry.addData("Note", note);
         }
-        telemetry.addData("Saved?", "SHARE saves trim, power and pause");
+        telemetry.addData("Saved?", "SHARE saves trim and fire power");
     }
 
     private static double round2(double v) {

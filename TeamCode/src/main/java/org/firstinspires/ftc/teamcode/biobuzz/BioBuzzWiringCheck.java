@@ -21,6 +21,8 @@ import java.util.List;
  *   - encoder cable missing                    (current flows but no encoder counts)
  *   - encoder cables swapped                   (a DIFFERENT motor's encoder counts)
  *   - encoder or motor direction reversed      (own encoder counts down for a forward command)
+ *   - launcher2 (indexer v2) back-driven by launcher must count the same way (LAUNCHER2_DIRECTION)
+ *   - queue beams read clear with no ball, gate calibrated
  *   - hubs found, IMU, camera, battery
  * Results: on the Driver Hub and in /sdcard/BioBuzzLogs/wiring_*.csv
  */
@@ -67,11 +69,13 @@ public class BioBuzzWiringCheck extends LinearOpMode {
             return;
         }
 
-        String[] names = {LEFT_FRONT_DRIVE, RIGHT_FRONT_DRIVE, LEFT_BACK_DRIVE, RIGHT_BACK_DRIVE, LAUNCHER, INDEXER, INTAKE};
-        DcMotorEx[] motors = {robot.leftFront, robot.rightFront, robot.leftBack, robot.rightBack, robot.launcher, robot.indexer, robot.intake};
-        double[] power = {0.25, 0.25, 0.25, 0.25, 0.3, 0.2, 0.4};
-        double[] seconds = {0.6, 0.6, 0.6, 0.6, 1.0, 0.4, 0.6};
-        boolean[] hasEncoder = {true, true, true, true, true, true, false};
+        String[] names = {LEFT_FRONT_DRIVE, RIGHT_FRONT_DRIVE, LEFT_BACK_DRIVE, RIGHT_BACK_DRIVE, LAUNCHER, LAUNCHER2,
+                INDEXER, INTAKE};
+        DcMotorEx[] motors = {robot.leftFront, robot.rightFront, robot.leftBack, robot.rightBack, robot.launcher,
+                robot.launcher2, robot.indexer, robot.intake};
+        double[] power = {0.25, 0.25, 0.25, 0.25, 0.3, 0.3, 0.2, 0.4};
+        double[] seconds = {0.6, 0.6, 0.6, 0.6, 1.0, 1.0, 0.4, 0.6};
+        boolean[] hasEncoder = {true, true, true, true, true, true, true, false};
         for (DcMotorEx m : motors) {
             m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         }
@@ -81,7 +85,7 @@ public class BioBuzzWiringCheck extends LinearOpMode {
             double maxAmps = 0;
             ElapsedTime t = new ElapsedTime();
             if (motors[i] == robot.intake) {
-                robot.setIntake(power[i]);                      // intake motor + both corner servos
+                robot.setIntake(power[i]);                      // intake motor + both corner + both centring servos
             } else {
                 motors[i].setPower(power[i]);
             }
@@ -95,10 +99,13 @@ public class BioBuzzWiringCheck extends LinearOpMode {
             } else {
                 motors[i].setPower(0);
             }
-            sleep(motors[i] == robot.launcher ? 1500 : 300);   // let it stop before the next motor
+            boolean flywheel = motors[i] == robot.launcher || motors[i] == robot.launcher2;
+            sleep(flywheel ? 2500 : 300);                       // let it stop before the next motor (steel disc: slow)
             int[] after = positions(motors);
-            judge(names, motors, i, hasEncoder[i], before, after, maxAmps);
+            judge(names, motors, i, hasEncoder[i], before, after, maxAmps, robot);
         }
+
+        checkQueueSensors(robot);
 
         try {
             double h1 = robot.headingDeg();
@@ -119,8 +126,9 @@ public class BioBuzzWiringCheck extends LinearOpMode {
         } catch (Exception e) {
             report("CAMERA", "FAIL", "'" + WEBCAM + "' not found: " + e.getMessage());
         }
-        report("SERVOS", "INFO", "corner intake servos ran with the intake test (both should have pulled inward); "
-                + "flower arm is tested in System Check part 3");
+        report("SERVOS", "INFO", "corner intake servos and the centring wheels (" + CENTER_LEFT + ", " + CENTER_RIGHT
+                + ") ran with the intake test (all four should have pulled inward); flower arm and queue gate are tested"
+                + " in System Check part 3");
         report("SUMMARY", failures == 0 ? "PASS" : "FAIL", failures == 0 ? "no wiring problems found" : failures + " problem(s)");
         log.close();
 
@@ -135,15 +143,41 @@ public class BioBuzzWiringCheck extends LinearOpMode {
         }
     }
 
-    private void judge(String[] names, DcMotorEx[] motors, int i, boolean hasEncoder, int[] before, int[] after, double amps) {
+    private void judge(String[] names, DcMotorEx[] motors, int i, boolean hasEncoder, int[] before, int[] after, double amps,
+                       BioBuzzRobot robot) {
         String who = names[i] + " (" + port(motors[i]) + ")";
         int own = after[i] - before[i];
+        // launcher and launcher2 share one flywheel (belt, 1:1): spinning one back-drives the other, so its encoder
+        // moving is expected, not a swapped cable. With LAUNCHER2_DIRECTION right it counts the SAME way.
+        int partner = -1;
+        if (motors[i] == robot.launcher || motors[i] == robot.launcher2) {
+            for (int j = 0; j < motors.length; j++) {
+                if (j != i && (motors[j] == robot.launcher || motors[j] == robot.launcher2)) {
+                    partner = j;
+                }
+            }
+        }
         int other = -1, otherDelta = 0;
         for (int j = 0; j < motors.length; j++) {
             int d = after[j] - before[j];
-            if (j != i && Math.abs(d) > MOVED && Math.abs(d) > Math.abs(otherDelta)) {
+            if (j != i && j != partner && Math.abs(d) > MOVED && Math.abs(d) > Math.abs(otherDelta)) {
                 other = j;
                 otherDelta = d;
+            }
+        }
+        if (partner >= 0 && Math.abs(own) > MOVED) {
+            int p = after[partner] - before[partner];
+            if (Math.abs(p) <= MOVED) {
+                report("LAUNCHER PAIR", "FAIL", names[partner] + " encoder did not count while " + names[i] + " turned "
+                        + "the flywheel (" + own + " ticks): " + names[partner] + " encoder cable missing, or the belt "
+                        + "between the two motors is off");
+            } else if (Integer.signum(p) != Integer.signum(own)) {
+                report("LAUNCHER PAIR", "FAIL", names[partner] + " counts the OTHER way (" + p + ") while " + names[i]
+                        + " turned the flywheel (" + own + "): flip LAUNCHER2_DIRECTION in BioBuzzConstants (the two "
+                        + "motors would fight each other)");
+            } else {
+                report("LAUNCHER PAIR", "PASS", names[partner] + " follows " + names[i] + " (" + p + " vs " + own
+                        + " ticks): LAUNCHER2_DIRECTION ok");
             }
         }
         String ampsText = String.format("%.2f A", amps);
@@ -166,6 +200,23 @@ public class BioBuzzWiringCheck extends LinearOpMode {
             report(names[i], "PASS", who + ": encoder +" + own + " ticks, " + ampsText
                     + (other >= 0 ? " (note: " + names[other] + " also moved " + otherDelta + ")" : ""));
         }
+    }
+
+    /** No POLLEN in the robot: both beams must read CLEAR (a ball in the beam is checked in BioBuzz Calibration). */
+    private void checkQueueSensors(BioBuzzRobot robot) {
+        String[] beams = {BEAM_STAGED, BEAM_FULL};
+        boolean[] broken = {robot.stagedBroken(), robot.fullBroken()};
+        for (int i = 0; i < beams.length; i++) {
+            report(beams[i], broken[i] ? "FAIL" : "PASS", broken[i]
+                    ? "'" + beams[i] + "' reads BROKEN with no ball in the robot: BEAM_BROKEN_IS_LOW is the wrong way, "
+                    + "the emitter has no power, or the beam is misaligned"
+                    : "'" + beams[i] + "' reads clear (also hold a ball in it in BioBuzz Calibration: it must show "
+                    + "BALL; an unplugged receiver also reads clear)");
+        }
+        report("GATE", BioBuzzRobot.gateCalibrated() ? "INFO" : "WARN", BioBuzzRobot.gateCalibrated()
+                ? String.format("'%s' calibrated: OPEN %.3f, CLOSED %.3f (moved in System Check part 3)", GATE, GATE_OPEN,
+                GATE_CLOSED)
+                : "'" + GATE + "' NOT calibrated (GATE_OPEN / GATE_CLOSED): FIRE is refused - jog it in BioBuzz Calibration");
     }
 
     private static int[] positions(DcMotorEx[] motors) {

@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.PwmControl;
@@ -20,9 +21,17 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
+import java.util.List;
+
 /**
  * All BIOBUZZ hardware and the low-level commands shared by TeleOp, Autonomous and Calibration.
  * The constructor only configures hardware; it never moves a motor or servo.
+ * <p>
+ * Indexer v2 (Nov 2026): a second flywheel motor (launcher2), the queue gate servo, two IR break beams and two
+ * centring wheels at the lane mouth. Bulk caching: TeleOp, Tune and the Pedro AUTO make the robot with
+ * {@code manualBulkCache = true} and call {@link #clearBulkCache()} once per loop, so every encoder, velocity and
+ * beam read in a loop comes from ONE bulk read per hub (and all of them agree with each other). The test op modes
+ * keep AUTO caching (a fresh bulk read whenever a value is read twice).
  */
 public class BioBuzzRobot {
     public final DcMotorEx leftFront;
@@ -31,26 +40,41 @@ public class BioBuzzRobot {
     public final DcMotorEx rightBack;
     public final DcMotorEx intake;
     public final DcMotorEx launcher;
+    public final DcMotorEx launcher2;
     public final DcMotorEx indexer;
     public final CRServo leftIntakeServo;
     public final CRServo rightIntakeServo;
+    public final CRServo centerLeft;
+    public final CRServo centerRight;
     public final Servo flowerArm;
+    public final Servo gate;
+    public final DigitalChannel beamStaged;
+    public final DigitalChannel beamFull;
     public final IMU imu;
     public final VoltageSensor battery;
+    private final List<LynxModule> hubs;
+    private final boolean manualBulkCache;
 
     private boolean launcherOn = false;
     /** Last commanded outputs, kept for diagnostics (reading them back from the hub would cost loop time). */
     public final double[] lastDrivePower = new double[4];
     public double lastIntakePower = 0;
     public double lastIndexerPower = 0;
+    /** Last gate command (null = never commanded since INIT) and the last beam readings (true = broken). */
+    public Boolean lastGateOpen = null;
+    public boolean lastStagedBroken = false;
+    public boolean lastFullBroken = false;
     /** Launcher current from the last launcherCurrentAmps() this loop (NaN = not read; TeleOp reads it only while firing). */
     public double lastLauncherAmps = Double.NaN;
     /** TeleOp field-centric driving, for the diagnostics log: heading relative to the drivers, and whether it was used. */
     public double lastDriveHeadingDeg = Double.NaN;
     public boolean lastFieldDrive = false;
     private double launcherTarget = 0;
+    private double writtenTarget = -1;                          // last velocity sent to the two motors (-1 = none)
     private final ElapsedTime launcherTimer = new ElapsedTime();
     private final LauncherGate launcherGate = LauncherGate.standard();
+    private final FlywheelPairCheck pairCheck = FlywheelPairCheck.standard();
+    private String launcherFault = null;                        // latched pair fault: both motors stopped
     private final ElapsedTime clock = new ElapsedTime();
     private boolean readyCached = false;
     private double readyAt = -1;
@@ -60,9 +84,20 @@ public class BioBuzzRobot {
     public enum ArmState { UNKNOWN, STOWED, DEPLOYED }
     private ArmState armState = ArmState.UNKNOWN;
 
+    /** Test and setup op modes: AUTO bulk caching (no clearBulkCache() needed). */
     public BioBuzzRobot(HardwareMap hw) {
-        for (LynxModule hub : hw.getAll(LynxModule.class)) {
-            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        this(hw, false);
+    }
+
+    /**
+     * @param manualBulkCache MANUAL bulk caching: the op mode MUST call {@link #clearBulkCache()} once per loop (and per
+     *                        INIT loop), or every encoder / velocity / beam reading stays frozen
+     */
+    public BioBuzzRobot(HardwareMap hw, boolean manualBulkCache) {
+        this.manualBulkCache = manualBulkCache;
+        hubs = hw.getAll(LynxModule.class);
+        for (LynxModule hub : hubs) {
+            hub.setBulkCachingMode(manualBulkCache ? LynxModule.BulkCachingMode.MANUAL : LynxModule.BulkCachingMode.AUTO);
         }
 
         leftFront = hw.get(DcMotorEx.class, LEFT_FRONT_DRIVE);
@@ -71,10 +106,16 @@ public class BioBuzzRobot {
         rightBack = hw.get(DcMotorEx.class, RIGHT_BACK_DRIVE);
         intake = hw.get(DcMotorEx.class, INTAKE);
         launcher = hw.get(DcMotorEx.class, LAUNCHER);
+        launcher2 = hw.get(DcMotorEx.class, LAUNCHER2);
         indexer = hw.get(DcMotorEx.class, INDEXER);
         leftIntakeServo = hw.get(CRServo.class, LEFT_INTAKE_SERVO);
         rightIntakeServo = hw.get(CRServo.class, RIGHT_INTAKE_SERVO);
+        centerLeft = hw.get(CRServo.class, CENTER_LEFT);
+        centerRight = hw.get(CRServo.class, CENTER_RIGHT);
         flowerArm = hw.get(Servo.class, FLOWER_ARM);
+        gate = hw.get(Servo.class, GATE);
+        beamStaged = hw.get(DigitalChannel.class, BEAM_STAGED);
+        beamFull = hw.get(DigitalChannel.class, BEAM_FULL);
         imu = hw.get(IMU.class, IMU_NAME);
         battery = hw.voltageSensor.iterator().next();
 
@@ -90,9 +131,13 @@ public class BioBuzzRobot {
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        centerRight.setDirection(DcMotorSimple.Direction.REVERSE);   // mirrored like the corner servos; CALIBRATE
 
         launcher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         launcher.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        launcher2.setDirection(LAUNCHER2_DIRECTION);
+        launcher2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        launcher2.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         indexer.setDirection(INDEXER_DIRECTION);
         indexer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -102,6 +147,11 @@ public class BioBuzzRobot {
         if (flowerArm instanceof ServoImplEx) {
             ((ServoImplEx) flowerArm).setPwmRange(new PwmControl.PwmRange(ARM_PWM_MIN_US, ARM_PWM_MAX_US));
         }
+        if (gate instanceof ServoImplEx) {
+            ((ServoImplEx) gate).setPwmRange(new PwmControl.PwmRange(GATE_PWM_MIN_US, GATE_PWM_MAX_US));
+        }
+        beamStaged.setMode(DigitalChannel.Mode.INPUT);
+        beamFull.setMode(DigitalChannel.Mode.INPUT);
 
         imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(HUB_LOGO, HUB_USB)));
         ArmCalibration.reload();
@@ -109,6 +159,26 @@ public class BioBuzzRobot {
 
     public DcMotorEx[] driveMotors() {
         return new DcMotorEx[]{leftFront, rightFront, leftBack, rightBack};
+    }
+
+    /**
+     * MANUAL bulk caching: the next read of any motor encoder / velocity / digital input does a fresh bulk read. Call
+     * ONCE per loop (start or end, always the same place). Harmless with AUTO caching.
+     */
+    public void clearBulkCache() {
+        if (!manualBulkCache) {
+            return;
+        }
+        for (LynxModule hub : hubs) {
+            hub.clearBulkCache();
+        }
+    }
+
+    /** Sets this robot's caching mode again (after a library such as Pedro Pathing may have changed it). */
+    public void reapplyBulkCaching() {
+        for (LynxModule hub : hubs) {
+            hub.setBulkCachingMode(manualBulkCache ? LynxModule.BulkCachingMode.MANUAL : LynxModule.BulkCachingMode.AUTO);
+        }
     }
 
     // ---------------- Drive ----------------
@@ -154,33 +224,49 @@ public class BioBuzzRobot {
 
     // ---------------- Intake ----------------
 
+    /** Intake roller, both corner wheels and both centring wheels at the lane mouth (they reverse with it). */
     public void setIntake(double power) {
         power = Range.clip(power, -1, 1);
         lastIntakePower = power;
         intake.setPower(power);
         leftIntakeServo.setPower(power);
         rightIntakeServo.setPower(power);
+        centerLeft.setPower(power);
+        centerRight.setPower(power);
     }
 
-    // ---------------- Launcher ----------------
+    // ---------------- Launcher (two motors on one flywheel) ----------------
 
-    /** velocity <= 0 lets the flywheel coast down. */
+    /**
+     * velocity <= 0 lets the flywheel coast down. Both motors get the same target (each in velocity mode on its own
+     * encoder, LAUNCHER_PIDF); a new target is only sent when it changes. After a pair fault (see
+     * {@link #updateLauncherReady()}) both stay off until the op mode commands 0 once (FIRE / pre-spin let go).
+     */
     public void setLauncherVelocity(double ticksPerSecond) {
         if (ticksPerSecond <= 0) {
+            launcherFault = null;                               // let go: the next spin-up is a fresh try
+        }
+        if (ticksPerSecond <= 0 || launcherFault != null) {
             if (launcherOn) {
-                launcher.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-                launcher.setPower(0);
+                for (DcMotorEx m : launchers()) {
+                    m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                    m.setPower(0);
+                }
             }
             launcherOn = false;
             launcherTarget = 0;
+            writtenTarget = -1;
             launcherGate.reset();
+            pairCheck.reset();
             readyCached = false;
             readyAt = -1;
             return;
         }
         if (!launcherOn) {
-            launcher.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            launcher.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, LAUNCHER_PIDF);
+            for (DcMotorEx m : launchers()) {
+                m.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                m.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, LAUNCHER_PIDF);
+            }
             launcherTimer.reset();
             launcherOn = true;
         }
@@ -189,7 +275,15 @@ public class BioBuzzRobot {
             readyAt = -1;                                       // a new target must qualify on its own
         }
         launcherTarget = newTarget;
-        launcher.setVelocity(launcherTarget);
+        if (launcherTarget != writtenTarget) {                  // each write is a hub transaction per motor
+            launcher.setVelocity(launcherTarget);
+            launcher2.setVelocity(launcherTarget);
+            writtenTarget = launcherTarget;
+        }
+    }
+
+    private DcMotorEx[] launchers() {
+        return new DcMotorEx[]{launcher, launcher2};
     }
 
     public boolean isLauncherOn() {
@@ -200,8 +294,25 @@ public class BioBuzzRobot {
         return launcherTarget;
     }
 
+    /** Flywheel speed: the average of both motors' encoders (ticks/s at the motor = flywheel, 1:1). */
     public double launcherVelocity() {
+        return (launcher.getVelocity() + launcher2.getVelocity()) / 2;
+    }
+
+    public double launcher1Velocity() {
         return launcher.getVelocity();
+    }
+
+    public double launcher2Velocity() {
+        return launcher2.getVelocity();
+    }
+
+    /**
+     * Indexer v2: the queue must HOLD - the flywheel is off, or more than QUEUE_HOLD_DIP_TPS below its target (a dip
+     * deeper than the normal one between balls).
+     */
+    public boolean launcherDipTooDeep() {
+        return !launcherOn || launcherVelocity() < launcherTarget - QUEUE_HOLD_DIP_TPS;
     }
 
     /** Launcher motor current (A). Not in the hub's bulk read: each call costs a hub transaction (~2-3 ms). */
@@ -223,9 +334,20 @@ public class BioBuzzRobot {
         return updateLauncherReady();
     }
 
-    /** Re-decides now (with a fresh speed reading); launcherReady() calls this when its last answer is too old. */
+    /**
+     * Re-decides now (with a fresh speed reading); launcherReady() calls this when its last answer is too old. Also
+     * checks the two flywheel encoders against each other (FlywheelPairCheck): a fault stops both motors at once.
+     */
     public boolean updateLauncherReady() {
         readyAt = clock.seconds();
+        if (launcherOn) {
+            String fault = pairCheck.update(readyAt, launcher1Velocity(), launcher2Velocity());
+            if (fault != null) {
+                setLauncherVelocity(-1);                        // both off (clears the latch: set it after)
+                launcherFault = fault;
+                readyAt = clock.seconds();
+            }
+        }
         if (!launcherOn) {
             launcherGate.reset();
             readyCached = false;
@@ -235,6 +357,11 @@ public class BioBuzzRobot {
         return readyCached;
     }
 
+    /** Non-null after the two flywheel encoders disagreed: both motors are stopped until the launcher is turned off. */
+    public String launcherFault() {
+        return launcherFault;
+    }
+
     /** True when the last {@link #launcherReady()} was only allowed by the 1 s fallback (speed not settled). */
     public boolean launcherReadyByFallback() {
         return launcherOn && launcherGate.usedFallback();
@@ -242,20 +369,23 @@ public class BioBuzzRobot {
 
     /** Non-null when the launcher has had time to spin up but its encoder reading makes no sense. */
     public String launcherWarning() {
+        if (launcherFault != null) {
+            return "Launcher STOPPED: " + launcherFault;
+        }
         if (!launcherOn || launcherTimer.seconds() < LAUNCHER_ENCODER_WARNING_SEC) {
             return null;
         }
         double v = launcherVelocity();
         if (v < -50) {
-            return "Launcher velocity negative: check motor/encoder polarity";
+            return "Launcher velocity negative: check motor/encoder polarity (both launcher motors)";
         }
         if (Math.abs(v) < 50) {
-            return "Launcher reads ~0: check launcher encoder cable";
+            return "Launcher reads ~0: check the launcher / launcher2 encoder cables and motor power";
         }
         return null;
     }
 
-    // ---------------- Indexer ----------------
+    // ---------------- Indexer v2: queue, gate, beams ----------------
 
     public void setIndexerPower(double power) {
         lastIndexerPower = Range.clip(power, -1, 1);
@@ -264,6 +394,32 @@ public class BioBuzzRobot {
 
     public int indexerTicks() {
         return indexer.getCurrentPosition();
+    }
+
+    /** GATE_OPEN and GATE_CLOSED set: otherwise the gate is never moved and FIRE is refused. */
+    public static boolean gateCalibrated() {
+        return QueueFeeder.gateCalibrated(GATE_OPEN, GATE_CLOSED);
+    }
+
+    /** Sends the gate position only when it changes (a servo write is a hub transaction). Uncalibrated: nothing. */
+    public void setGateOpen(boolean open) {
+        if (!gateCalibrated() || (lastGateOpen != null && lastGateOpen == open)) {
+            return;
+        }
+        gate.setPosition(open ? GATE_OPEN : GATE_CLOSED);
+        lastGateOpen = open;
+    }
+
+    /** True = a ball breaks beam_staged (ball 1 at the gate). From the bulk read (see clearBulkCache). */
+    public boolean stagedBroken() {
+        lastStagedBroken = beamStaged.getState() != BEAM_BROKEN_IS_LOW;
+        return lastStagedBroken;
+    }
+
+    /** True = a ball breaks beam_full (ball 4's spot just behind the intake). */
+    public boolean fullBroken() {
+        lastFullBroken = beamFull.getState() != BEAM_BROKEN_IS_LOW;
+        return lastFullBroken;
     }
 
     // ---------------- Flower arm ----------------

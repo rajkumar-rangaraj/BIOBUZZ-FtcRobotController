@@ -11,10 +11,11 @@ import com.qualcomm.robotcore.util.Range;
  *
  *   Sticks           drive at 30% (check every direction is correct)
  *   X / Square       zero drive encoders and IMU heading
- *   RB / LB (hold)   windmill slowly forward / backward (check FIRE direction, ticks per pocket)
+ *   RB / LB (hold)   queue (indexer v2) slowly forward / backward (check FIRE direction, QUEUE_TICKS_PER_BALL)
  *   A / Cross        start arm jogging (arm moves to the saved DEPLOY value, or 0.50 if none) - hold the arm!
  *                    For a first-time arm setup use "BioBuzz Arm Setup" instead: it guides and saves.
  *   D-pad up/down    arm +/- 0.010       D-pad right/left   arm +/- 0.002
+ *   Options          the D-pad jogs the queue GATE instead (first press powers the gate at GATE_CLOSED, or 0.50)
  *   Y / Triangle     arm: toggle between the jog value and the computed STOW position
  *   B / Circle       flip the STOW direction used by Y
  *
@@ -23,6 +24,8 @@ import com.qualcomm.robotcore.util.Range;
  * IMU: turn the robot counter-clockwise by hand; heading must INCREASE. Otherwise fix HUB_LOGO / HUB_USB.
  * Arm: jog until both arms just touch the deploy pads, add 0.002 into the stop, check Y swings to STOW
  *   without stalling, then copy "Jog position" to ARM_DEPLOY_POSITION and the direction to ARM_STOW_DIRECTION.
+ * Queue gate: Options, then jog until the paddle holds a ball at the gate -> GATE_CLOSED; jog until the lane is fully
+ *   clear (a ball rolls through) -> GATE_OPEN. Beams: hold a ball in each beam, it must show BALL.
  * Camera: park at the spot you shoot best from; note the CELL range and bearing.
  */
 @TeleOp(name = "BioBuzz Calibration", group = "BioBuzz Test")
@@ -35,6 +38,9 @@ public class BioBuzzCalibration extends OpMode {
     private boolean armAtStow = false;
     private double armJog = 0.5;
     private int stowDirection = ARM_STOW_DIRECTION;
+    private boolean jogGate = false;                            // Options: the D-pad jogs the queue gate
+    private boolean gateActive = false;
+    private double gateJog = BioBuzzRobot.gateCalibrated() ? GATE_CLOSED : 0.5;
 
     @Override
     public void init() {
@@ -78,14 +84,27 @@ public class BioBuzzCalibration extends OpMode {
         if (gamepad1.bWasPressed()) {
             stowDirection = -stowDirection;
         }
+        if (gamepad1.optionsWasPressed()) {                      // the D-pad jogs the queue gate instead of the arm
+            jogGate = !jogGate;
+            gateActive |= jogGate;
+        }
+        double step = 0;
         if (gamepad1.dpadUpWasPressed()) {
-            armJog += 0.010;
+            step = 0.010;
         } else if (gamepad1.dpadDownWasPressed()) {
-            armJog -= 0.010;
+            step = -0.010;
         } else if (gamepad1.dpadRightWasPressed()) {
-            armJog += 0.002;
+            step = 0.002;
         } else if (gamepad1.dpadLeftWasPressed()) {
-            armJog -= 0.002;
+            step = -0.002;
+        }
+        if (jogGate) {
+            gateJog = Range.clip(gateJog + step, 0, 1);
+        } else {
+            armJog += step;
+        }
+        if (gateActive) {
+            robot.gate.setPosition(gateJog);
         }
         armJog = Range.clip(armJog, 0, 1);
         double stowTest = armJog + stowDirection * ARM_STOW_OFFSET;
@@ -113,9 +132,17 @@ public class BioBuzzCalibration extends OpMode {
             telemetry.addData("Pinpoint X Y H", "%.2f in  %.2f in  %.1f deg", pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg());
         }
 
-        telemetry.addLine("--- Windmill (RB fwd / LB back) ---");
-        telemetry.addData("Ticks", "%d  (%.2f pockets)", robot.indexerTicks(),
-                robot.indexerTicks() / INDEXER_TICKS_PER_POCKET);
+        telemetry.addLine("--- Queue (RB fwd / LB back) ---");
+        telemetry.addData("Ticks", "%d  (%.2f balls of %.0f ticks: QUEUE_TICKS_PER_BALL)", robot.indexerTicks(),
+                robot.indexerTicks() / QUEUE_TICKS_PER_BALL, QUEUE_TICKS_PER_BALL);
+        telemetry.addData("Beams", "staged %s (raw %s), full %s (raw %s)   a ball in a beam must show BALL, else flip"
+                        + " BEAM_BROKEN_IS_LOW", robot.stagedBroken() ? "BALL" : "clear", robot.beamStaged.getState() ? "HIGH" : "LOW",
+                robot.fullBroken() ? "BALL" : "clear", robot.beamFull.getState() ? "HIGH" : "LOW");
+        telemetry.addLine("--- Queue gate (Options: D-pad jogs the " + (jogGate ? "GATE" : "ARM") + ") ---");
+        telemetry.addData("Gate", gateActive ? String.format("at %.3f  -> paddle holds a ball: GATE_CLOSED; lane clear:"
+                + " GATE_OPEN", gateJog) : "not powered (Options starts the gate jog)");
+        telemetry.addData("Gate constants", BioBuzzRobot.gateCalibrated()
+                ? String.format("OPEN %.3f, CLOSED %.3f", GATE_OPEN, GATE_CLOSED) : "NOT CALIBRATED (FIRE refused)");
 
         telemetry.addLine("--- Flower arm (A starts) ---");
         telemetry.addData("Arm", armActive ? (armAtStow ? "at STOW test" : "at jog position") : "not powered");

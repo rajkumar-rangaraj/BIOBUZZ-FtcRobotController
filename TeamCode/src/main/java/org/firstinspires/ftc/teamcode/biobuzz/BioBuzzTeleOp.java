@@ -21,20 +21,23 @@ import com.qualcomm.robotcore.util.Range;
  *   Left bumper  (hold)   precision drive
  *   Right trigger         intake IN (analog)
  *   Left trigger          intake OUT (analog) - half pull = the flower "back-out" reverse
- *   Right bumper (hold)   FIRE: spins the launcher up and feeds the windmill when at speed. With our CELL in view it
+ *   Right bumper (hold)   FIRE: spins the launcher up, and once it is at speed opens the queue gate and runs the queue
+ *                         (indexer v2, QueueFeeder: the whole volley goes; the queue only holds if the flywheel dips
+ *                         too deep; the gate closes when the queue is EMPTY or FIRE is let go). With our CELL in view it
  *                         also aims like X: the camera turns the robot onto the CELL and, with a saved SHOT SPOT,
  *                         drives to that distance (push the left stick to take over); the shot speed is the camera's
- *                         unless the driver chose one with the D-pad. A ball goes when aimed, not turning and at the
- *                         distance; a held ball goes anyway 1.5 s after the hold starts (AimGate). The speed follows
- *                         the distance until the first ball of the burst goes, then stays until FIRE is let go, and
- *                         the robot stops driving to the spot (it stays where the speed fits)
+ *                         unless the driver chose one with the D-pad. The gate opens when aimed, not turning and at the
+ *                         distance; a held volley goes anyway 1.5 s after the hold starts (AimGate). The speed follows
+ *                         the distance until the gate opens, then stays until FIRE is let go, and the robot stops
+ *                         driving to the spot (it stays where the speed fits). Intake IN while the queue is FULL (4
+ *                         balls, G407): the intake stops (QUEUE_FULL_INTAKE_POWER)
  *   X / Square   (hold)   HIVE auto-aim without firing (the same turn and SHOT SPOT drive as FIRE). Also switches the
  *                         shot speed back to AUTO (clears a D-pad preset and the trim)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
  *   LB + Back / Share     same, AND teach AUTO this exact position (TeleOp must be INIT-ed at the AUTO start)
  *   Y / Triangle          launcher pre-spin ON/OFF
  *   A / Cross             flower arm DEPLOY / STOW (deploys only while the sticks are released)
- *   B / Circle   (hold)   unjam: windmill slowly backwards
+ *   B / Circle   (hold)   unjam: queue slowly backwards (an open gate closes once the staged beam is clear)
  *   D-pad up / down       MANUAL shot speed FAR / NEAR (the camera distance is ignored until X is pressed)
  *   D-pad right / left    shot speed trim +/- LAUNCHER_TRIM_STEP ticks/s (10); stays on top of AUTO for the match
  *   LB + D-pad            what the ball did, for the diagnostics log (ShotResults): UP = IN, DOWN = SHORT (too slow),
@@ -81,10 +84,11 @@ public class BioBuzzTeleOp extends OpMode {
     private final ElapsedTime matchTimer = new ElapsedTime();
     private final ElapsedTime statusTimer = new ElapsedTime();
     private BioBuzzDiag diag = new BioBuzzDiag("teleop", false);
-    private ShotFeeder feeder = ShotFeeder.standard();
-    private final BallCounter ballCounter = BallCounter.forTuning();      // launched balls (flywheel dips), diagnostics
+    private QueueFeeder queue = QueueFeeder.standard();
+    private final BallCounter ballCounter = BallCounter.forQueue();       // flywheel dips: a cross-check of the queue's
+                                                                          // beam count, and the BALL rows (diagnostics)
     private final GrabTracker grabs = GrabTracker.standard();             // how the flywheel took each ball (GRAB event)
-    private double lastFeedingT = -1e9;
+    private String lastLauncherFault = null;
     private final ShotResults shotResults = new ShotResults(SHOT_LABEL_WINDOW_SEC);
     private final double[] velT = new double[24], velV = new double[24];   // recent flywheel readings: speed at launch
     private int velN = 0;
@@ -107,9 +111,9 @@ public class BioBuzzTeleOp extends OpMode {
 
     @Override
     public void init() {
-        robot = new BioBuzzRobot(hardwareMap);
+        robot = new BioBuzzRobot(hardwareMap, true);            // MANUAL bulk cache: cleared at the top of every loop
         settings = TeleOpSettings.load();
-        feeder = ShotFeeder.fromSettings(settings).skipEmptyPockets(SHOT_SKIP_EMPTY_PAUSE, settings.feedEmptyWaitSec);
+        queue = QueueFeeder.fromSettings(settings);
         pinpoint = Pinpoint.tryCreate(hardwareMap);
         if (pinpoint != null) {
             pinpoint.reset();                                   // robot still at INIT (AUTO start position to teach AUTO)
@@ -130,6 +134,7 @@ public class BioBuzzTeleOp extends OpMode {
 
     @Override
     public void init_loop() {
+        robot.clearBulkCache();
         if (gamepad1.bWasPressed()) {
             alliance = HiveVision.Alliance.RED;
         } else if (gamepad1.aWasPressed()) {
@@ -184,6 +189,10 @@ public class BioBuzzTeleOp extends OpMode {
                 : "none saved (press Share at a spot that scores)");
         telemetry.addData("Diagnostics log", "%s   (Back/Share toggles)", BioBuzzMatchState.diagnostics ? "ON" : "off");
         telemetry.addData("Flower arm", BioBuzzRobot.armCalibrated() ? "calibrated" : "NOT CALIBRATED - arm disabled");
+        telemetry.addData("Queue gate", BioBuzzRobot.gateCalibrated() ? "calibrated"
+                : "NOT CALIBRATED - FIRE disabled (GATE_OPEN / GATE_CLOSED)");
+        telemetry.addData("Queue beams", "staged %s, full %s", robot.stagedBroken() ? "BALL" : "clear",
+                robot.fullBroken() ? "BALL" : "clear");
         telemetry.addData("Camera", vision == null ? "NOT FOUND: " + visionError : "ok");
         telemetry.addData("Battery", "%.2f V", robot.battery.getVoltage());
     }
@@ -196,12 +205,11 @@ public class BioBuzzTeleOp extends OpMode {
         matchTimer.reset();
         diag = new BioBuzzDiag("teleop", BioBuzzMatchState.diagnostics);
         diag.event("CONFIG", String.format("alliance=%s arm_calibrated=%s camera=%s launcher_near=%.0f far=%.0f battery=%.2f"
-                        + " aim_trim=%.1f feed_power=%.2f feed_pause=%.2f feed_empty_wait=%s spot=%s aim_gate=%s auto_speed=%s"
+                        + " aim_trim=%.1f queue_fire_power=%.2f gate_calibrated=%s spot=%s aim_gate=%s auto_speed=%s"
                         + " field_centric=%s start_heading=\"%s\" pinpoint_recal=%d",
                 alliance, BioBuzzRobot.armCalibrated(), vision == null ? "MISSING " + visionError : "ok",
                 LAUNCHER_NEAR_VELOCITY, LAUNCHER_FAR_VELOCITY, robot.battery.getVoltage(),
-                settings.aimTrimDeg, settings.feedPower, settings.feedPauseSec,
-                SHOT_SKIP_EMPTY_PAUSE ? String.format("%.2f", settings.feedEmptyWaitSec) : "off",
+                settings.aimTrimDeg, settings.queueFirePower, BioBuzzRobot.gateCalibrated(),
                 settings.hasSpot() ? String.format("%.1fin@%.0f/%s", settings.spotRangeIn, settings.spotSpeed,
                         settings.spotCell) : "none",
                 aimGate.enabled() ? "on" : "off", shotSpeed.autoEnabled() ? "on" : "off",
@@ -211,6 +219,7 @@ public class BioBuzzTeleOp extends OpMode {
 
     @Override
     public void loop() {
+        robot.clearBulkCache();                                 // one bulk read per hub per loop: all reads below agree
         if (vision != null) {
             vision.update();
         }
@@ -282,6 +291,13 @@ public class BioBuzzTeleOp extends OpMode {
         double launcherTarget = Range.clip(baseSpeed + launcherTrim, 0, LAUNCHER_MAX_VELOCITY);
         robot.setLauncherVelocity(launcherToggledOn || fire ? launcherTarget : 0);
         boolean ready = robot.updateLauncherReady();            // one fresh decision per loop; logs reuse it
+        String launcherFault = robot.launcherFault();           // the two flywheel encoders disagree: both stopped
+        if (launcherFault != null && !launcherFault.equals(lastLauncherFault)) {
+            diag.event("LAUNCHER_FAULT", launcherFault);
+            setStatus("LAUNCHER STOPPED: " + launcherFault + " (let FIRE / pre-spin go to retry)");
+            gamepad1.rumbleBlips(3);
+        }
+        lastLauncherFault = launcherFault;
         if (!robot.isLauncherOn()) {
             readyRumbled = false;
         } else if (ready && !readyRumbled) {                    // once per spin-up: READY now drops after every shot
@@ -454,13 +470,13 @@ public class BioBuzzTeleOp extends OpMode {
         lastAimHadTarget = aim && aimTarget != null;
         robot.drive(forward, strafe, turn, 1.0);
 
-        // ---------------- Intake + windmill (one ball per shot, see ShotFeeder) ----------------
-        // Aim gate (AimGate): with our CELL in view the next ball waits for a good, steady aim and, while X or FIRE
-        // drives to a saved spot, for the right distance. Every hold gives way after AIM_GATE_GIVEWAY_SEC; X in INIT
-        // turns it off.
+        // ---------------- Intake + queue (indexer v2: the whole volley, see QueueFeeder) ----------------
+        // Aim gate (AimGate): with our CELL in view the gate waits for a good, steady aim and, while X or FIRE drives
+        // to a saved spot, for the right distance (only before it opens: the volley then goes on). Every hold gives way
+        // after AIM_GATE_GIVEWAY_SEC; X in INIT turns it off.
         boolean aimOk = aimGate.update(matchTimer.seconds(), fire, ready, aimTarget != null,
                 aimTarget != null ? aimTarget.bearingDeg : 0, turn, spotHold);
-        boolean aimHold = fire && ready && !aimOk;
+        boolean aimHold = fire && ready && !aimOk && !queue.firing();   // only the volley's start waits for the aim
         if (aimHold != lastAimHold) {
             diag.event(aimHold ? "AIM_HOLD" : "AIM_HOLD_END", aimGate.state() + " "
                     + (aimTarget != null ? String.format("bearing %.1f floor %.1f", aimTarget.bearingDeg, floorIn) : "no target"));
@@ -479,36 +495,54 @@ public class BioBuzzTeleOp extends OpMode {
         }
         lastGiveWay = giveWay;
         double intakePower = gamepad1.right_trigger - gamepad1.left_trigger;
-        int indexerTicks = robot.indexerTicks();                // once per loop: the feeder and the grab log share it
+        boolean intakeIn = intakePower > 0.05;                  // the driver's request (the queue loads while it lasts)
+        int indexerTicks = robot.indexerTicks();                // once per loop: the queue and the grab log share it
+        boolean staged = robot.stagedBroken();
+        boolean fullBeam = robot.fullBroken();
         if (gamepad1.b) {
-            feeder.reset();
-            robot.setIndexerPower(-INDEXER_UNJAM_POWER);
+            queue.reset();                                      // an open gate closes once the staged beam is clear
+            robot.setIndexerPower(-QUEUE_UNJAM_POWER);
         } else {
-            robot.setIndexerPower(feeder.update(matchTimer.seconds(), indexerTicks, ready, aimOk, fire));
-            String feedEvent = feeder.event();
-            if (feedEvent != null) {
-                diag.event("FEED", feedEvent + String.format(" | launcher %.0f t/s", robot.launcherVelocity()));
-                if (feedEvent.startsWith("SHOT")) {
-                    aimGate.ballFed();                          // the next ball earns its own give-way time
+            robot.setIndexerPower(queue.update(matchTimer.seconds(), fire, aimOk, intakeIn, staged, fullBeam, ready,
+                    robot.launcherDipTooDeep(), indexerTicks));
+            String queueEvent = queue.event();
+            if (queueEvent != null) {
+                diag.event("QUEUE", queueEvent + String.format(" | %s launcher %.0f / %.0f t/s", queue.state(),
+                        robot.launcherVelocity(), robot.launcherTarget()));
+                if (queueEvent.contains("GATE OPEN")) {
+                    aimGate.ballFed();                          // the next volley earns its own give-way time
                     burstStarted = fire;                        // the shot speed is frozen from here to FIRE's release
                 }
-                if (feedEvent.startsWith("JAM")) {
-                    setStatus("Windmill " + feedEvent + " - hold B to unjam");
+                if (queueEvent.contains("JAM")) {
+                    setStatus("Queue " + queueEvent + " - hold B to back it off");
                     gamepad1.rumbleBlips(1);
+                }
+                if (queueEvent.startsWith("REFUSED")) {
+                    setStatus("FIRE refused: gate not calibrated (GATE_OPEN / GATE_CLOSED in BioBuzzConstants)");
+                    gamepad1.rumbleBlips(2);
                 }
             }
         }
-        boolean feeding = feeder.feeding();
-        if (fire && !aimHold) {                                 // don't press balls into a windmill that is held
+        robot.setGateOpen(queue.gateOpen());
+        boolean feeding = queue.firing();
+        if (fire && (feeding || !aimHold)) {                    // helps ball 4 into the lane; not while the aim holds
             intakePower = Math.max(intakePower, 0) + FEED_INTAKE_BOOST;
+        }
+        // G407: never take a 5th ball. FULL = 4 held (QueueFeeder); both beams broken while not firing counts too, so
+        // the intake pauses while a ball crosses ball 4's spot (the queue keeps carrying it up)
+        boolean queueFull = !feeding && (queue.isFull() || (staged && fullBeam));
+        if (queueFull && intakePower > 0) {
+            intakePower = QUEUE_FULL_INTAKE_POWER;
         }
         robot.setIntake(intakePower);
         if (gamepad1.b != lastUnjam) {
-            diag.event(gamepad1.b ? "UNJAM_PRESS" : "UNJAM_RELEASE", "indexer ticks " + robot.indexerTicks());
+            diag.event(gamepad1.b ? "UNJAM_PRESS" : "UNJAM_RELEASE", "indexer ticks " + indexerTicks);
             lastUnjam = gamepad1.b;
         }
 
         // ---------------- Launched balls (diagnostics: what each shot had; LB + D-pad adds the result) ----------------
+        // The queue counts balls on its staged beam; the flywheel dips (BallCounter) are only a cross-check now, and
+        // still give the BALL rows their launch speed and the LB + D-pad labels their ball.
         double now = matchTimer.seconds();
         double flywheel = robot.launcherVelocity();
         velT[velN % velT.length] = now;
@@ -518,16 +552,12 @@ public class BioBuzzTeleOp extends OpMode {
             lastSeenTarget = target;
             lastSeenTargetT = now;
         }
-        // The grab (GrabTracker): the launcher current is read only around a pocket and while a dip is measured, so the
-        // extra ~2-3 ms per loop is spent only while firing.
-        if (feeding) {
-            lastFeedingT = now;
-        }
-        boolean watchGrab = robot.isLauncherOn() && (feeding || grabs.active() || now - lastFeedingT <= GRAB_WATCH_SEC);
-        double launcherAmps = watchGrab ? robot.launcherCurrentAmps() : Double.NaN;
+        // The grab (GrabTracker) without the launcher current: a current read is not in the bulk read (~2-3 ms each),
+        // and a volley would pay it every loop. The pocket-boundary field has no meaning for the queue (NaN).
+        double launcherAmps = Double.NaN;
         robot.lastLauncherAmps = launcherAmps;
         double flywheelTarget = robot.isLauncherOn() ? robot.launcherTarget() : 0;
-        grabs.sample(now, flywheel, flywheelTarget, indexerTicks, feeder.targetTicks(), feeding, launcherAmps);
+        grabs.sample(now, flywheel, flywheelTarget, indexerTicks, Double.NaN, feeding, launcherAmps);
         if (ballCounter.update(now, feeding, flywheelTarget, flywheel)) {
             HiveVision.Target seen = now - lastSeenTargetT <= 1.0 ? lastSeenTarget : null;
             double ballFloorIn = seen == null ? Double.NaN : seen.horizontalIn();
@@ -547,21 +577,22 @@ public class BioBuzzTeleOp extends OpMode {
             }
             diag.event("BALL", String.format("ball=%d cell=%s tags=%d floor_in=%.1f range_in=%.1f bearing=%.1f seen_ago_s=%.1f"
                             + " source=%s base=%.0f trim=%+.0f target=%.0f table=%.0f vel=%.0f dip=%.0f ready=%s fallback=%s"
-                            + " aim_gate=%s battery=%.2f imu_hdg=%.1f move=%.2f turn_cmd=%+.2f aim_x=%s%s",
+                            + " aim_gate=%s battery=%.2f imu_hdg=%.1f move=%.2f turn_cmd=%+.2f aim_x=%s queue_volley_balls=%d%s",
                     ball.number, seen == null ? "none" : seen.cell, seen == null ? 0 : seen.tagCount,
                     ballFloorIn, seen == null ? Double.NaN : seen.rangeIn, seen == null ? Double.NaN : seen.bearingDeg,
                     seen == null ? Double.NaN : now - lastSeenTargetT, shotSpeed.source(), baseSpeed, launcherTrim,
                     launcherTarget, table, launchVel, launchVel - lowVel, ready, fallback,
                     !aimGate.enabled() ? "off" : (aimGate.gaveWay() ? "gave_way" : "ok"), robot.battery.getVoltage(),
                     MecanumMath.normalizeDegrees(robot.headingDeg() - imuAtInit), move, turn, gamepad1.x,
+                    queue.volleyBalls(),
                     pinpoint != null && pinpoint.ok() ? String.format(" pinpoint_fwd_in=%.1f pinpoint_left_in=%.1f pinpoint_hdg=%.1f",
                             pinpoint.xIn(), pinpoint.yIn(), pinpoint.headingDeg()) : ""));
         }
         for (GrabTracker.Grab g = grabs.poll(); g != null; g = grabs.poll()) {
             diag.event("GRAB", String.format("ball=%d t_grab=%.3f gap_s=%.3f pre=%.0f target=%.0f launch_err=%+.0f min=%.0f"
                             + " depth=%.0f energy=%.3f t_min_s=%.3f below_s=%.3f recovery_s=%.3f drops=%d overlapped=%s"
-                            + " target_changed=%s windmill_ticks_left=%.0f feeding=%s since_pocket_end_s=%.3f"
-                            + " amps_base=%.2f amps_peak=%.2f",
+                            + " target_changed=%s windmill_ticks_left=%.0f feeding=%s since_pocket_end_s=%.3f"   // indexer v2:
+                            + " amps_base=%.2f amps_peak=%.2f",          // ticks_left/amps NaN, feeding = gate open
                     g.ball, g.tStart, g.startGapSec, g.preTps, g.targetTps, g.launchErrorTps(), g.minTps, g.depthTps(),
                     g.energyFraction(), g.tMin - g.tStart, g.belowSec, g.recoverySec, g.drops, g.overlapped,
                     g.targetChanged, g.ticksToBoundary, g.feedingAtStart, g.sincePocketEndSec, g.baseAmps, g.peakAmps));
@@ -574,7 +605,8 @@ public class BioBuzzTeleOp extends OpMode {
             setStatus("20 s left - PARK in the LOADING ZONE");
             diag.event("ENDGAME_WARNING", "20 s left");
         }
-        diag.sample(robot, gamepad1, target, feeding ? "FEEDING " + Math.round(feeder.targetTicks()) : (gamepad1.b ? "UNJAM" : ""));
+        diag.sample(robot, gamepad1, target, gamepad1.b ? "UNJAM" : "QUEUE " + queue.state()
+                + (queue.holding() ? " HOLD" : ""));
 
         // ---------------- Telemetry ----------------
         telemetry.addData("Alliance", alliance);
@@ -595,9 +627,10 @@ public class BioBuzzTeleOp extends OpMode {
         telemetry.addData("Shot speed", "%s %.0f %+.0f = %.0f t/s   (D-pad: UP far, DOWN near, RIGHT +%.0f, LEFT -%.0f%s)",
                 speedName, baseSpeed, launcherTrim, launcherTarget, LAUNCHER_TRIM_STEP, LAUNCHER_TRIM_STEP,
                 shotSpeed.manual() ? "; X = camera speed" : "");
-        telemetry.addData("Launcher", "%s  actual %.0f t/s",
-                !robot.isLauncherOn() ? "OFF" : (ready ? (fallback ? "READY (speed not settled)" : "READY") : "settling"),
-                robot.launcherVelocity());
+        telemetry.addData("Launcher", "%s  actual %.0f t/s  (launcher %.0f, launcher2 %.0f)",
+                !robot.isLauncherOn() ? (launcherFault != null ? "STOPPED (encoders disagree)" : "OFF")
+                        : (ready ? (fallback ? "READY (speed not settled)" : "READY") : "settling"),
+                robot.launcherVelocity(), robot.launcher1Velocity(), robot.launcher2Velocity());
         if (aimHold) {
             String why;
             if (aimGate.state() == AimGate.State.HOLD_SPOT) {
@@ -614,8 +647,13 @@ public class BioBuzzTeleOp extends OpMode {
         } else if (!aimGate.enabled()) {
             telemetry.addData("Aim gate", "OFF (X in INIT)");
         }
-        telemetry.addData("Windmill", gamepad1.b ? "UNJAM" : String.format("%s  shots %d%s", feeder.state(), feeder.shots(),
-                feeder.jams() > 0 ? "  jams " + feeder.jams() : ""));
+        telemetry.addData("Queue", gamepad1.b ? "UNJAM (backwards)" : String.format("%s%s  beams: staged %s, full %s"
+                        + "  volley %d balls (%d total)%s", queue.state(), queue.holding() ? " (HOLD: flywheel dipped)" : "",
+                staged ? "BALL" : "clear", fullBeam ? "BALL" : "clear", queue.volleyBalls(), queue.balls(),
+                queue.jams() > 0 ? "  jams " + queue.jams() : ""));
+        if (queueFull) {
+            telemetry.addData("FULL", "4 balls held - the intake won't take a 5th (G407)");
+        }
         int waiting = shotResults.waiting(matchTimer.seconds());
         telemetry.addData("Balls", "%d out, results %d (IN %d, short %d, long %d, side %d)%s", shotResults.balls(),
                 shotResults.labelled(), shotResults.count(ShotResults.Result.IN), shotResults.count(ShotResults.Result.SHORT),

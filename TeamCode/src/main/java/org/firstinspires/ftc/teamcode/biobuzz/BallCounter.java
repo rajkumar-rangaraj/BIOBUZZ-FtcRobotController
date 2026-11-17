@@ -82,6 +82,16 @@ public class BallCounter {
     }
 
     /**
+     * Indexer v2 (TeleOp, Tune, AUTO): a whole volley is one "pocket" (feeding = QueueFeeder.firing()), so up to the
+     * queue's 4 balls count in it. Only a cross-check of the queue's beam count now: balls ~0.2 s apart can merge into
+     * one dip, and the heavier flywheel dips less (AUTO_SHOT_DIP_TPS: CALIBRATE again).
+     */
+    public static BallCounter forQueue() {
+        return new BallCounter(BioBuzzConstants.AUTO_SHOT_DIP_TPS, BioBuzzConstants.AUTO_DIP_WINDOW_SEC,
+                BioBuzzConstants.AUTO_DIP_MIN_SEC, BioBuzzConstants.QUEUE_CAPACITY, true);
+    }
+
+    /**
      * Call once per loop.
      *
      * @param t           seconds, monotonic

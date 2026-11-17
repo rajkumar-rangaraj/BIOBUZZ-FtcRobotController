@@ -38,7 +38,8 @@ public class BioBuzzDiag {
                 "fwd_in", "right_in", "intake_pw", "indexer_pw", "indexer_ticks",
                 "launcher_on", "launcher_target", "launcher_vel", "launcher_ready",
                 "arm_state", "arm_cmd", "aim_cell", "aim_tags", "aim_bearing", "aim_range_in", "aim_floor_in", "note",
-                "launcher_amps", "drive_hdg", "field_drive");
+                "launcher_amps", "drive_hdg", "field_drive", "launcher1_vel", "launcher2_vel", "gate_open", "beam_staged",
+                "beam_full");
         events = new CsvLog("events_" + opMode, "t", "event", "detail");
         event("START", opMode);
     }
@@ -83,7 +84,9 @@ public class BioBuzzDiag {
                 target == null ? "" : target.horizontalIn(),
                 note == null ? "" : note,
                 Double.isNaN(r.lastLauncherAmps) ? "" : (Object) r.lastLauncherAmps,   // read only while firing
-                Double.isNaN(r.lastDriveHeadingDeg) ? "" : (Object) r.lastDriveHeadingDeg, r.lastFieldDrive);
+                Double.isNaN(r.lastDriveHeadingDeg) ? "" : (Object) r.lastDriveHeadingDeg, r.lastFieldDrive,
+                r.launcher1Velocity(), r.launcher2Velocity(), r.lastGateOpen == null ? "" : (Object) r.lastGateOpen,
+                r.lastStagedBroken, r.lastFullBroken);                   // indexer v2 (beams as read this loop)
         maxLoopMs = 0;
         String w = r.launcherWarning();
         if (w != null && !w.equals(lastWarning) && warningsLogged < 50) {

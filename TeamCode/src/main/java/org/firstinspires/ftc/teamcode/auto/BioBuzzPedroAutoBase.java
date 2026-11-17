@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.BioBuzzRobot;
 import org.firstinspires.ftc.teamcode.biobuzz.CsvLog;
 import org.firstinspires.ftc.teamcode.biobuzz.HiveVision;
 import org.firstinspires.ftc.teamcode.biobuzz.PinpointInitCheck;
-import org.firstinspires.ftc.teamcode.biobuzz.ShotFeeder;
+import org.firstinspires.ftc.teamcode.biobuzz.QueueFeeder;
 import org.firstinspires.ftc.teamcode.biobuzz.TeleOpSettings;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
@@ -29,9 +29,11 @@ import java.util.List;
 /*
  * BIOBUZZ AUTO with Pedro Pathing (plan and field places: AutoPlanner / AutoField, AUTO.md).
  *
- *   1. SHOT     drive to the straight-on spot in front of our up CELL, camera aim, fire the 4 pre-loads
- *   2. GARDEN   only when the pre-loads are gone (G407: max 4 balls): sweep our 4 GARDEN POLLEN with the intake, then
- *               2 in back and forth at the corner while the intake keeps running
+ *   1. SHOT     drive to the straight-on spot in front of our up CELL, camera aim, fire the 4 pre-loads (indexer v2:
+ *               one queue volley, QueueFeeder)
+ *   2. GARDEN   only when the pre-loads are gone (G407: max 4 balls; the volley ended EMPTY): sweep our 4 GARDEN POLLEN
+ *               with the intake, then 2 in back and forth at the corner while the intake keeps running (ends early
+ *               once the queue is FULL)
  *   3. STRETCH  back to the spot, fire the GARDEN POLLEN (only if the camera sees the CELL in front still UP)
  *   4. PARK     in LOADING ZONE slot A (corner end) or B (middle end), intake 2 in off the wall: LEAVE 3 + PARK 5
  *
@@ -68,15 +70,17 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double GARDEN_MIN_DWELL_SEC = 1.0;
     /** One move of the GARDEN back-and-forth ends after this long even when it can't finish (POLLEN or the wall). */
     static final double GARDEN_WIGGLE_MOVE_SEC = 1.0;
-    /** Stretch only when at least this much time is left for aim + settle + a few pockets at the spot. */
-    static final double STRETCH_MIN_FIRE_SEC = 4.0;
+    /** Stretch only when at least this much time is left for aim + settle + a volley at the spot (indexer v2: 4 -> 2 s). */
+    static final double STRETCH_MIN_FIRE_SEC = 2.0;
     /**
-     * A volley's feed ends after this long (or at the park start). The pre-loads must prove the windmill empty for the
-     * GARDEN (G407): 4 balls counted, or AUTO_FEED_POCKETS pockets. The 4th ball often makes no flywheel dip, so it takes
-     * all 12 pockets: ~0.5 s each, ~0.8 s when the windmill sticks. With BioBuzzConstants.AUTO_FEED_TIMEOUT_SEC (8 s)
-     * 14 Nov 13:58 BLUE (4 sticks, 1 jam) and 9 Nov 18:04 BLUE stopped at 10 pockets: not proven empty, no GARDEN.
+     * A volley's feed ends this long after the gate starts opening (or at the park start). The pre-loads must prove the
+     * queue empty for the GARDEN (G407): the volley ends on QueueFeeder's EMPTY rule (both beams clear while the queue
+     * runs). Indexer v2: 4 balls leave in ~1.5 s (gate 0.15 s, ~0.2 s per ball at QUEUE_FIRE_POWER, ~0.6 s EMPTY check),
+     * so 2.5 s leaves room for a dip hold or one unjam (the windmill needed up to 12 s for 12 pockets).
      */
-    static final double VOLLEY_FEED_SEC = 12.0;
+    static final double VOLLEY_FEED_SEC = 2.5;
+    /** The flywheel gets this long to be ready (the gate stays shut meanwhile) before the volley is dropped. */
+    static final double VOLLEY_READY_WAIT_SEC = 4.0;
     /** Fallback without Pedro: back straight off the wall this far (LEAVE). */
     static final double FALLBACK_LEAVE_IN = 8.0;
     /**
@@ -119,9 +123,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     static final double PINPOINT_RESET_EVERY_SEC = 5.0;
     /** INIT warning below this (13 Nov: from ~11.9 V on, the Expansion Hub dropped out and the hubs cut the motors). */
     static final double LOW_BATTERY_V = 12.5;
-    /** INIT warning: Tune's feed settings (AUTO fires with them) far from what AUTO was run with (0.40, 0.25-0.35 s). */
-    static final double FEED_PAUSE_WARN_SEC = 0.5;
-    static final double FEED_POWER_WARN_MIN = 0.3, FEED_POWER_WARN_MAX = 0.5;
+    /** INIT warning: Tune's queue fire power (AUTO fires with it) outside this range. */
+    static final double QUEUE_POWER_WARN_MIN = 0.4, QUEUE_POWER_WARN_MAX = 0.9;
 
     private Start start = Start.CELL_WALL;
     private Slot slot = Slot.B;                                 // B: no driving past a partner parked in the other slot
@@ -165,10 +168,17 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private HiveVision.Target otherCell;                        // INIT: the other ALLIANCE's CELL in front (wrong AUTO?)
     private double handoffHeadingRed = Double.NaN;              // without Pedro: TeleOp's heading, turned with ...
     private double handoffImuPrev;                              // ... the hub IMU (its last reading)
+    private QueueFeeder queue;                                  // indexer v2: updated in every loopTick (loads, fires)
+    private boolean queueFire = false;                          // fire() wants the volley
+    private double intakeWanted = 0;                            // intake power asked for (before the G407 cap)
+    private String lastFaultLogged = null;
+    private final BallCounter dipCounter = BallCounter.forQueue();   // flywheel dips: cross-check, logged only
 
     @Override
     public void runOpMode() {
-        robot = new BioBuzzRobot(hardwareMap);                  // first: Pedro below takes over the drive motors
+        robot = new BioBuzzRobot(hardwareMap, true);            // first: Pedro below takes over the drive motors.
+                                                                // MANUAL bulk cache: cleared once per loop (loopTick, INIT)
+        queue = QueueFeeder.fromSettings(settings);
         String visionError = null;
         try {
             vision = new HiveVision(hardwareMap);
@@ -184,6 +194,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             follower = null;
             pedroError = e.getMessage();
         }
+        robot.reapplyBulkCaching();                             // MANUAL again, whatever Pedro set
         try {
             pinpointDev = hardwareMap.tryGet(GoBildaPinpointDriver.class, PINPOINT);
         } catch (Exception e) {
@@ -197,6 +208,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         BioBuzzMatchState.rememberAlliance(hiveAlliance());
 
         while (opModeInInit()) {
+            robot.clearBulkCache();
             readInitButtons();
             if (follower != null) {
                 follower.update();                              // idle: motors 0, keeps the Pinpoint status fresh
@@ -219,13 +231,15 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
 
         log = new CsvLog("pedroauto_" + alliance(), "t", "step", "x_in", "y_in", "heading_deg", "launcher_tps",
                 "launcher_target", "launcher_ready", "indexer_ticks", "battery_v", "cell", "tags", "bearing_deg",
-                "height_in", "floor_in");
+                "height_in", "floor_in", "queue", "gate_open", "beam_staged", "beam_full", "launcher1_tps",
+                "launcher2_tps");
         log.row("CONFIG", "start=" + start, "slot=" + slot, "shoot=" + shoot, "garden=" + garden, "stretch=" + stretch,
                 "delay=" + delaySec, "park_by=" + parkBySec, "camera=" + (vision != null),
                 String.format("aim_trim=%.1f", settings.aimTrimDeg), String.format("battery=%.1f", robot.battery.getVoltage()),
                 "pinpoint=" + pinpointStatus(), "pinpoint_resets=" + pinpointResets,
                 String.format("launcher=%.0f", launchTps), "gyro_recal=" + gyroRecalibrations,
-                String.format("feed_power=%.2f", settings.feedPower), String.format("feed_pause=%.2f", settings.feedPauseSec),
+                String.format("queue_fire_power=%.2f", settings.queueFirePower),
+                "gate_calibrated=" + BioBuzzRobot.gateCalibrated(),
                 "other_cell=" + (otherCell == null ? "none" : otherCell.cell));
         matchStart = clock.seconds();
         startForwardIn = robot.forwardInches();
@@ -291,7 +305,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             if (collected) {
                 gardenWiggle(Math.min(now() + GARDEN_DWELL_SEC, parkStart()));
             }
-            robot.setIntake(0);
+            intake(0);
         } else if (garden) {
             log.row(now(), "EVENT", preloadsGone ? "GARDEN skipped: no time" : "GARDEN skipped: pre-loads not all fired (G407)");
         }
@@ -308,7 +322,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         }
         robot.setLauncherVelocity(0);
         robot.setIndexerPower(0);
-        robot.setIntake(0);
+        intake(0);
         if (poseLostOnce) {
             afterPoseLost();
             return;
@@ -369,7 +383,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                     return false;
                 }
                 pedroUpdate();
-                robot.setIntake(leg.action == AutoPlanner.Action.INTAKE ? GARDEN_INTAKE_POWER : 0);
+                intake(leg.action == AutoPlanner.Action.INTAKE ? GARDEN_INTAKE_POWER : 0);
                 if (poseLost()) {
                     losePose();
                     return false;
@@ -444,8 +458,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private void gardenWiggle(double endSec) {
         log.row(now(), "EVENT", String.format("GARDEN WIGGLE %.1f in until %.1f s", AutoField.GARDEN_WIGGLE_IN, endSec));
         int moves = 0;
+        boolean full = false;
         double deepest = redHere().x;                           // closest to the RED wall (wall contact, for calibration)
-        while (opModeIsActive() && now() < endSec) {
+        while (opModeIsActive() && now() < endSec && !full) {
             if (!waitPoseOk()) {
                 return;
             }
@@ -460,23 +475,27 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 while (opModeIsActive() && now() < endSec && move.seconds() < GARDEN_WIGGLE_MOVE_SEC
                         && (move.seconds() < 0.2 || follower.isBusy())) {
                     pedroUpdate();
-                    robot.setIntake(GARDEN_INTAKE_POWER);
+                    intake(GARDEN_INTAKE_POWER);
                     if (poseLost()) {
                         losePose();
                         return;
                     }
                     deepest = Math.min(deepest, redHere().x);
                     loopTick();
+                    if (queue.isFull()) {                       // 4 held: nothing more to take (G407)
+                        full = true;
+                        break;
+                    }
                 }
                 moves++;
-                if (!opModeIsActive() || now() >= endSec) {
+                if (!opModeIsActive() || now() >= endSec || full) {
                     break;
                 }
             }
         }
         halt();
-        log.row(now(), "EVENT", String.format("GARDEN WIGGLE done: %d moves, deepest x %.1f (bumper on the wall at "
-                + "x %.1f), at %s", moves, deepest, AutoField.GARDEN_CORNER_X, here()));
+        log.row(now(), "EVENT", String.format("GARDEN WIGGLE done%s: %d moves, deepest x %.1f (bumper on the wall at "
+                + "x %.1f), at %s", full ? " early (queue FULL)" : "", moves, deepest, AutoField.GARDEN_CORNER_X, here()));
     }
 
     /** Camera aim (Pedro holds the spot and turns), CELL-up check, then fire. Sets preloadsGone after the first one. */
@@ -591,8 +610,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     }
 
     /**
-     * The TeleOp pocket-by-pocket feed (ShotFeeder) while Pedro holds the aimed pose (or, without Pedro, the drive
-     * stopped), until the park start (fallback: FALLBACK_FIRE_END_SEC).
+     * One queue volley (QueueFeeder, updated in loopTick) while Pedro holds the aimed pose (or, without Pedro, the drive
+     * stopped): the gate opens once the flywheel is ready, the queue runs until EMPTY (both beams clear), JAMMED,
+     * VOLLEY_FEED_SEC after the gate opened, or the park start (fallback: FALLBACK_FIRE_END_SEC). The gate closes in
+     * the next loopTicks (queue stopped, beam_staged clear) while the robot moves on.
      */
     private void fire(boolean preloads) {
         if (pedroDrives && waitPoseOk()) {
@@ -606,37 +627,80 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             step = "FIRE settle";
             loopTick();
         }
-        ShotFeeder feeder = ShotFeeder.fromSettings(settings);
-        BallCounter counter = BallCounter.forAuto();
-        robot.setIntake(FEED_INTAKE_BOOST);
-        double feedEnd = now() + VOLLEY_FEED_SEC;
-        while (opModeIsActive() && now() < Math.min(feedEnd, fireDeadline()) && feeder.shots() < AUTO_FEED_POCKETS
-                && feeder.state() != ShotFeeder.State.JAMMED
-                && !(counter.balls() >= AUTO_PRELOADS && feeder.state() != ShotFeeder.State.FEEDING)) {
+        if (!BioBuzzRobot.gateCalibrated()) {
+            log.row(now(), "EVENT", "FIRE skipped: gate not calibrated (GATE_OPEN / GATE_CLOSED)"
+                    + (preloads ? ", pre-loads kept (no GARDEN)" : ""));
+            return;
+        }
+        int dipsBefore = dipCounter.balls();
+        intake(FEED_INTAKE_BOOST);                              // helps ball 4 into the lane while the queue runs
+        queueFire = true;
+        double start = now();
+        double openedAt = Double.NaN;
+        String end = "park time";
+        while (opModeIsActive() && now() < fireDeadline()) {
             holdTick();
-            double t = now();
-            int ticks = robot.indexerTicks();
-            robot.setIndexerPower(feeder.update(t, ticks, robot.updateLauncherReady(), true));
-            double velocity = robot.launcherVelocity();
-            if (counter.update(t, feeder.state() == ShotFeeder.State.FEEDING, launchTps, velocity)) {
-                log.row(t, "EVENT", "BALL " + counter.balls(), "launcher", velocity);
+            step = String.format("FIRE %s, %d balls (beam), %d (dips)", queue.state(), queue.volleyBalls(),
+                    dipCounter.balls() - dipsBefore);
+            loopTick();                                         // the queue steps here
+            if (Double.isNaN(openedAt) && (queue.firing() || queue.gateOpen())) {
+                openedAt = now();
             }
-            if (feeder.event() != null) {
-                log.row(t, "EVENT", feeder.event(), "ticks", robot.indexerTicks());
+            if (queue.emptied()) {
+                end = "EMPTY";
+                break;
             }
-            step = String.format("FIRE %d balls, pocket %d/%d %s", counter.balls(), feeder.shots(), AUTO_FEED_POCKETS,
-                    feeder.state());
-            loopTick();
+            if (queue.state() == QueueFeeder.State.JAMMED) {
+                end = "JAMMED";
+                break;
+            }
+            if (Double.isNaN(openedAt) ? now() - start > VOLLEY_READY_WAIT_SEC : now() - openedAt > VOLLEY_FEED_SEC) {
+                end = Double.isNaN(openedAt) ? "flywheel never ready" : "feed time up";
+                break;
+            }
         }
-        robot.setIndexerPower(0);
-        robot.setIntake(0);
+        queueFire = false;                                      // the queue stops; the gate closes when safe
+        intake(0);
         if (preloads) {
-            // G407: only collect more once the windmill is empty (4 balls counted, or 3 full turns of the windmill)
-            preloadsGone = counter.balls() >= AUTO_PRELOADS || feeder.shots() >= AUTO_FEED_POCKETS;
+            // G407: only collect more once the queue is proven empty (the EMPTY rule, not a ball count)
+            preloadsGone = queue.emptied();
         }
-        log.row(now(), "EVENT", String.format("FIRE done: %d balls, %d pockets, %d jams, %s%s", counter.balls(),
-                feeder.shots(), feeder.jams(), feeder.state() == ShotFeeder.State.JAMMED ? "JAMMED" : "ok",
-                preloads ? (preloadsGone ? ", windmill empty" : ", balls may be left (no GARDEN)") : ""));
+        log.row(now(), "EVENT", String.format("FIRE done (%s): %d balls (beam), %d (flywheel dips), %d jams, %.1f s%s",
+                end, queue.volleyBalls(), dipCounter.balls() - dipsBefore, queue.jams(), now() - start,
+                preloads ? (preloadsGone ? ", queue empty" : ", balls may be left (no GARDEN)") : ""));
+    }
+
+    /** Intake power through the G407 cap: never pull a 5th ball in while the queue is FULL (not while it fires). */
+    private void intake(double power) {
+        intakeWanted = power;
+        boolean full = queue != null && !queue.firing()
+                && (queue.isFull() || robot.lastStagedBroken && robot.lastFullBroken);
+        robot.setIntake(full && power > 0 ? QUEUE_FULL_INTAKE_POWER : power);
+    }
+
+    /**
+     * Indexer v2, once per loop (from loopTick): flywheel READY decision (also the two-encoder check), the queue
+     * (loading while the intake pulls in, the volley while fire() wants it), the gate, and the flywheel dip cross-check.
+     */
+    private void queueTick(double t) {
+        boolean ready = robot.updateLauncherReady();
+        int ticks = robot.indexerTicks();
+        boolean staged = robot.stagedBroken();
+        boolean fullBeam = robot.fullBroken();
+        robot.setIndexerPower(queue.update(t, queueFire, true, intakeWanted > 0.05, staged, fullBeam, ready,
+                robot.launcherDipTooDeep(), ticks));
+        robot.setGateOpen(queue.gateOpen());
+        if (queue.event() != null && log != null) {
+            log.row(t, "EVENT", "QUEUE " + queue.event(), "ticks", ticks, "launcher", robot.launcherVelocity());
+        }
+        if (robot.launcherFault() != null && !robot.launcherFault().equals(lastFaultLogged) && log != null) {
+            log.row(t, "EVENT", "LAUNCHER STOPPED: " + robot.launcherFault());
+        }
+        lastFaultLogged = robot.launcherFault();
+        if (dipCounter.update(t, queue.firing(), robot.isLauncherOn() ? robot.launcherTarget() : 0,
+                robot.launcherVelocity()) && log != null) {
+            log.row(t, "EVENT", "BALL (flywheel dip) " + dipCounter.balls(), "launcher", robot.launcherVelocity());
+        }
     }
 
     /**
@@ -666,7 +730,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         backOffTo(FALLBACK_LEAVE_IN);
         robot.setLauncherVelocity(0);
         robot.setIndexerPower(0);
-        robot.setIntake(0);
+        intake(0);
         step = shootHere ? "FALLBACK DONE (shot + LEAVE)" : "FALLBACK DONE (LEAVE only)";
         log.row(now(), "EVENT", String.format("%s: %.1f in back from the start (wheel encoders)%s", step, backedIn(),
                 backedIn() < FALLBACK_LEAVE_IN - 1 ? ": SHORT, LEAVE not sure" : ""));
@@ -681,7 +745,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
      */
     private void afterPoseLost() {
         robot.setIndexerPower(0);
-        robot.setIntake(0);
+        intake(0);
         if (!leftStart && !preloadsTried && shoot && start == Start.CELL_WALL) {
             fallback();
             return;
@@ -1155,6 +1219,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
 
     private void loopTick() {
         double t = now();
+        queueTick(t);                                           // indexer v2: queue, gate, READY (one decision per loop)
         Pose p = follower == null ? null : rawHere();
         if (pedroDrives && poseSet && !isStopRequested()) {     // at STOP the last reads are zeros: record nothing
             if (poseLost()) {
@@ -1176,7 +1241,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                     robot.launcherVelocity(), robot.launcherTarget(), robot.launcherReady(), robot.indexerTicks(),
                     robot.battery.getVoltage(), target == null ? "" : target.cell, target == null ? 0 : target.tagCount,
                     target == null ? "" : target.bearingDeg, target == null ? "" : target.heightIn(),
-                    target == null ? "" : target.horizontalIn());
+                    target == null ? "" : target.horizontalIn(), queue.state() + (queue.holding() ? " HOLD" : ""),
+                    queue.gateOpen(), robot.lastStagedBroken, robot.lastFullBroken, robot.launcher1Velocity(),
+                    robot.launcher2Velocity());
         }
         lastTarget = null;
         telemetry.addData("Step", step);
@@ -1189,8 +1256,15 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             telemetry.addData("Where", "x %.1f  y %.1f in  heading %.0f", p.x, p.y, p.headingDeg);
         }
         telemetry.addData("Launcher", "%.0f / %.0f t/s", robot.launcherVelocity(), robot.launcherTarget());
+        telemetry.addData("Queue", "%s  gate %s  staged %s  full %s", queue.state(), queue.gateOpen() ? "OPEN" : "closed",
+                robot.lastStagedBroken ? "BALL" : "clear", robot.lastFullBroken ? "BALL" : "clear");
+        String warning = robot.launcherWarning();
+        if (warning != null) {
+            telemetry.addData("WARNING", warning);
+        }
         telemetry.addData("Log", log == null ? "-" : log.status());
         telemetry.update();
+        robot.clearBulkCache();                                 // MANUAL bulk cache: the next loop reads fresh values
     }
 
     // ---------------- INIT ----------------
@@ -1239,10 +1313,12 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             telemetry.addLine(String.format("!! %s CELL IN FRONT (%.0f in): this is the %s AUTO - the right one?",
                     otherCell.cell, otherCell.horizontalIn(), alliance()));
         }
-        if (settings.feedPauseSec > FEED_PAUSE_WARN_SEC || settings.feedPower < FEED_POWER_WARN_MIN
-                || settings.feedPower > FEED_POWER_WARN_MAX) {
-            telemetry.addLine(String.format("!! FEED FROM TUNE: power %.2f, pause %.2f s (AUTO was run with 0.40 and"
-                    + " 0.25-0.35 s): set it back in BioBuzz Tune", settings.feedPower, settings.feedPauseSec));
+        if (!BioBuzzRobot.gateCalibrated()) {
+            telemetry.addLine("!! QUEUE GATE NOT CALIBRATED (GATE_OPEN / GATE_CLOSED): AUTO can't fire, so no GARDEN");
+        }
+        if (settings.queueFirePower < QUEUE_POWER_WARN_MIN || settings.queueFirePower > QUEUE_POWER_WARN_MAX) {
+            telemetry.addLine(String.format("!! QUEUE FIRE POWER FROM TUNE: %.2f (default %.2f): set it back in BioBuzz"
+                    + " Tune", settings.queueFirePower, QUEUE_FIRE_POWER));
         }
         double cellHeight = CellCheck.median(initHeights);
         boolean cellUp = CellCheck.up(initHeights);
@@ -1262,7 +1338,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         double t = delaySec;
         Pose at = s;
         if (shoot) {
-            t += AutoPlanner.estimateSec(at, AutoPlanner.toShot(start)) + AUTO_AIM_TIMEOUT_SEC / 2 + 4;
+            t += AutoPlanner.estimateSec(at, AutoPlanner.toShot(start)) + AUTO_AIM_TIMEOUT_SEC / 2 + AUTO_FIRE_SETTLE_SEC
+                    + 1.5;                                      // one queue volley ~1-1.5 s (was +4 s for the windmill)
             at = AutoField.SHOT;
             telemetry.addData("Plan", "shot spot + 4 pre-loads done ~%.0f s", t);
         }
@@ -1292,7 +1369,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 gyroRecalibrations > 0 ? String.format("  (gyro drifted: recalibrated %d x - keep the robot STILL)",
                         gyroRecalibrations) : "");
         telemetry.addData("Battery", "%.1f V%s", volts, volts < LOW_BATTERY_V ? "  LOW" : "");
-        telemetry.addData("Feed (from Tune)", "power %.2f, pause %.2f s", settings.feedPower, settings.feedPauseSec);
+        telemetry.addData("Queue (from Tune)", "fire power %.2f, gate %s", settings.queueFirePower,
+                BioBuzzRobot.gateCalibrated() ? "calibrated" : "NOT CALIBRATED");
         if (vision == null) {
             telemetry.addData("Camera", "NOT FOUND: %s (fires pre-loads unaimed, no stretch)", visionError);
         } else if (start != Start.CELL_WALL) {

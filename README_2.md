@@ -114,7 +114,7 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 
 "Left", "right", "front" and "back" are as seen from **behind the robot looking toward the intake** (the intake/flower-arm side is the FRONT, the launcher/camera side is the BACK).
 
-**Simple rule: everything on the LEFT goes to the Control Hub, everything on the RIGHT goes to the Expansion Hub.** The intake motor, the indexer and the flower arm servo sit on the right, so they go to the Expansion Hub. The launcher sits in the middle and goes to the Control Hub, which leaves one spare motor port there.
+**Simple rule: everything on the LEFT goes to the Control Hub, everything on the RIGHT goes to the Expansion Hub.** The intake motor, the indexer and the flower arm servo sit on the right, so they go to the Expansion Hub. The launcher sits in the middle and goes to the Control Hub; its second motor (`launcher2`, indexer v2) takes the Control Hub's last motor port.
 
 ### Control Hub (left side)
 
@@ -123,7 +123,7 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 | Motor 0 | Front-left drive wheel | goBILDA 5202/3/4 series | `left_front_drive` |
 | Motor 1 | Back-left drive wheel | goBILDA 5202/3/4 series | `left_back_drive` |
 | Motor 2 | Launcher / flywheel motor, 1:1 (middle) | goBILDA 5202/3/4 series | `launcher` |
-| Motor 3 | spare | — | — |
+| Motor 3 | Second flywheel motor, 6000 RPM 1:1 (indexer v2, belted to the same shaft from the other side) | goBILDA 5202/3/4 series | `launcher2` |
 | Servo 0 | Left corner intake wheel servo | Continuous Rotation Servo | `left_intake_servo` |
 | I2C bus 0 | Built-in IMU (already in the default config) | REV internal IMU (set automatically) | `imu` |
 | I2C port 0 | goBILDA Pinpoint odometry computer (**optional**, AUTO only; without it AUTO uses the wheel encoders). Shares port 0 with the built-in IMU (different address). Run `BioBuzz Pinpoint Setup` after mounting | goBILDA Pinpoint Odometry Computer | `pinpoint` |
@@ -136,9 +136,11 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 | Motor 0 | Front-right drive wheel | goBILDA 5202/3/4 series | `right_front_drive` |
 | Motor 1 | Back-right drive wheel | goBILDA 5202/3/4 series | `right_back_drive` |
 | Motor 2 | Intake roller motor | goBILDA 5202/3/4 series | `intake` |
-| Motor 3 | Windmill / indexer motor, 435 RPM | goBILDA 5202/3/4 series | `indexer` |
+| Motor 3 | Queue motor (indexer v2: belts + Gecko row; was the windmill), 435 RPM | goBILDA 5202/3/4 series | `indexer` |
 | Servo 0 | Right corner intake wheel servo | Continuous Rotation Servo | `right_intake_servo` |
 | Servo 1 | Flower arm servo (2000-0025-0002, **servo mode**) | Servo | `flower_arm` |
+
+**Indexer v2 devices** (Nov 2026; any free port, suggested): `gate` = Servo (2000-0025-0003, **servo mode**); `center_left` / `center_right` = Continuous Rotation Servo (centring Gecko wheels at the lane mouth); `beam_staged` / `beam_full` = Digital Device (Adafruit 2167 receivers on a digital port; emitters need 3.3–5 V power). See "Indexer v2" below.
 
 ### Wiring rules
 
@@ -148,6 +150,31 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 - After replacing the servo cradle (PPA5), the arms (PPA2L/PPA2R) or the servo horn, run `BioBuzz Arm Setup` again. The servo positions shift when the horn goes back on a different spline tooth.
 - Plug each servo cable so its black (ground) wire lines up with the ground pin marked on the hub. A reversed servo plug doesn't move.
 - After any wiring change, run `BioBuzz Wiring Check` (robot on a box), then `BioBuzz System Check`. It spins each drive motor alone so you can confirm the right wheel moves, and checks every encoder.
+
+## Indexer v2 (linear queue + gate, Nov 2026)
+
+The 4-pocket windmill is replaced by a **single-file queue** at 40° that holds 4 balls: ball 4 just behind the intake roller, ball 1 "staged" against a **gate** paddle. Bottom belts and a top Gecko row run on the old windmill motor (`indexer`, same name; positive power = balls toward the flywheel, `INDEXER_DIRECTION`). A **second flywheel motor** (`launcher2`) is belted 1:1 to the flywheel shaft from the other side. Code: `biobuzz/QueueFeeder.java` (laptop tests: `QueueFeederTest`), `FlywheelPairCheck.java`.
+
+**How FIRE works:** wait for the flywheel to be ready **once**, open the gate (`GATE_OPEN_SEC`), run the queue at the fire power (`QUEUE_FIRE_POWER`, Tune changes it) — no pause between balls. The queue only **holds** if the flywheel dips more than `QUEUE_HOLD_DIP_TPS`. The volley ends **EMPTY** (both beams clear while the queue ran ~3 ball lengths), the gate closes only after the queue stopped and backed off and `beam_staged` is clear. Jams back off and retry (3 in a row = JAMMED). Loading: the queue runs while the intake pulls in, stops when ball 1 reaches `beam_staged`, then gives short packing pulses. Both beams broken = **FULL** (4 held): the intake stops (G407).
+
+| Config name | Device | Type |
+|---|---|---|
+| `indexer` | queue motor (was the windmill) | goBILDA 5202/3/4 series |
+| `launcher2` | 2nd flywheel motor, turns the **opposite** way to `launcher` | goBILDA 5202/3/4 series |
+| `gate` | gate paddle servo, servo mode | Servo |
+| `beam_staged` / `beam_full` | IR break beams: ball 1 at the gate / ball 4 behind the intake | Digital Device |
+| `center_left` / `center_right` | centring Gecko wheels, run and reverse with the intake | Continuous Rotation Servo |
+
+**Calibrate on the robot (in this order):**
+
+1. **Wiring:** `BioBuzz Wiring Check` (on a box). The `LAUNCHER PAIR` line must PASS: spinning `launcher` alone back-drives `launcher2`, whose encoder must count the same way. "counts the OTHER way" → flip `LAUNCHER2_DIRECTION` in `BioBuzzConstants`.
+2. **Queue direction:** `BioBuzz Calibration`, hold RB: balls must move **toward the flywheel**, ticks count up. Otherwise flip `INDEXER_DIRECTION`. Measure the ticks for one ball length (73 mm) → `QUEUE_TICKS_PER_BALL` (estimate 340).
+3. **Beam polarity:** in `BioBuzz Calibration`, hold a ball in each beam: it must show `BALL`, and `clear` without one. Both wrong → flip `BEAM_BROKEN_IS_LOW`. Mount `beam_staged` a little off the ball centre line so touching balls leave a gap (better ball count).
+4. **Gate positions:** `BioBuzz Calibration`, press **Options** (the D-pad now jogs the gate). Jog until the paddle holds a ball → `GATE_CLOSED`; until the lane is fully clear → `GATE_OPEN`. Until both are set, FIRE is refused (like the flower arm). Set `GATE_OPEN_SEC` to the time the paddle takes (0.10–0.2 s).
+5. **Check:** `BioBuzz System Check` part 3 (queue, gate, both beams, both flywheel motors). Then `BioBuzz Tune`: fire volleys, set the fire power (D-pad up/down), SHARE saves.
+6. **Re-measure** the camera height (`CAMERA_LENS_HEIGHT_IN` = 16.1 in from the v4 mount CAD) and re-check `AUTO_SHOT_DIP_TPS` (the heavier flywheel dips less; only a cross-check now) and `LAUNCHER_PIDF` F (two motors now share the load).
+
+If the two flywheel encoders disagree for 0.3 s (one unplugged or reversed), **both motors stop** and the Driver Hub shows `Launcher STOPPED: ...`; letting go of FIRE / pre-spin allows a retry.
 
 ---
 
