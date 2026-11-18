@@ -140,7 +140,7 @@ Plug every motor and servo into the port below, and type the **name** exactly as
 | Servo 0 | Right corner intake wheel servo | Continuous Rotation Servo | `right_intake_servo` |
 | Servo 1 | Flower arm servo (2000-0025-0002, **servo mode**) | Servo | `flower_arm` |
 
-**Indexer v2 devices** (Nov 2026; any free port, suggested): `gate` = Servo (2000-0025-0003, **servo mode**); `center_left` / `center_right` = Continuous Rotation Servo (centring Gecko wheels at the lane mouth); `beam_staged` / `beam_full` = Digital Device (Adafruit 2167 receivers on a digital port; emitters need 3.3–5 V power). See "Indexer v2" below.
+**Indexer v2 devices** (Nov 2026; any free port, suggested): `gate` = Servo (2000-0025-0003, **servo mode**); `beam_staged` / `beam_full` = Digital Device (Adafruit 2167 receivers on a digital port; emitters need 3.3–5 V power). See "Indexer v2" below.
 
 ### Wiring rules
 
@@ -163,7 +163,6 @@ The 4-pocket windmill is replaced by a **single-file queue** at 40° that holds 
 | `launcher2` | 2nd flywheel motor, turns the **opposite** way to `launcher` | goBILDA 5202/3/4 series |
 | `gate` | gate paddle servo, servo mode | Servo |
 | `beam_staged` / `beam_full` | IR break beams: ball 1 at the gate / ball 4 behind the intake | Digital Device |
-| `center_left` / `center_right` | centring Gecko wheels, run and reverse with the intake | Continuous Rotation Servo |
 
 **Calibrate on the robot (in this order):**
 

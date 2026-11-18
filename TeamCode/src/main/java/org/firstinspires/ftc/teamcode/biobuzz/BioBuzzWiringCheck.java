@@ -85,7 +85,7 @@ public class BioBuzzWiringCheck extends LinearOpMode {
             double maxAmps = 0;
             ElapsedTime t = new ElapsedTime();
             if (motors[i] == robot.intake) {
-                robot.setIntake(power[i]);                      // intake motor + both corner + both centring servos
+                robot.setIntake(power[i]);                      // intake motor + both corner servos
             } else {
                 motors[i].setPower(power[i]);
             }
@@ -126,9 +126,8 @@ public class BioBuzzWiringCheck extends LinearOpMode {
         } catch (Exception e) {
             report("CAMERA", "FAIL", "'" + WEBCAM + "' not found: " + e.getMessage());
         }
-        report("SERVOS", "INFO", "corner intake servos and the centring wheels (" + CENTER_LEFT + ", " + CENTER_RIGHT
-                + ") ran with the intake test (all four should have pulled inward); flower arm and queue gate are tested"
-                + " in System Check part 3");
+        report("SERVOS", "INFO", "corner intake servos ran with the intake test (both should have pulled inward);"
+                + " flower arm and queue gate are tested in System Check part 3");
         report("SUMMARY", failures == 0 ? "PASS" : "FAIL", failures == 0 ? "no wiring problems found" : failures + " problem(s)");
         log.close();
 

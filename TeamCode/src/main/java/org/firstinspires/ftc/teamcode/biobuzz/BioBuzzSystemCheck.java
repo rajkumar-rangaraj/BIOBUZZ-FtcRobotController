@@ -17,7 +17,7 @@ import java.util.List;
  *
  *   PART 1 Wheels    robot on a box: each drive motor alone -> right wheel? right direction? encoder counting?
  *   PART 2 Floor     forward, back, SLIDE RIGHT, SLIDE LEFT, turn clockwise, turn counter-clockwise
- *   PART 3 Mechanisms intake (+ centring wheels), queue, gate, both queue beams, launcher (both motors), flower arm
+ *   PART 3 Mechanisms intake, queue, gate, both queue beams, launcher (both motors), flower arm
  */
 @TeleOp(name = "BioBuzz System Check", group = "BioBuzz Test")
 public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
@@ -136,8 +136,8 @@ public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
         robot.setIntake(0.6);
         pause(1.0, "Intake running IN");
         robot.setIntake(0);
-        record(ask("Did the intake roller, BOTH corner wheels and BOTH centring wheels (lane mouth) pull INWARD?"),
-                "intake pulls in", "intake: flip the motor, a corner-servo or a centring-servo direction");
+        record(ask("Did the intake roller and BOTH corner wheels pull INWARD?"),
+                "intake pulls in", "intake: flip the motor or a corner-servo direction");
 
         // Indexer v2: the queue (same motor and name as the old windmill)
         int start = robot.indexerTicks();

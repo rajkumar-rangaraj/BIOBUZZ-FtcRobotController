@@ -30,15 +30,14 @@ public final class BioBuzzConstants {
     public static final String LEFT_INTAKE_SERVO = "left_intake_servo";
     public static final String RIGHT_INTAKE_SERVO = "right_intake_servo";
     public static final String FLOWER_ARM = "flower_arm";
-    // Indexer v2 (linear queue, Nov 2026): second flywheel motor, gate servo, two IR break beams, two centring wheels.
-    // Suggested ports (README_2.md "Indexer v2"): launcher2 = Control Hub motor 3 (the spare); gate, center_left,
-    // center_right = free servo ports; beam_staged / beam_full = digital ports configured as "Digital Device".
+    // Indexer v2 (linear queue, Nov 2026): second flywheel motor, gate servo, two IR break beams (no centring wheels:
+    // dropped 17 Nov, the passive funnel walls centre the balls).
+    // Suggested ports (README_2.md "Indexer v2"): launcher2 = Control Hub motor 3 (the spare); gate = a free servo
+    // port; beam_staged / beam_full = digital ports configured as "Digital Device".
     public static final String LAUNCHER2 = "launcher2";
     public static final String GATE = "gate";
     public static final String BEAM_STAGED = "beam_staged";
     public static final String BEAM_FULL = "beam_full";
-    public static final String CENTER_LEFT = "center_left";
-    public static final String CENTER_RIGHT = "center_right";
     public static final String IMU_NAME = "imu";
     public static final String WEBCAM = "Webcam 1";
 

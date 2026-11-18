@@ -43,7 +43,7 @@ The windmill is replaced by a **single-file queue** (40°, 4 balls: ball 1 again
 - **Gate safety:** the gate closes only after the queue stopped, backed off ~1.5 ball lengths and the staged beam is clear (never on a ball).
 - **Log:** `QUEUE ...` events (GATE OPEN, BALL n, HOLD/RESUME, JAM, EMPTY, GATE CLOSED); the CSV has `queue`, `gate_open`, `beam_staged`, `beam_full`, `launcher1_tps`, `launcher2_tps`. `BALL (flywheel dip)` lines are only a cross-check.
 
-Configuration names: `launcher2` (second flywheel motor), `gate` (servo), `beam_staged` / `beam_full` (digital), `center_left` / `center_right` (CR servos); the queue motor keeps the name `indexer`. Calibrate before the first AUTO (README_2.md "Indexer v2"): gate positions, beam polarity, `LAUNCHER2_DIRECTION`, queue direction.
+Configuration names: `launcher2` (second flywheel motor), `gate` (servo), `beam_staged` / `beam_full` (digital); the queue motor keeps the name `indexer`. Calibrate before the first AUTO (README_2.md "Indexer v2"): gate positions, beam polarity, `LAUNCHER2_DIRECTION`, queue direction.
 ## If something goes wrong
 
 - **Pinpoint not ready at START:** AUTO puts the start pose into the Pinpoint and gives it up to 1 s to be READY there. If it still isn't, AUTO runs the **FALLBACK** on the wheel encoders and the camera:

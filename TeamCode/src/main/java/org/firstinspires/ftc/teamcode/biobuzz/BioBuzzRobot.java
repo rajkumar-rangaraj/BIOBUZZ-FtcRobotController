@@ -27,8 +27,8 @@ import java.util.List;
  * All BIOBUZZ hardware and the low-level commands shared by TeleOp, Autonomous and Calibration.
  * The constructor only configures hardware; it never moves a motor or servo.
  * <p>
- * Indexer v2 (Nov 2026): a second flywheel motor (launcher2), the queue gate servo, two IR break beams and two
- * centring wheels at the lane mouth. Bulk caching: TeleOp, Tune and the Pedro AUTO make the robot with
+ * Indexer v2 (Nov 2026): a second flywheel motor (launcher2), the queue gate servo and two IR break beams (the
+ * centring wheels at the lane mouth were dropped on 17 Nov: the passive funnel walls centre the balls). Bulk caching: TeleOp, Tune and the Pedro AUTO make the robot with
  * {@code manualBulkCache = true} and call {@link #clearBulkCache()} once per loop, so every encoder, velocity and
  * beam read in a loop comes from ONE bulk read per hub (and all of them agree with each other). The test op modes
  * keep AUTO caching (a fresh bulk read whenever a value is read twice).
@@ -44,8 +44,6 @@ public class BioBuzzRobot {
     public final DcMotorEx indexer;
     public final CRServo leftIntakeServo;
     public final CRServo rightIntakeServo;
-    public final CRServo centerLeft;
-    public final CRServo centerRight;
     public final Servo flowerArm;
     public final Servo gate;
     public final DigitalChannel beamStaged;
@@ -110,8 +108,6 @@ public class BioBuzzRobot {
         indexer = hw.get(DcMotorEx.class, INDEXER);
         leftIntakeServo = hw.get(CRServo.class, LEFT_INTAKE_SERVO);
         rightIntakeServo = hw.get(CRServo.class, RIGHT_INTAKE_SERVO);
-        centerLeft = hw.get(CRServo.class, CENTER_LEFT);
-        centerRight = hw.get(CRServo.class, CENTER_RIGHT);
         flowerArm = hw.get(Servo.class, FLOWER_ARM);
         gate = hw.get(Servo.class, GATE);
         beamStaged = hw.get(DigitalChannel.class, BEAM_STAGED);
@@ -131,7 +127,6 @@ public class BioBuzzRobot {
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rightIntakeServo.setDirection(DcMotorSimple.Direction.REVERSE);
-        centerRight.setDirection(DcMotorSimple.Direction.REVERSE);   // mirrored like the corner servos; CALIBRATE
 
         launcher.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         launcher.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -224,15 +219,13 @@ public class BioBuzzRobot {
 
     // ---------------- Intake ----------------
 
-    /** Intake roller, both corner wheels and both centring wheels at the lane mouth (they reverse with it). */
+    /** Intake roller and both corner wheels (they reverse with it). */
     public void setIntake(double power) {
         power = Range.clip(power, -1, 1);
         lastIntakePower = power;
         intake.setPower(power);
         leftIntakeServo.setPower(power);
         rightIntakeServo.setPower(power);
-        centerLeft.setPower(power);
-        centerRight.setPower(power);
     }
 
     // ---------------- Launcher (two motors on one flywheel) ----------------
