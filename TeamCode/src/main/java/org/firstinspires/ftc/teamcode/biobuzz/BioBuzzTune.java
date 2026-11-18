@@ -31,6 +31,7 @@ public class BioBuzzTune extends OpMode {
     private HiveVision vision;
     private TeleOpSettings settings;
     private QueueFeeder queue;
+    private final IntakeGuard intakeGuard = IntakeGuard.standard();
     private double trim, firePower;
     private boolean launcherOn = false;
     private int volleys = 0, jams = 0, beamBalls = 0;
@@ -182,8 +183,11 @@ public class BioBuzzTune extends OpMode {
         if (fire && queue.firing()) {
             intake = Math.max(intake, 0) + FEED_INTAKE_BOOST;
         }
-        if (!queue.firing() && (queue.isFull() || staged && fullBeam) && intake > 0) {
-            intake = QUEUE_FULL_INTAKE_POWER;                   // G407: no 5th ball
+        double t = clock.seconds();                             // G407 push-back + pair-jam unjam (IntakeGuard)
+        double intakeAmps = intakeGuard.currentDue(t, intake) ? robot.intakeCurrentAmps() : Double.NaN;
+        intake = intakeGuard.update(t, intake, queue.isFull(), queue.firing(), intakeAmps, staged, fullBeam);
+        if (intakeGuard.event() != null) {
+            say(intakeGuard.event());
         }
         robot.setIntake(intake);
         double vel = robot.launcherVelocity();
@@ -211,6 +215,7 @@ public class BioBuzzTune extends OpMode {
         telemetry.addData("Queue", "%s%s  staged %s, full %s%s", gamepad1.b ? "UNJAM" : queue.state().toString(),
                 queue.holding() ? " (HOLD)" : "", staged ? "BALL" : "clear", fullBeam ? "BALL" : "clear",
                 BioBuzzRobot.gateCalibrated() ? "" : "   GATE NOT CALIBRATED");
+        telemetry.addData("Intake", intakeGuard.status());
         if (noteTimer.seconds() < 4 && !note.isEmpty()) {
             telemetry.addData("Note", note);
         }

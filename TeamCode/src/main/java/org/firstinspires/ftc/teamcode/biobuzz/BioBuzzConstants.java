@@ -213,9 +213,17 @@ public final class BioBuzzConstants {
     // FULL (4 held, G407): both beams broken while the queue pushes forward for this long (a ball only passing the
     // beam_full spot moves off it sooner).
     public static final double QUEUE_FULL_CONFIRM_SEC = 0.5;
-    // TeleOp: intake power while FULL and the driver pulls IN. 0 = the roller stops (ball 4 sits just behind it; a
-    // reverse may drag it out). Negative = push a 5th ball back out. CALIBRATE on the robot.
-    public static final double QUEUE_FULL_INTAKE_POWER = 0;
+    // Safe push-back (G407, IntakeGuard; TeleOp, Tune, AUTO): when the queue becomes FULL (not firing) the intake runs
+    // in reverse at QUEUE_FULL_PUSHBACK_POWER for QUEUE_FULL_PUSHBACK_SEC (pushes a 5th ball back out), then, while
+    // FULL and the driver / AUTO still asks for intake IN, at QUEUE_FULL_INTAKE_POWER (gentle reverse: a 5th ball is
+    // never pulled in). A driver's reverse passes through unchanged. Ball 4 sits on the bottom belts and touches the
+    // roller by < 1 mm, so meanwhile the queue HOLDS it with QUEUE_HOLD_POWER forward (QueueFeeder; gate closed, not
+    // firing: the gate stops balls 1-3, so this only keeps the queue packed). CALIBRATE: ball 4 must stay put (beam_full
+    // stays broken) while a 5th ball is pushed out; raise QUEUE_HOLD_POWER if the roller drags ball 4 back.
+    public static final double QUEUE_FULL_INTAKE_POWER = -0.3;
+    public static final double QUEUE_FULL_PUSHBACK_POWER = -0.6;
+    public static final double QUEUE_FULL_PUSHBACK_SEC = 0.4;
+    public static final double QUEUE_HOLD_POWER = 0.12;
     // Firing: EMPTY = beam_staged and beam_full clear for at least this long while the queue runs, AND the queue moved
     // QUEUE_EMPTY_FLUSH_TICKS since they cleared: 3 balls of travel carries a ball resting between the two beams
     // (positions 2-3, which no beam sees) up through beam_staged, and the last ball (past the beam, not yet in the
@@ -250,6 +258,10 @@ public final class BioBuzzConstants {
 
     // Gate: goBILDA 2000-0025-0003 in SERVO mode ("gate"): a paddle holds ball 1 when CLOSED. Negative = not
     // calibrated: FIRE is refused (like ARM_DEPLOY_POSITION). CALIBRATE with BioBuzz Calibration (Options = gate jog).
+    // OPEN DIRECTION (CAD): from CLOSED the paddle swings +90 deg about the robot +x axis at its pivot, i.e. it tips
+    // toward the FRONT of the robot (toward the intake) and lies under the lane floor. The other way it hits the hood,
+    // the side plates and the name board; less than ~85 deg leaves it inside the lane floor (balls catch on it). So
+    // GATE_OPEN must be ~90 deg of paddle travel from GATE_CLOSED in that direction: check by eye before saving.
     public static final double GATE_OPEN = -1;                                  // CALIBRATE
     public static final double GATE_CLOSED = -1;                                // CALIBRATE
     public static final double GATE_OPEN_SEC = 0.15;                            // CALIBRATE: 0.10-0.2 s to swing open / closed
@@ -262,6 +274,18 @@ public final class BioBuzzConstants {
 
     // ---------------- Intake ----------------
     public static final double FEED_INTAKE_BOOST = 0.5;
+    // Pair-jam unjam (IntakeGuard): two balls side by side can wedge in the funnel mouth in front of the lane. While the
+    // intake pulls IN and the queue is not FULL, the intake current (read at most every INTAKE_AMPS_PERIOD_SEC: not in
+    // the bulk read) above INTAKE_JAM_AMPS for INTAKE_JAM_SEC = jam: reverse at INTAKE_UNJAM_POWER for INTAKE_UNJAM_SEC,
+    // then pull in again. INTAKE_UNJAM_MAX_TRIES in a row without a beam changing: give up until the intake is let go.
+    // CALIBRATE INTAKE_JAM_AMPS: free-running and normal-pickup current must stay below it, a wedged pair above it.
+    public static final boolean INTAKE_JAM_DETECT = true;
+    public static final double INTAKE_JAM_AMPS = 4.0;                            // CALIBRATE
+    public static final double INTAKE_JAM_SEC = 0.25;
+    public static final double INTAKE_UNJAM_POWER = -0.5;
+    public static final double INTAKE_UNJAM_SEC = 0.15;
+    public static final int INTAKE_UNJAM_MAX_TRIES = 3;
+    public static final double INTAKE_AMPS_PERIOD_SEC = 0.05;
 
     // ---------------- Flower arm: goBILDA 2000-0025-0002 in SERVO mode ----------------
     // Negative means "not calibrated": TeleOp then refuses to move the arm.

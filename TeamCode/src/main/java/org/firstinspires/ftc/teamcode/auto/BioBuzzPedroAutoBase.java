@@ -18,6 +18,7 @@ import org.firstinspires.ftc.teamcode.biobuzz.BioBuzzMatchState;
 import org.firstinspires.ftc.teamcode.biobuzz.BioBuzzRobot;
 import org.firstinspires.ftc.teamcode.biobuzz.CsvLog;
 import org.firstinspires.ftc.teamcode.biobuzz.HiveVision;
+import org.firstinspires.ftc.teamcode.biobuzz.IntakeGuard;
 import org.firstinspires.ftc.teamcode.biobuzz.PinpointInitCheck;
 import org.firstinspires.ftc.teamcode.biobuzz.QueueFeeder;
 import org.firstinspires.ftc.teamcode.biobuzz.TeleOpSettings;
@@ -170,7 +171,8 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
     private double handoffImuPrev;                              // ... the hub IMU (its last reading)
     private QueueFeeder queue;                                  // indexer v2: updated in every loopTick (loads, fires)
     private boolean queueFire = false;                          // fire() wants the volley
-    private double intakeWanted = 0;                            // intake power asked for (before the G407 cap)
+    private double intakeWanted = 0;                            // intake power asked for (before IntakeGuard: G407, unjam)
+    private final IntakeGuard intakeGuard = IntakeGuard.standard();
     private String lastFaultLogged = null;
     private final BallCounter dipCounter = BallCounter.forQueue();   // flywheel dips: cross-check, logged only
 
@@ -670,12 +672,25 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 preloads ? (preloadsGone ? ", queue empty" : ", balls may be left (no GARDEN)") : ""));
     }
 
-    /** Intake power through the G407 cap: never pull a 5th ball in while the queue is FULL (not while it fires). */
+    /**
+     * Intake power asked for, through IntakeGuard (applied now and again in every loopTick): never pull a 5th ball in
+     * while the queue is FULL (G407 push-back, not while it fires), and the pair-jam unjam while pulling in.
+     */
     private void intake(double power) {
         intakeWanted = power;
-        boolean full = queue != null && !queue.firing()
-                && (queue.isFull() || robot.lastStagedBroken && robot.lastFullBroken);
-        robot.setIntake(full && power > 0 ? QUEUE_FULL_INTAKE_POWER : power);
+        applyIntake(now(), robot.lastStagedBroken, robot.lastFullBroken);
+    }
+
+    private void applyIntake(double t, boolean staged, boolean fullBeam) {
+        if (queue == null) {
+            robot.setIntake(intakeWanted > 0 ? 0 : intakeWanted);
+            return;
+        }
+        double amps = intakeGuard.currentDue(t, intakeWanted) ? robot.intakeCurrentAmps() : Double.NaN;
+        robot.setIntake(intakeGuard.update(t, intakeWanted, queue.isFull(), queue.firing(), amps, staged, fullBeam));
+        if (intakeGuard.event() != null && log != null) {
+            log.row(t, "EVENT", "INTAKE " + intakeGuard.event());
+        }
     }
 
     /**
@@ -690,6 +705,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         robot.setIndexerPower(queue.update(t, queueFire, true, intakeWanted > 0.05, staged, fullBeam, ready,
                 robot.launcherDipTooDeep(), ticks));
         robot.setGateOpen(queue.gateOpen());
+        applyIntake(t, staged, fullBeam);                       // push-back / unjam pulses are timed per loop
         if (queue.event() != null && log != null) {
             log.row(t, "EVENT", "QUEUE " + queue.event(), "ticks", ticks, "launcher", robot.launcherVelocity());
         }
@@ -1258,6 +1274,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         telemetry.addData("Launcher", "%.0f / %.0f t/s", robot.launcherVelocity(), robot.launcherTarget());
         telemetry.addData("Queue", "%s  gate %s  staged %s  full %s", queue.state(), queue.gateOpen() ? "OPEN" : "closed",
                 robot.lastStagedBroken ? "BALL" : "clear", robot.lastFullBroken ? "BALL" : "clear");
+        telemetry.addData("Intake", intakeGuard.status());
         String warning = robot.launcherWarning();
         if (warning != null) {
             telemetry.addData("WARNING", warning);

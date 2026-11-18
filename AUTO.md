@@ -39,7 +39,7 @@ Rules the code keeps:
 The windmill is replaced by a **single-file queue** (40°, 4 balls: ball 1 against the gate, ball 4 just behind the intake). AUTO uses it like this (`biobuzz/QueueFeeder.java`, updated every loop):
 
 - **Fire:** wait once for the flywheel (up to 4 s), open the gate, run the queue at the fire power. It only holds if the flywheel dips too deep. The volley ends **EMPTY** (both beams clear while the queue ran ~3 ball lengths), **JAMMED** (3 jams in a row), or **2.5 s** after the gate opened (`VOLLEY_FEED_SEC`, was 12 s). A volley takes ~1.5 s. Stretch needs only 2 s left (`STRETCH_MIN_FIRE_SEC`, was 4).
-- **GARDEN:** the queue loads while the intake runs; the corner back-and-forth **ends early once the queue is FULL** (4 held). The intake never pulls a 5th ball in while FULL.
+- **GARDEN:** the queue loads while the intake runs; the corner back-and-forth **ends early once the queue is FULL** (4 held). The intake never pulls a 5th ball in while FULL: on FULL it reverses for 0.4 s (push-back), then gently while it is still asked to pull in; the queue holds ball 4 meanwhile. A pair of balls wedged in the funnel (high intake current) gets short reverse pulses (3 tries, then it keeps pulling without more tries). Log: `INTAKE ...` events (PUSH-BACK, INTAKE JAM n/3, gave up).
 - **Gate safety:** the gate closes only after the queue stopped, backed off ~1.5 ball lengths and the staged beam is clear (never on a ball).
 - **Log:** `QUEUE ...` events (GATE OPEN, BALL n, HOLD/RESUME, JAM, EMPTY, GATE CLOSED); the CSV has `queue`, `gate_open`, `beam_staged`, `beam_full`, `launcher1_tps`, `launcher2_tps`. `BALL (flywheel dip)` lines are only a cross-check.
 

@@ -228,6 +228,11 @@ public class BioBuzzRobot {
         rightIntakeServo.setPower(power);
     }
 
+    /** Intake motor current (A), for IntakeGuard's jam watch. Not in the bulk read (~2-3 ms): only when it's due. */
+    public double intakeCurrentAmps() {
+        return intake.getCurrent(CurrentUnit.AMPS);
+    }
+
     // ---------------- Launcher (two motors on one flywheel) ----------------
 
     /**

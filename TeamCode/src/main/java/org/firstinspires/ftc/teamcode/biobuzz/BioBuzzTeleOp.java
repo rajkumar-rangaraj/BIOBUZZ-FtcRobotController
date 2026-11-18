@@ -30,7 +30,9 @@ import com.qualcomm.robotcore.util.Range;
  *                         distance; a held volley goes anyway 1.5 s after the hold starts (AimGate). The speed follows
  *                         the distance until the gate opens, then stays until FIRE is let go, and the robot stops
  *                         driving to the spot (it stays where the speed fits). Intake IN while the queue is FULL (4
- *                         balls, G407): the intake stops (QUEUE_FULL_INTAKE_POWER)
+ *                         balls, G407): a short reverse pulse pushes a 5th ball out, then a gentle reverse
+ *                         (IntakeGuard). A pair of balls wedged in the funnel (intake current high) is unjammed with
+ *                         short reverses (3 tries, then let the intake go)
  *   X / Square   (hold)   HIVE auto-aim without firing (the same turn and SHOT SPOT drive as FIRE). Also switches the
  *                         shot speed back to AUTO (clears a D-pad preset and the trim)
  *   Back / Share          save the SHOT SPOT here: camera distance + current shot speed (needs HIVE tags in view)
@@ -85,6 +87,7 @@ public class BioBuzzTeleOp extends OpMode {
     private final ElapsedTime statusTimer = new ElapsedTime();
     private BioBuzzDiag diag = new BioBuzzDiag("teleop", false);
     private QueueFeeder queue = QueueFeeder.standard();
+    private final IntakeGuard intakeGuard = IntakeGuard.standard();
     private final BallCounter ballCounter = BallCounter.forQueue();       // flywheel dips: a cross-check of the queue's
                                                                           // beam count, and the BALL rows (diagnostics)
     private final GrabTracker grabs = GrabTracker.standard();             // how the flywheel took each ball (GRAB event)
@@ -528,11 +531,19 @@ public class BioBuzzTeleOp extends OpMode {
         if (fire && (feeding || !aimHold)) {                    // helps ball 4 into the lane; not while the aim holds
             intakePower = Math.max(intakePower, 0) + FEED_INTAKE_BOOST;
         }
-        // G407: never take a 5th ball. FULL = 4 held (QueueFeeder); both beams broken while not firing counts too, so
-        // the intake pauses while a ball crosses ball 4's spot (the queue keeps carrying it up)
+        // G407: never take a 5th ball. FULL = 4 held (QueueFeeder): push-back pulse, then a gentle reverse; both beams
+        // broken while not firing pauses an IN request (a ball crossing ball 4's spot; the queue carries it up). Not FULL:
+        // the pair-jam watch on the intake current (IntakeGuard)
         boolean queueFull = !feeding && (queue.isFull() || (staged && fullBeam));
-        if (queueFull && intakePower > 0) {
-            intakePower = QUEUE_FULL_INTAKE_POWER;
+        double intakeT = matchTimer.seconds();
+        double intakeAmps = intakeGuard.currentDue(intakeT, intakePower) ? robot.intakeCurrentAmps() : Double.NaN;
+        intakePower = intakeGuard.update(intakeT, intakePower, queue.isFull(), feeding, intakeAmps, staged, fullBeam);
+        if (intakeGuard.event() != null) {
+            diag.event("INTAKE", intakeGuard.event() + (Double.isNaN(intakeAmps) ? "" : String.format(" | %.2f A", intakeAmps)));
+            if (intakeGuard.gaveUp()) {
+                setStatus("Intake " + intakeGuard.event());
+                gamepad1.rumbleBlips(1);
+            }
         }
         robot.setIntake(intakePower);
         if (gamepad1.b != lastUnjam) {
@@ -654,6 +665,7 @@ public class BioBuzzTeleOp extends OpMode {
         if (queueFull) {
             telemetry.addData("FULL", "4 balls held - the intake won't take a 5th (G407)");
         }
+        telemetry.addData("Intake", intakeGuard.status());
         int waiting = shotResults.waiting(matchTimer.seconds());
         telemetry.addData("Balls", "%d out, results %d (IN %d, short %d, long %d, side %d)%s", shotResults.balls(),
                 shotResults.labelled(), shotResults.count(ShotResults.Result.IN), shotResults.count(ShotResults.Result.SHORT),

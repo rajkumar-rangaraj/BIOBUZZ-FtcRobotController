@@ -13,7 +13,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * intake keeps running it gives short packing pulses (off first, then on) so the balls behind come up, and ball 1 is
  * only pressed into the closed gate for a moment at a time. Both beams broken while the queue pushes forward for
  * fullConfirmSec = FULL (4 held: G407, the intake must not take a 5th ball; a ball that only passes the beam_full spot
- * on its way up moves off it sooner).
+ * on its way up moves off it sooner). While FULL, the intake pushes a 5th ball back out (IntakeGuard: a reverse pulse,
+ * then a gentle reverse while the intake is asked IN); for the pulse and while the intake is asked IN the queue holds
+ * ball 4 with holdPower forward (gate closed only: the gate stops balls 1-3).
  * <p>
  * FIRE: wait for the flywheel to be ready ONCE (and the aim, TeleOp), open the gate, wait gateOpenSec, then run the
  * queue at firePower. No per-ball pause: the loop is 33-76 ms, so the spacing comes from the queue speed. The queue
@@ -64,6 +66,8 @@ public class QueueFeeder {
         public double packOffSec = BioBuzzConstants.QUEUE_PACK_OFF_SEC;
         public double loadLingerSec = BioBuzzConstants.QUEUE_LOAD_LINGER_SEC;
         public double fullConfirmSec = BioBuzzConstants.QUEUE_FULL_CONFIRM_SEC;
+        public double holdPower = BioBuzzConstants.QUEUE_HOLD_POWER;
+        public double pushbackSec = BioBuzzConstants.QUEUE_FULL_PUSHBACK_SEC;
         /** False = GATE_OPEN / GATE_CLOSED not calibrated: FIRE is refused. */
         public boolean gateCalibrated = true;
     }
@@ -246,12 +250,15 @@ public class QueueFeeder {
 
     private void loading(double t, boolean stagedBroken) {
         if (full) {
-            power = 0;
             packStart = Double.NaN;
             if (state != State.FULL) {
                 addEvent("FULL (" + BioBuzzConstants.QUEUE_CAPACITY + " held)");
             }
             go(State.FULL, t);
+            // G407 push-back: the intake reverses (IntakeGuard) for pushbackSec from FULL, then gently while the
+            // intake is still asked IN; hold ball 4 on the belts meanwhile (the closed gate stops balls 1-3).
+            boolean intakeReversing = t - stateStart < s.pushbackSec || loadingWanted(t);
+            power = !gateOpen && intakeReversing ? s.holdPower : 0;
             return;
         }
         if (!loadingWanted(t)) {

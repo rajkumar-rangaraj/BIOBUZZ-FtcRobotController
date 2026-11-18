@@ -464,10 +464,12 @@ public class QueueFeederTest {
             assertTrue(s.beam(STAGED_X) && s.beam(FULL_X));
             s.step(dt);
             assertEquals(QueueFeeder.State.FULL, s.f.state());
-            assertEquals("FULL: the queue stops", 0, s.f.power(), 0);
+            assertEquals("FULL, intake asked IN: the queue holds ball 4", BioBuzzConstants.QUEUE_HOLD_POWER,
+                    s.f.power(), 0);
             s.run(1.0, dt);
-            assertEquals(0, s.f.power(), 0);
+            assertEquals(BioBuzzConstants.QUEUE_HOLD_POWER, s.f.power(), 0);
             assertTrue(s.f.isFull());
+            assertEquals("the hold doesn't move the packed balls", 4, s.balls.size());
             s.fire = true;                                       // a FULL queue fires as usual
             assertTrue(s.runUntil(3.0, dt, s.f::emptied));
             assertFalse("not FULL once fired", s.f.isFull());
@@ -498,5 +500,78 @@ public class QueueFeederTest {
         s.intake = true;
         assertTrue(s.runUntil(6.0, 0.05, () -> s.launchTimes.size() == 2));
         assertEquals(2, s.f.volleys());
+    }
+
+    // ---------------- FULL hold (G407 push-back) ----------------
+
+    private static Sim fillToFull(double dt) {
+        Sim s = new Sim();
+        s.pendingBalls = 4;
+        s.intake = true;
+        assertTrue("FULL\n" + s.log(), s.runUntil(20.0, dt, s.f::isFull));
+        return s;
+    }
+
+    @Test
+    public void holdPowerOnlyWhileFullIdleAndGateClosed() {
+        double dt = 0.05;
+        Sim s = fillToFull(dt);
+        s.step(dt);
+        assertEquals(QueueFeeder.State.FULL, s.f.state());
+        assertFalse(s.f.gateOpen());
+        assertEquals("FULL + gate closed: hold ball 4", BioBuzzConstants.QUEUE_HOLD_POWER, s.f.power(), 0);
+
+        s.intake = false;                                        // intake let go: the hold ends after the linger
+        s.run(BioBuzzConstants.QUEUE_LOAD_LINGER_SEC + 0.2, dt);
+        assertTrue(s.f.isFull());
+        assertEquals("FULL, intake idle, push-back over: no hold", 0, s.f.power(), 0);
+
+        s.intake = true;                                         // the driver pulls IN again: gentle reverse, hold
+        s.step(dt);
+        assertEquals(BioBuzzConstants.QUEUE_HOLD_POWER, s.f.power(), 0);
+
+        s.fire = true;                                           // firing: never the hold power
+        boolean sawOpening = false;
+        while (!s.f.emptied() && s.t < 30) {
+            s.step(dt);
+            QueueFeeder.State st = s.f.state();
+            if (s.f.gateOpen() || s.f.firing() || st == QueueFeeder.State.WAIT_READY || st == QueueFeeder.State.CLOSING
+                    || st == QueueFeeder.State.UNJAM || st == QueueFeeder.State.JAMMED) {
+                sawOpening |= st == QueueFeeder.State.OPENING;
+                assertTrue("no hold power while firing (" + st + ")",
+                        s.f.power() != BioBuzzConstants.QUEUE_HOLD_POWER);
+            }
+        }
+        assertTrue(sawOpening);
+        assertTrue(s.f.emptied());
+        assertFalse(s.f.isFull());
+    }
+
+    @Test
+    public void holdCoversThePushBackPulseEvenWithoutTheIntake() {
+        QueueFeeder.Settings st = new QueueFeeder.Settings();
+        st.loadLingerSec = 0.05;
+        st.pushbackSec = 0.4;
+        Sim s = new Sim(st);
+        s.pendingBalls = 4;
+        s.intake = true;
+        assertTrue(s.runUntil(20.0, 0.05, s.f::isFull));
+        s.intake = false;
+        s.step(0.05);                                            // FULL entered this loop or the last one
+        assertEquals("the push-back pulse: hold", BioBuzzConstants.QUEUE_HOLD_POWER, s.f.power(), 0);
+        s.run(0.5, 0.05);
+        assertEquals("pulse over, intake idle: no hold", 0, s.f.power(), 0);
+    }
+
+    @Test
+    public void zeroHoldPowerKeepsTheOldStop() {
+        QueueFeeder.Settings st = new QueueFeeder.Settings();
+        st.holdPower = 0;
+        Sim s = new Sim(st);
+        s.pendingBalls = 4;
+        s.intake = true;
+        assertTrue(s.runUntil(20.0, 0.05, s.f::isFull));
+        s.run(1.0, 0.05);
+        assertEquals(0, s.f.power(), 0);
     }
 }

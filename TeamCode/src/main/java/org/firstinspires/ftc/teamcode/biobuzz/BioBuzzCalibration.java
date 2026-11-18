@@ -26,6 +26,9 @@ import com.qualcomm.robotcore.util.Range;
  *   without stalling, then copy "Jog position" to ARM_DEPLOY_POSITION and the direction to ARM_STOW_DIRECTION.
  * Queue gate: Options, then jog until the paddle holds a ball at the gate -> GATE_CLOSED; jog until the lane is fully
  *   clear (a ball rolls through) -> GATE_OPEN. Beams: hold a ball in each beam, it must show BALL.
+ *   Gate OPEN direction (CAD): the paddle swings ~90 deg toward the FRONT of the robot (toward the intake, +90 deg about
+ *   the robot +x axis at its pivot) and lies under the lane floor. Never the other way (hood, side plates, name board);
+ *   less than ~85 deg leaves it inside the lane floor.
  * Camera: park at the spot you shoot best from; note the CELL range and bearing.
  */
 @TeleOp(name = "BioBuzz Calibration", group = "BioBuzz Test")
@@ -139,8 +142,8 @@ public class BioBuzzCalibration extends OpMode {
                         + " BEAM_BROKEN_IS_LOW", robot.stagedBroken() ? "BALL" : "clear", robot.beamStaged.getState() ? "HIGH" : "LOW",
                 robot.fullBroken() ? "BALL" : "clear", robot.beamFull.getState() ? "HIGH" : "LOW");
         telemetry.addLine("--- Queue gate (Options: D-pad jogs the " + (jogGate ? "GATE" : "ARM") + ") ---");
-        telemetry.addData("Gate", gateActive ? String.format("at %.3f  -> paddle holds a ball: GATE_CLOSED; lane clear:"
-                + " GATE_OPEN", gateJog) : "not powered (Options starts the gate jog)");
+        telemetry.addData("Gate", gateActive ? String.format("at %.3f  -> paddle holds a ball: GATE_CLOSED; swung ~90 deg"
+                + " toward the INTAKE, under the lane floor: GATE_OPEN", gateJog) : "not powered (Options starts the gate jog)");
         telemetry.addData("Gate constants", BioBuzzRobot.gateCalibrated()
                 ? String.format("OPEN %.3f, CLOSED %.3f", GATE_OPEN, GATE_CLOSED) : "NOT CALIBRATED (FIRE refused)");
 
