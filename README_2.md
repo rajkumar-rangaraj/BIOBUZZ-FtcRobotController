@@ -404,12 +404,40 @@ Plain Share saves only the spot. The "From INIT" telemetry line shows the positi
 
 Aiming uses the SDK 12 BIOBUZZ tag clusters, so the robot aims at the centre of the CELL opening even when only some of the 4 tags are visible. A SHOT SPOT saved before this change (measured to the tag average) is ignored and must be saved again.
 
+## BioBuzz TeleOp PP (Pinpoint aim, 17 Nov — under test)
+
+**Drivers: read [PP_DRIVER_GUIDE.md](PP_DRIVER_GUIDE.md)** (start spots, buttons, screen messages, practice checklist). The details below are for programmers.
+
+A second TeleOp beside `BioBuzz TeleOp` (which is unchanged: switch back any time). It knows where the robot is from the **Pinpoint**, corrects that position whenever the camera sees one of our CELLs, and aims and sets the flywheel speed from it. The speed table, presets, trim, aim trim, windmill and SHOT SPOT are the same as in `BioBuzz TeleOp`, and when the camera sees the CELL its distance is used exactly as there.
+
+Why (logs 7–14 Nov): drivers released and pressed FIRE again before almost every ball (2.15 s per ball, against 0.46 s while held), and 8 % of balls left with no CELL in view, those going SIDE 3× as often.
+
+**Starting it (INIT):** pick the alliance, then the **start** with D-pad LEFT/RIGHT:
+- **AUTO's last pose** (offered when AUTO ran in the last 60 s): nothing to do.
+- **CAMERA** (practice without AUTO): place the robot with the **intake pointing AWAY from you** (or press Options when it does). The first time the camera sees our UP CELL, the robot knows where it is (screen: `PINPOINT + tags`).
+- **CELL wall / ALLIANCE wall**: the robot is at AUTO's start position.
+- Keep the robot still in INIT (the Pinpoint calibrates its gyro).
+
+**Driving:**
+- **RB = VOLLEY (tap, don't hold).** One tap turns onto the CELL (and drives to the SHOT SPOT if one is saved) and fires every ball. Each ball waits until the robot is aimed and the flywheel has settled (no overshoot after the last ball). After 2 s a held ball goes anyway only if the aim is within 5° (by the Pinpoint and, when it sees the CELL, by the camera) and you aren't turning; a SHOT SPOT that can't be reached is given up instead. It stops by itself when the robot is empty (5 pockets without a ball) or jams. Tap RB again, or B, to stop it.
+- **X (hold)** = aim only. **Y** = auto pre-spin on/off (on: the flywheel runs at the shot speed whenever the robot is within 80 in of our CELL, so it is ready on arrival).
+- **Right stick always wins** over the auto aim (the ball waits while you turn).
+- **Options tap** = the intake points away from you now (fixes the heading after a hard hit). Hold 1 s = field-centric on/off.
+- Screen **`camera aim (position not known yet)`**: until the camera has placed the robot (or after a Pinpoint jump) it aims and gates exactly like `BioBuzz TeleOp`; point the camera at our CELL once. **`CAMERA ONLY`**: the Pinpoint failed; same camera aim.
+- **CELL names:** after a CAMERA start the robot checks the CELL names when it sees our *other* CELL (log `POSE_FIX` "names confirmed" or "SWAPPED CELL names"). After an AUTO or wall start it learns them from the first sightings. Once confirmed they never change during the run.
+- "LB + Share teaches AUTO" is only in `BioBuzz TeleOp`.
+
+**Before trusting it in a match (CALIBRATE in `pp/PpConstants.java`):** measure the camera lens distance behind the robot centre (`CAMERA_BACK_IN`, now 8 in) and check the CELL positions (`CELL_A_*`, `CELL_B_*`, from the AUTO logs). Then: pose vs tape measure at a few marked spots, aim with the CELL out of view, and 40 labelled shots each with both TeleOps from the same spots (the IN rate must not drop).
+
+**Log** (`diag_teleop_pp_*`, `events_teleop_pp_*`): `MODE`, `POSE` (2 per second: x, y, heading, distance, aim error, fixes), `POSE_FIX` (first fix, snaps, CELL name remaps), `POSE_JUMP`, `VOLLEY_START` / `VOLLEY_STOP` (why, balls, time), `BALL` (with `volley_ball`, `aim_err`, `dist_source` camera/pose and the pose).
+
 ## Current op modes
 
 | Op mode | What it does |
 |---|---|
 | `BioBuzz AUTO RED` / `BioBuzz AUTO BLUE` | LEAVE, launch the 4 preloads into our upward CELL, then AUTO PARK in our LOADING ZONE. Selects `BioBuzz TeleOp` afterwards. |
 | `BioBuzz TeleOp` | Competition driver control, one gamepad (controls listed at the top of `BioBuzzTeleOp.java`) |
+| `BioBuzz TeleOp PP` | Pinpoint + AprilTag aim, tap-RB volley (see "BioBuzz TeleOp PP" above). Under test |
 | `BioBuzz Arm Setup` | Guided flower-arm setup, one step per screen: fit the arm level, move it down onto the pads, test up/down, press X to save. Saved on the Control Hub (`/sdcard/biobuzz_arm.txt`), so no code change or re-deploy is needed |
 | `BioBuzz Pinpoint Setup` | Robot on the floor: it drives forward, slides left and spins 2 turns by itself. Finds which pod is which, their directions and their positions, and saves them on the Control Hub (`/sdcard/biobuzz_pinpoint.txt`). Run it after mounting or moving the pods |
 | `BioBuzz Calibration` | Measures drive distance, IMU direction, windmill direction, flower-arm servo positions and camera range/bearing |

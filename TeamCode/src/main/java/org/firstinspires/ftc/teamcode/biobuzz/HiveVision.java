@@ -96,9 +96,16 @@ public class HiveVision {
         public final double xIn;
         public final double yIn;
         public final double zIn;
+        /** When the frame was taken (System.nanoTime), 0 if unknown. */
+        public final long frameNanos;
 
         Target(Cell cell, int tagCount, double rawBearingDeg, double aimTrimDeg, double rangeIn, double elevationDeg,
                double xIn, double yIn, double zIn) {
+            this(cell, tagCount, rawBearingDeg, aimTrimDeg, rangeIn, elevationDeg, xIn, yIn, zIn, 0);
+        }
+
+        Target(Cell cell, int tagCount, double rawBearingDeg, double aimTrimDeg, double rangeIn, double elevationDeg,
+               double xIn, double yIn, double zIn, long frameNanos) {
             this.cell = cell;
             this.tagCount = tagCount;
             this.rawBearingDeg = rawBearingDeg;
@@ -108,6 +115,7 @@ public class HiveVision {
             this.xIn = xIn;
             this.yIn = yIn;
             this.zIn = zIn;
+            this.frameNanos = frameNanos;
         }
 
         /** Floor distance from the camera lens to the point under the tags. */
@@ -228,7 +236,22 @@ public class HiveVision {
         }
         int count = Math.max(1, (int) Math.round(d.percentClusterFound * 4 / 100.0));
         return new Target(cell, count, d.ftcPose.bearing, aimTrimDeg, d.ftcPose.range, d.ftcPose.elevation,
-                d.ftcPose.x, d.ftcPose.y, d.ftcPose.z);
+                d.ftcPose.x, d.ftcPose.y, d.ftcPose.z, d.frameAcquisitionNanoTime);
+    }
+
+    /** Every CELL of our ALLIANCE in the most recent frame (empty if none, or the frame is too old). */
+    public List<Target> targets(Alliance alliance) {
+        List<Target> out = new java.util.ArrayList<>();
+        if (latest == null || sinceFrame.seconds() > TARGET_MAX_AGE_SEC) {
+            return out;
+        }
+        for (AprilTagDetection det : latest) {
+            Target t = toTarget(det);
+            if (t != null && t.cell.belongsTo(alliance)) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     public int visibleTagCount() {

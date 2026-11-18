@@ -233,6 +233,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         // that (RED drivers look along +X; BLUE poses are mirrored into it). The start pose holds for the no-Pedro
         // fallback too (it only backs straight off the wall); loopTick() updates it while Pedro drives.
         BioBuzzMatchState.recordAutoHeading(AutoField.start(start).headingDeg);
+        BioBuzzMatchState.clearAutoPose();                      // TeleOp PP gets a pose only while Pedro tracks it
         try {
             String why = startPedro();
             if (why != null) {
@@ -746,6 +747,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         handoffHeadingRed = lastGoodRed != null ? lastGoodRed.headingDeg : AutoField.start(start).headingDeg;
         handoffImuPrev = robot.headingDeg();
         BioBuzzMatchState.recordAutoHeading(handoffHeadingRed);
+        BioBuzzMatchState.clearAutoPose();                      // no trusted position from here on
     }
 
     /** Without Pedro: the hub IMU's turn, added up loop by loop (its yaw flips by 180 at +-90 deg), for TeleOp. */
@@ -1163,6 +1165,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
                 Pose r = redHere();
                 lastGoodRed = r;
                 BioBuzzMatchState.recordAutoHeading(r.headingDeg);   // for TeleOp's field-centric start
+                BioBuzzMatchState.recordAutoPose(r.x, r.y, r.headingDeg);   // for BioBuzz TeleOp PP's field pose
                 if (r.distanceTo(AutoField.start(start)) >= FALLBACK_LEAVE_IN) {
                     leftStart = true;
                 }
