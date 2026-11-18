@@ -17,7 +17,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * then a gentle reverse while the intake is asked IN); for the pulse and while the intake is asked IN the queue holds
  * ball 4 with holdPower forward (gate closed only: the gate stops balls 1-3).
  * <p>
- * FIRE: wait for the flywheel to be ready ONCE (and the aim, TeleOp), open the gate, wait gateOpenSec, then run the
+ * FIRE: wait for the flywheel to be ready ONCE (and the aim, TeleOp); with ball 1 staged against the paddle, first back
+ * the queue off openBackoffTicks (the paddle's swing passes ~5 mm into a resting ball; at most openBackoffSec, then it
+ * opens anyway); open the gate, wait gateOpenSec, then run the
  * queue at firePower. No per-ball pause: the loop is 33-76 ms, so the spacing comes from the queue speed. The queue
  * only HOLDS (power 0) when the flywheel dips too deep (flywheelDipTooDeep) and resumes when it is ready again.
  * Balls are counted from beam_staged broken -> clear edges after the gate opened (debounced by queue travel: the queue
@@ -43,7 +45,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  */
 public class QueueFeeder {
 
-    public enum State { IDLE, LOADING, FULL, WAIT_READY, OPENING, FIRING, UNJAM, CLOSING, EMPTY, JAMMED }
+    public enum State { IDLE, LOADING, FULL, WAIT_READY, OPEN_BACKOFF, OPENING, FIRING, UNJAM, CLOSING, EMPTY, JAMMED }
 
     /** Tunables (defaults from BioBuzzConstants); tests change single fields. */
     public static final class Settings {
@@ -54,6 +56,8 @@ public class QueueFeeder {
         public double backoffPower = BioBuzzConstants.QUEUE_BACKOFF_POWER;
         public double closeBackoffSec = BioBuzzConstants.QUEUE_CLOSE_BACKOFF_SEC;
         public double closeBackoffTicks = BioBuzzConstants.QUEUE_CLOSE_BACKOFF_TICKS;
+        public double openBackoffTicks = BioBuzzConstants.QUEUE_OPEN_BACKOFF_TICKS;
+        public double openBackoffSec = BioBuzzConstants.QUEUE_OPEN_BACKOFF_SEC;
         public double gateOpenSec = BioBuzzConstants.GATE_OPEN_SEC;
         public double emptyClearSec = BioBuzzConstants.QUEUE_EMPTY_CLEAR_SEC;
         public double emptyFlushTicks = BioBuzzConstants.QUEUE_EMPTY_FLUSH_TICKS;
@@ -103,6 +107,7 @@ public class QueueFeeder {
     private double brokenStartTicks = Double.NaN;               // beam jam: queue position when the beam run began
     private double closeStart = 0;
     private double backoffStartTicks = Double.NaN;              // closing: queue position when the back-off began
+    private double openBackoffStartTicks = 0;                   // opening: queue position when its back-off began
     private State closeNext = State.IDLE;
     private boolean blockedReported = false;
 
@@ -182,6 +187,9 @@ public class QueueFeeder {
                 break;
             case WAIT_READY:
                 waitReady(t, wantFire, aimOk, stagedBroken, flywheelReady, flywheelDipTooDeep, queueTicks);
+                break;
+            case OPEN_BACKOFF:
+                openBackoff(t, wantFire, stagedBroken, queueTicks);
                 break;
             case OPENING:
                 power = 0;
@@ -333,14 +341,53 @@ public class QueueFeeder {
             return;
         }
         if (flywheelReady && !flywheelDipTooDeep && aimOk) {
-            power = 0;
-            gateOpen = true;
-            gateMovedAt = t;
-            addEvent("GATE OPEN (volley " + volleys + ", ball 1 " + (stagedBroken ? "staged" : "not at the gate") + ")");
-            go(State.OPENING, t);
+            if (stagedBroken && s.openBackoffTicks > 0) {
+                openBackoffStartTicks = queueTicks;             // ball 1 rests on the paddle: back off first
+                power = -s.backoffPower;
+                go(State.OPEN_BACKOFF, t);
+                return;
+            }
+            openGate(t, stagedBroken);
             return;
         }
         power = stagedBroken ? 0 : s.loadPower;                 // gate closed: bring ball 1 up meanwhile
+    }
+
+    /**
+     * Ball 1 was resting against the paddle, whose swing passes ~5 mm into it: the queue backs off openBackoffTicks
+     * (at most openBackoffSec, then the gate opens anyway) before the gate opens.
+     */
+    private void openBackoff(double t, boolean wantFire, boolean stagedBroken, int queueTicks) {
+        if (!wantFire) {
+            power = 0;
+            addEvent("FIRE released during the back-off before the gate opened");
+            go(State.IDLE, t);
+            loading(t, stagedBroken);
+            return;
+        }
+        boolean backedOff = openBackoffStartTicks - queueTicks >= s.openBackoffTicks;
+        if (!backedOff && t - stateStart < s.openBackoffSec) {
+            power = -s.backoffPower;
+            return;
+        }
+        if (!backedOff) {
+            addEvent("OPEN BACK-OFF timed out (" + Math.round(openBackoffStartTicks - queueTicks) + " of "
+                    + Math.round(s.openBackoffTicks) + " ticks): opening anyway");
+        }
+        if (inRun) {                                            // ball 1's beam run went backward: count it from here
+            runStartTicks = queueTicks;
+            runForward = false;
+            runReverse = false;
+        }
+        openGate(t, stagedBroken);
+    }
+
+    private void openGate(double t, boolean stagedBroken) {
+        power = 0;
+        gateOpen = true;
+        gateMovedAt = t;
+        addEvent("GATE OPEN (volley " + volleys + ", ball 1 " + (stagedBroken ? "staged" : "not at the gate") + ")");
+        go(State.OPENING, t);
     }
 
     private void startFiring(double t, int queueTicks) {
@@ -573,9 +620,9 @@ public class QueueFeeder {
         return emptied;
     }
 
-    /** Gate open or opening, or the queue feeding / unjamming with it open. */
+    /** Backing off before the gate opens, gate open or opening, or the queue feeding / unjamming with it open. */
     public boolean firing() {
-        return state == State.OPENING || state == State.FIRING || state == State.UNJAM;
+        return state == State.OPEN_BACKOFF || state == State.OPENING || state == State.FIRING || state == State.UNJAM;
     }
 
     /** Stopped mid-volley: the flywheel dipped too deep. */

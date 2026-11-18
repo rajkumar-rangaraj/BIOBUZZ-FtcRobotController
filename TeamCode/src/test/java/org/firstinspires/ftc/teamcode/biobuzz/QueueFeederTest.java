@@ -218,7 +218,8 @@ public class QueueFeederTest {
         assertEquals(QueueFeeder.State.WAIT_READY, s.f.state());
         s.ready = true;
         s.step(0.05);
-        assertTrue(s.f.gateOpen());
+        assertEquals("ball 1 staged: back off first", QueueFeeder.State.OPEN_BACKOFF, s.f.state());
+        assertTrue(s.runUntil(BioBuzzConstants.QUEUE_OPEN_BACKOFF_SEC + 0.1, 0.05, s.f::gateOpen));
         s.ready = false;                                         // normal small dips: READY flickers, no hold
         assertTrue(s.runUntil(2.0, 0.05, s.f::emptied));
         assertEquals(4, s.launchTimes.size());
@@ -500,6 +501,81 @@ public class QueueFeederTest {
         s.intake = true;
         assertTrue(s.runUntil(6.0, 0.05, () -> s.launchTimes.size() == 2));
         assertEquals(2, s.f.volleys());
+    }
+
+    // ---------------- back-off before the gate opens ----------------
+
+    @Test
+    public void stagedBallBacksOffBeforeTheGateOpens() {
+        for (double dt : new double[]{0.02, 0.033, 0.060}) {
+            Sim s = new Sim().preload(4);
+            s.fire = true;
+            s.step(dt);
+            assertEquals(QueueFeeder.State.OPEN_BACKOFF, s.f.state());
+            assertFalse("gate still closed during the back-off", s.f.gateOpen());
+            assertEquals(-BioBuzzConstants.QUEUE_BACKOFF_POWER, s.f.power(), 0);
+            assertTrue("a volley has started", s.f.firing());
+            assertTrue(s.runUntil(1.0, dt, s.f::gateOpen));
+            Collections.sort(s.balls, Collections.reverseOrder());
+            assertTrue("ball 1 clear of the paddle by ~8 mm when it opens (" + s.balls.get(0) + ", dt " + dt + ")",
+                    s.balls.get(0) <= -R - BioBuzzConstants.QUEUE_OPEN_BACKOFF_MM + 0.5);
+            assertFalse("not a time-out\n" + s.log(), s.log().contains("timed out"));
+            double opened = s.t - dt;
+            assertTrue(s.runUntil(1.0, dt, () -> s.f.state() == QueueFeeder.State.FIRING));
+            assertTrue("OPENING still waits gateOpenSec", s.t - dt - opened >= BioBuzzConstants.GATE_OPEN_SEC - 1e-9);
+            assertTrue("EMPTY\n" + s.log(), s.runUntil(3.0, dt, s.f::emptied));
+            assertEquals(4, s.launchTimes.size());
+            assertTrue("ball 1 still counted after backing off: " + s.f.volleyBalls() + "\n" + s.log(),
+                    s.f.volleyBalls() >= 3);
+        }
+    }
+
+    @Test
+    public void noBackOffWhenBallOneIsNotStaged() {
+        Sim s = new Sim();
+        s.balls.add(-200.0);
+        s.fire = true;
+        s.step(0.05);
+        assertTrue("opens directly", s.f.gateOpen());
+        assertEquals(QueueFeeder.State.OPENING, s.f.state());
+        assertFalse(s.log().contains("timed out"));
+    }
+
+    @Test
+    public void fireReleasedDuringTheBackOffNeverOpens() {
+        Sim s = new Sim().preload(2);
+        s.fire = true;
+        s.step(0.02);
+        assertEquals(QueueFeeder.State.OPEN_BACKOFF, s.f.state());
+        s.fire = false;
+        s.step(0.02);
+        assertEquals(QueueFeeder.State.IDLE, s.f.state());
+        assertTrue(s.log(), s.log().contains("FIRE released during the back-off"));
+        s.run(1.0, 0.02);
+        assertFalse(s.f.gateOpen());
+        assertEquals(0, s.closings);
+        assertFalse(s.log().contains("GATE OPEN"));
+    }
+
+    @Test
+    public void backOffTimesOutAndOpensAnyway() {
+        QueueFeeder.Settings st = new QueueFeeder.Settings();
+        st.openBackoffTicks = 1e6;                               // never reached (e.g. the encoder doesn't count)
+        Sim s = new Sim(st).preload(4);
+        s.fire = true;
+        s.step(0.02);
+        double start = s.t - 0.02;
+        assertTrue(s.runUntil(1.0, 0.02, s.f::gateOpen));
+        double took = s.t - 0.02 - start;
+        assertEquals("opens after QUEUE_OPEN_BACKOFF_SEC", BioBuzzConstants.QUEUE_OPEN_BACKOFF_SEC, took, 0.021);
+        assertTrue(s.log(), s.log().contains("OPEN BACK-OFF timed out"));
+        assertTrue(s.runUntil(3.0, 0.02, s.f::emptied));
+        assertEquals(4, s.launchTimes.size());
+    }
+
+    @Test
+    public void openBackoffTicksAreEightMillimetres() {
+        assertEquals(BioBuzzConstants.QUEUE_TICKS_PER_BALL * 8 / 73, BioBuzzConstants.QUEUE_OPEN_BACKOFF_TICKS, 1e-9);
     }
 
     // ---------------- FULL hold (G407 push-back) ----------------

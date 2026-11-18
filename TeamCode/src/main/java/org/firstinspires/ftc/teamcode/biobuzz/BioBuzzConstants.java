@@ -255,6 +255,14 @@ public final class BioBuzzConstants {
     public static final double QUEUE_CLOSE_BACKOFF_TICKS = 1.5 * QUEUE_TICKS_PER_BALL;
     public static final double QUEUE_BACKOFF_POWER = 0.30;
     public static final double QUEUE_CLOSE_BACKOFF_SEC = 1.2;
+    // Opening the gate: the paddle's swing (toward the intake) passes ~5 mm into a ball resting against it between
+    // ~30 and 50 deg (CAD mock run). So with ball 1 staged the queue first backs off QUEUE_OPEN_BACKOFF_MM (at
+    // QUEUE_BACKOFF_POWER, for at most QUEUE_OPEN_BACKOFF_SEC: then it opens anyway, logged), and only then the gate
+    // opens. Ball 1 not staged (the queue was bringing it up): no back-off. CALIBRATE: the paddle must swing clear.
+    public static final double QUEUE_BALL_PITCH_MM = 73;
+    public static final double QUEUE_OPEN_BACKOFF_MM = 8;
+    public static final double QUEUE_OPEN_BACKOFF_TICKS = QUEUE_TICKS_PER_BALL * QUEUE_OPEN_BACKOFF_MM / QUEUE_BALL_PITCH_MM;
+    public static final double QUEUE_OPEN_BACKOFF_SEC = 0.15;
 
     // Gate: goBILDA 2000-0025-0003 in SERVO mode ("gate"): a paddle holds ball 1 when CLOSED. Negative = not
     // calibrated: FIRE is refused (like ARM_DEPLOY_POSITION). CALIBRATE with BioBuzz Calibration (Options = gate jog).
