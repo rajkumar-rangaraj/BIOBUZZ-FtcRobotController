@@ -30,7 +30,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * never ends it, because the open back-off, a retry, JAMMED, an unjam reverse or B can move ball 4 off the beam with
  * all 4 still inside, and FIRE let go keeps it. It ends only on egress (a ball counted out, then carried
  * closeBackoffTicks further with the gate open, {@link #capacityFreed()}; or the volley ending EMPTY) or on the safe
- * re-load reading: gate closed, not firing, the queue pushing forward with ball 1 at beam_staged and beam_full clear
+ * re-load reading: gate closed, not firing, the queue pushing forward with the intake stopped ({@link
+ * #intakeApplied(double)} 0; IntakeGuard stops it and the queue holds forward whenever FULL reads beam_full clear) with
+ * ball 1 at beam_staged and beam_full clear
  * for fullResetSec without a break. {@link #reset()} keeps it. The volley ends on the EMPTY rule instead: beam_staged
  * and beam_full clear for emptyClearSec while the
  * queue runs, and the queue moved emptyFlushTicks since (a ball resting between the beams, where none sees it, would
@@ -99,6 +101,10 @@ public class QueueFeeder {
     private double packStart = Double.NaN;
     private double fullConfirm = 0;
     private double fullResetTime = 0;                           // FULL latch: the safe re-load reading lasted this long
+    private boolean intakeReported = false;                     // intakeApplied() since the last update ...
+    private boolean intakeMoved = false;                        // ... with a non-zero intake power
+    private boolean intakeStill = false;                        // the intake was reported 0 over the interval that just ended
+    private boolean fullBrokenNow = false;                      // beam_full this loop
     private double egressStartTicks = Double.NaN;               // a counted ball not yet carried clear: queue position
     private boolean egressed = false;                           // a ball has left in this volley
     private boolean full = false;
@@ -177,6 +183,10 @@ public class QueueFeeder {
         lastT = t;
         lastPower = power;
         event = null;
+        intakeStill = intakeReported && !intakeMoved;
+        intakeReported = false;
+        intakeMoved = false;
+        fullBrokenNow = fullBroken;
         if (intakeIn) {
             lastIntakeT = t;
         }
@@ -276,9 +286,11 @@ public class QueueFeeder {
             }
             go(State.FULL, t);
             // G407 push-back: the intake reverses (IntakeGuard) for pushbackSec from FULL, then gently while the
-            // intake is still asked IN; hold ball 4 on the belts meanwhile (the closed gate stops balls 1-3).
+            // intake is still asked IN; hold ball 4 on the belts meanwhile (the closed gate stops balls 1-3). With
+            // beam_full clear IntakeGuard stops the intake instead (0, not reverse) and the hold re-packs ball 4: that
+            // is the only state the safe re-load reading counts in (trackFull).
             boolean intakeReversing = t - stateStart < s.pushbackSec || loadingWanted(t);
-            power = !gateOpen && intakeReversing ? s.holdPower : 0;
+            power = !gateOpen && (intakeReversing || !fullBrokenNow) ? s.holdPower : 0;
             return;
         }
         if (!loadingWanted(t)) {
@@ -318,9 +330,10 @@ public class QueueFeeder {
         fullConfirm = 0;
         // G407 latch: beam_full clearing doesn't end FULL (a back-off, a jam reverse or B moves ball 4 off it with all 4
         // still inside). Egress ends it (confirmEgress, EMPTY); otherwise only a safe re-load reading: gate closed, not firing,
-        // the queue pushing forward over the whole interval, ball 1 at beam_staged and beam_full clear, unbroken for
+        // the queue pushing forward and the intake reported stopped (intakeApplied 0: a reversing intake can hold ball 4
+        // off beam_full) over the whole interval, ball 1 at beam_staged and beam_full clear, unbroken for
         // fullResetSec (4 balls would be packed back onto beam_full long before).
-        if (full && !gateOpen && !firing() && lastPower > 0 && stagedBroken) {
+        if (full && !gateOpen && !firing() && lastPower > 0 && intakeStill && stagedBroken) {
             fullResetTime += dt;
             if (fullResetTime >= s.fullResetSec - 1e-9) {
                 releaseFull("re-loaded with beam_full clear for " + s.fullResetSec + " s");
@@ -671,6 +684,16 @@ public class QueueFeeder {
         return state;
     }
 
+    /**
+     * The intake power actually commanded (after IntakeGuard), every loop after IntakeGuard.update. The safe re-load
+     * reading only counts intervals where every report was 0 (a reversing intake can hold ball 4 off beam_full; no
+     * report = not counted).
+     */
+    public void intakeApplied(double intakePower) {
+        intakeReported = true;
+        intakeMoved |= Math.abs(intakePower) > 1e-9;
+    }
+
     public double power() {
         return power;
     }
@@ -682,7 +705,8 @@ public class QueueFeeder {
 
     /**
      * 4 balls held: the intake must not take a 5th (G407). Latched: set by both beams broken while packing, cleared
-     * only when a ball has left ({@link #capacityFreed()}) / EMPTY or by the safe re-load reading (gate closed, queue pushing, beam_full clear for
+     * only when a ball has left ({@link #capacityFreed()}) / EMPTY or by the safe re-load reading (gate closed, queue pushing,
+     * intake stopped, beam_full clear for
      * fullResetSec), never by a back-off, JAMMED, FIRE let go or reset().
      */
     public boolean isFull() {

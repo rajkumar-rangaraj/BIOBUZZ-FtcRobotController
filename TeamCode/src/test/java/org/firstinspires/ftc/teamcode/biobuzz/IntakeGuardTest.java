@@ -79,6 +79,7 @@ public class IntakeGuardTest {
         l.requested = 0;
         l.step();
         l.full = true;
+        l.staged = l.fullBeam = true;
         assertEquals(BioBuzzConstants.QUEUE_FULL_PUSHBACK_POWER, l.step(), 0);
         l.run(BioBuzzConstants.QUEUE_FULL_PUSHBACK_SEC + 0.05);
         assertEquals("FULL, nothing asked: off", 0, l.out, 0);
@@ -127,13 +128,38 @@ public class IntakeGuardTest {
     public void newPulseEachTimeTheQueueBecomesFull() {
         Loop l = new Loop();
         l.full = true;
+        l.staged = l.fullBeam = true;
         l.run(1.0);
         assertEquals(BioBuzzConstants.QUEUE_FULL_INTAKE_POWER, l.out, 0);
         l.full = false;
+        l.staged = l.fullBeam = false;
         l.run(0.5);
         assertEquals(1.0, l.out, 0);
         l.full = true;
+        l.staged = l.fullBeam = true;
         assertEquals(BioBuzzConstants.QUEUE_FULL_PUSHBACK_POWER, l.step(), 0);
+    }
+
+    @Test
+    public void fullWithBeamFullClearStopsTheIntakeInsteadOfReversing() {
+        Loop l = new Loop();
+        l.full = true;
+        l.staged = l.fullBeam = true;
+        assertEquals(BioBuzzConstants.QUEUE_FULL_PUSHBACK_POWER, l.step(), 0);
+        l.fullBeam = false;                                      // the pulse moved ball 4 off beam_full
+        assertEquals("stopped, not reversing: the queue re-packs ball 4", 0, l.step(), 0);
+        assertEquals(IntakeGuard.State.REPACK, l.g.state());
+        l.requested = 0;
+        assertEquals(0, l.step(), 0);
+        l.requested = -1.0;
+        assertEquals("a driver's reverse still passes", -1.0, l.step(), 0);
+        l.requested = 1.0;
+        l.fullBeam = true;                                       // re-packed: the push-back pulse goes on
+        assertEquals(BioBuzzConstants.QUEUE_FULL_PUSHBACK_POWER, l.step(), 0);
+        l.run(1.0);
+        assertEquals("then the gentle reverse", BioBuzzConstants.QUEUE_FULL_INTAKE_POWER, l.out, 0);
+        l.fullBeam = false;
+        assertEquals(0, l.step(), 0);
     }
 
     @Test
@@ -276,6 +302,7 @@ public class IntakeGuardTest {
     public void noJamWatchWhileFullOrDisabled() {
         Loop l = new Loop();
         l.full = true;
+        l.staged = l.fullBeam = true;
         l.amps = JAM_AMPS;
         l.run(2.0);
         assertEquals(0, l.g.tries());

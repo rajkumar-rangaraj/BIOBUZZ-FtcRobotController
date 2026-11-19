@@ -190,6 +190,7 @@ public class BioBuzzTune extends OpMode {
             say(intakeGuard.event());
         }
         robot.setIntake(intake);
+        queue.intakeApplied(intake);                            // the FULL safe re-load reading counts intake 0 only
         double vel = robot.launcherVelocity();
         ballCounter.update(clock.seconds(), queue.firing(), robot.isLauncherOn() ? speed() : 0, vel);
 

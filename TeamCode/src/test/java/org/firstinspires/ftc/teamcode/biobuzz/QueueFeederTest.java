@@ -42,6 +42,9 @@ public class QueueFeederTest {
         double gateSwingSec = 0.10;                              // the real paddle: a bit faster than GATE_OPEN_SEC
         int closings = 0;
         int pendingBalls = 0;                                    // balls the intake will feed in
+        double asked = 1.0;                                      // teleOpIntake: the driver's intake request
+        double intakePower = 0;                                  // intake commanded (after IntakeGuard)
+        boolean reverseHoldsBall4 = false;                       // a reversing intake holds ball 4 off beam_full
         double pushedAtGateSec = 0, longestPushAtGate = 0;       // ball 1 pressed into the closed gate
 
         Sim(QueueFeeder.Settings s) {
@@ -121,6 +124,10 @@ public class QueueFeederTest {
                     nx = Math.max(nx, -600);
                 }
                 balls.set(i, nx);
+            }
+            if (reverseHoldsBall4 && intakePower < 0 && balls.size() >= 4) {
+                int last = balls.size() - 1;                     // the roller beats the hold: ball 4 just off beam_full
+                balls.set(last, Math.min(balls.get(last), FULL_X - beamHalf - 3));
             }
             if (pressing && !gateCmdOpen) {
                 pushedAtGateSec += dt;
@@ -625,13 +632,16 @@ public class QueueFeederTest {
 
     // ---------------- G407: no 5th ball until one has left ----------------
 
-    /** TeleOp's intake: the driver holds IN, the boost only once a ball has left, through IntakeGuard. */
+    /** TeleOp's intake: the driver holds IN, the boost only once a ball has left, through IntakeGuard (reported back). */
     private static double teleOpIntake(Sim s, IntakeGuard g) {
-        double asked = 1.0;
+        double asked = s.asked;
         if (s.fire && s.f.capacityFreed()) {
             asked += BioBuzzConstants.FEED_INTAKE_BOOST;
         }
-        return g.update(s.t, asked, s.f.isFull(), s.f.capacityFreed(), Double.NaN, s.beam(STAGED_X), s.beam(FULL_X));
+        double out = g.update(s.t, asked, s.f.isFull(), s.f.capacityFreed(), Double.NaN, s.beam(STAGED_X), s.beam(FULL_X));
+        s.f.intakeApplied(out);
+        s.intakePower = out;
+        return out;
     }
 
     @Test
@@ -853,6 +863,75 @@ public class QueueFeederTest {
         assertFalse(s.f.gateOpen());
         s.run(0.5, dt);
         assertEquals("room again: pulls in", 1.0, teleOpIntake(s, g), 0);
+    }
+
+    @Test
+    public void reversingIntakeHoldingBall4OffBeamFullKeepsTheLatch() {
+        for (double dt : new double[]{0.02, 0.033, 0.060}) {
+            Sim s = fillToFull(dt);
+            s.reverseHoldsBall4 = true;                          // the push-back / gentle reverse beats the hold
+            IntakeGuard g = IntakeGuard.standard();
+            boolean sawClear = false;
+            for (int i = 0; i < 3.0 / dt; i++) {                 // IN asked: push-back, ball 4 off, intake 0, re-pack
+                stepNoFifthBall(s, g, dt, "IN asked (dt " + dt + ")");
+                sawClear |= !s.beam(FULL_X);
+            }
+            assertTrue("the reverse took ball 4 off beam_full", sawClear);
+            s.asked = -0.5;                                      // the driver reverses: ball 4 held off the whole time
+            double clearFor = 0;
+            for (int i = 0; i < 2.0 / dt; i++) {
+                stepNoFifthBall(s, g, dt, "driver reverse (dt " + dt + ")");
+                clearFor = s.beam(FULL_X) ? 0 : clearFor + dt;
+            }
+            assertTrue("ball 4 off beam_full for > QUEUE_FULL_RESET_SEC (" + clearFor + " s)",
+                    clearFor > BioBuzzConstants.QUEUE_FULL_RESET_SEC);
+            s.asked = 1.0;
+            for (int i = 0; i < 3.0 / dt; i++) {
+                stepNoFifthBall(s, g, dt, "IN again (dt " + dt + ")");
+            }
+            assertFalse(s.log(), s.log().contains("FULL cleared"));
+        }
+    }
+
+    @Test
+    public void ballRemovedReleasesTheLatchWithTheIntakeStoppedAndTheQueueHolding() {
+        for (double dt : new double[]{0.02, 0.033, 0.060}) {
+            Sim s = fillToFull(dt);
+            s.reverseHoldsBall4 = true;
+            IntakeGuard g = IntakeGuard.standard();
+            for (int i = 0; i < 1.0 / dt || !s.beam(FULL_X); i++) {
+                assertTrue("re-packed", i < 5.0 / dt);
+                stepNoFifthBall(s, g, dt, "packed");
+            }
+            assertTrue(s.beam(FULL_X));
+            Collections.sort(s.balls, Collections.reverseOrder());
+            s.balls.remove(3);                                   // ball 4 taken out by hand: 3 left, still latched
+            s.step(dt);
+            assertEquals(0, teleOpIntake(s, g), 0);
+            s.asked = -0.5;                                      // one reverse loop restarts the reading
+            s.step(dt);
+            assertTrue(teleOpIntake(s, g) < 0);
+            s.asked = 1.0;
+            double start = s.t;
+            while (s.f.isFull()) {
+                assertTrue("released\n" + s.log(), s.t < start + 5);
+                s.step(dt);
+                double in = teleOpIntake(s, g);
+                if (s.f.isFull()) {
+                    assertEquals("FULL, beam_full clear: intake stopped", 0, in, 0);
+                    assertEquals(IntakeGuard.State.REPACK, g.state());
+                    assertEquals("queue holds forward", BioBuzzConstants.QUEUE_HOLD_POWER, s.f.power(), 0);
+                    assertFalse(s.f.gateOpen());
+                }
+            }
+            double took = s.t - start;
+            assertTrue("only after QUEUE_FULL_RESET_SEC of intake 0 (" + took + " s, dt " + dt + ")",
+                    took >= BioBuzzConstants.QUEUE_FULL_RESET_SEC - 1e-9
+                            && took <= BioBuzzConstants.QUEUE_FULL_RESET_SEC + 3 * dt + 1e-9);
+            assertTrue(s.log(), s.log().contains("FULL cleared (re-loaded"));
+            s.run(0.5, dt);
+            assertEquals("room again: pulls in", 1.0, teleOpIntake(s, g), 0);
+        }
     }
 
     @Test

@@ -8,7 +8,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * QueueFeeder.capacityFreed()) the intake reverses at pushbackPower for
  * pushbackSec (a 5th ball goes back out), then, while FULL and intake IN is still asked for, runs at fullPower (a
  * gentle reverse: a 5th ball is never pulled in). A reverse asked for passes through. QueueFeeder holds ball 4 on the
- * belts meanwhile. Both beams broken while not confirmed FULL (and no ball out yet) (a ball crossing ball 4's spot on its way up) only
+ * belts meanwhile. Both only while beam_full is broken: FULL with beam_full clear stops the intake (0, not reverse;
+ * a reverse asked for still passes) so the queue re-packs ball 4 and its safe re-load reading only counts with the
+ * intake stopped (report this method's result to QueueFeeder.intakeApplied()). Both beams broken while not confirmed FULL (and no ball out yet) (a ball crossing ball 4's spot on its way up) only
  * pauses an IN request (power 0), as before.
  * <p>
  * PAIR JAM: two balls side by side can wedge in the funnel mouth. While intake IN is asked for and the queue is not
@@ -19,7 +21,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  */
 public class IntakeGuard {
 
-    public enum State { NORMAL, CROSSING, PUSHBACK, FULL, UNJAM, GAVE_UP }
+    public enum State { NORMAL, CROSSING, PUSHBACK, FULL, REPACK, UNJAM, GAVE_UP }
 
     /** Tunables (defaults from BioBuzzConstants); tests change single fields. */
     public static final class Settings {
@@ -101,6 +103,12 @@ public class IntakeGuard {
             watching = false;
             overSince = Double.NaN;
             unjamUntil = Double.NEGATIVE_INFINITY;
+            if (!fullBroken && requested >= 0) {
+                // Ball 4 off beam_full: stop, don't reverse, so the queue's hold re-packs it and QueueFeeder's safe
+                // re-load reading (intake 0 only) can't be fooled by the reverse holding ball 4 back (G407)
+                state = State.REPACK;
+                return 0;
+            }
             if (t < pushbackUntil - 1e-9) {
                 state = State.PUSHBACK;
                 return Math.min(requested, s.pushbackPower);
@@ -199,6 +207,8 @@ public class IntakeGuard {
                 return "PUSH-BACK (FULL, G407)";
             case FULL:
                 return "FULL: no 5th ball (gentle reverse)";
+            case REPACK:
+                return "FULL: intake stopped, queue re-packs ball 4";
             case CROSSING:
                 return "paused (ball crossing beam_full)";
             case UNJAM:

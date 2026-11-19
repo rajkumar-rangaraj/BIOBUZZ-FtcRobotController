@@ -548,6 +548,7 @@ public class BioBuzzTeleOp extends OpMode {
             }
         }
         robot.setIntake(intakePower);
+        queue.intakeApplied(intakePower);                       // the FULL safe re-load reading counts intake 0 only
         if (gamepad1.b != lastUnjam) {
             diag.event(gamepad1.b ? "UNJAM_PRESS" : "UNJAM_RELEASE", "indexer ticks " + indexerTicks);
             lastUnjam = gamepad1.b;

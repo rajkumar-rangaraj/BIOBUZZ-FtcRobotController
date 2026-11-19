@@ -689,7 +689,9 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
         // In a volley the feed boost waits until a ball has left (back-off, gate opening: 4 may still be held, G407)
         double wanted = queue.firing() && !queue.capacityFreed() ? Math.min(intakeWanted, 0) : intakeWanted;
         double amps = intakeGuard.currentDue(t, wanted) ? robot.intakeCurrentAmps() : Double.NaN;
-        robot.setIntake(intakeGuard.update(t, wanted, queue.isFull(), queue.capacityFreed(), amps, staged, fullBeam));
+        double out = intakeGuard.update(t, wanted, queue.isFull(), queue.capacityFreed(), amps, staged, fullBeam);
+        robot.setIntake(out);
+        queue.intakeApplied(out);                               // the FULL safe re-load reading counts intake 0 only
         if (intakeGuard.event() != null && log != null) {
             log.row(t, "EVENT", "INTAKE " + intakeGuard.event());
         }
