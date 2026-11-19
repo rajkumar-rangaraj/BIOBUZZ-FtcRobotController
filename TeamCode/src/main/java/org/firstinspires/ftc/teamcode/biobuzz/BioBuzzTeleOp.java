@@ -535,7 +535,7 @@ public class BioBuzzTeleOp extends OpMode {
         }
         // G407: never take a 5th ball. FULL = 4 held (QueueFeeder): push-back pulse, then a gentle reverse; both beams
         // broken pauses an IN request (a ball crossing ball 4's spot; the queue carries it up). Both stay on in a volley
-        // until a ball has been counted out. Not FULL: the pair-jam watch on the intake current (IntakeGuard)
+        // until a ball has left (FULL is a latch). Not FULL: the pair-jam watch on the intake current (IntakeGuard)
         boolean queueFull = !freed && (queue.isFull() || (staged && fullBeam));
         double intakeT = matchTimer.seconds();
         double intakeAmps = intakeGuard.currentDue(intakeT, intakePower) ? robot.intakeCurrentAmps() : Double.NaN;

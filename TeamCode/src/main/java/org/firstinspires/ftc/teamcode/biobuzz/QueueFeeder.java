@@ -26,9 +26,13 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * Balls are counted from beam_staged broken -> clear edges after the gate opened (debounced by queue travel: the queue
  * must move beamMinRunTicks while the beam is broken, so a ball flickering at the beam's edge while the queue stands
  * never counts). Touching balls can keep the beam broken, so the count can be low; it is never estimated from time or
- * the encoder. A FULL queue stays FULL (G407: IntakeGuard keeps the push-back and the intake boost waits) until a
- * ball has been counted out in the volley ({@link #capacityFreed()}), not merely when the volley starts. The volley
- * ends on the EMPTY rule instead: beam_staged and beam_full clear for emptyClearSec while the
+ * the encoder. FULL is a latch (G407: IntakeGuard keeps the push-back and the intake boost waits): beam_full clearing
+ * never ends it, because the open back-off, a retry, JAMMED, an unjam reverse or B can move ball 4 off the beam with
+ * all 4 still inside, and FIRE let go keeps it. It ends only on egress (a ball counted out, then carried
+ * closeBackoffTicks further with the gate open, {@link #capacityFreed()}; or the volley ending EMPTY) or on the safe
+ * re-load reading: gate closed, not firing, the queue pushing forward with ball 1 at beam_staged and beam_full clear
+ * for fullResetSec without a break. {@link #reset()} keeps it. The volley ends on the EMPTY rule instead: beam_staged
+ * and beam_full clear for emptyClearSec while the
  * queue runs, and the queue moved emptyFlushTicks since (a ball resting between the beams, where none sees it, would
  * break beam_staged within that travel; the last ball reaches the flywheel).
  * <p>
@@ -73,6 +77,7 @@ public class QueueFeeder {
         public double packOffSec = BioBuzzConstants.QUEUE_PACK_OFF_SEC;
         public double loadLingerSec = BioBuzzConstants.QUEUE_LOAD_LINGER_SEC;
         public double fullConfirmSec = BioBuzzConstants.QUEUE_FULL_CONFIRM_SEC;
+        public double fullResetSec = BioBuzzConstants.QUEUE_FULL_RESET_SEC;
         public double holdPower = BioBuzzConstants.QUEUE_HOLD_POWER;
         public double pushbackSec = BioBuzzConstants.QUEUE_FULL_PUSHBACK_SEC;
         /** False = GATE_OPEN / GATE_CLOSED not calibrated: FIRE is refused. */
@@ -93,7 +98,9 @@ public class QueueFeeder {
     private double lastIntakeT = Double.NEGATIVE_INFINITY;
     private double packStart = Double.NaN;
     private double fullConfirm = 0;
-    private int notFullReadings = 0;
+    private double fullResetTime = 0;                           // FULL latch: the safe re-load reading lasted this long
+    private double egressStartTicks = Double.NaN;               // a counted ball not yet carried clear: queue position
+    private boolean egressed = false;                           // a ball has left in this volley
     private boolean full = false;
     private boolean refusedReported = false;
 
@@ -174,6 +181,7 @@ public class QueueFeeder {
             lastIntakeT = t;
         }
         countBalls(stagedBroken, queueTicks);
+        confirmEgress(queueTicks);
         trackFull(dt, stagedBroken, fullBroken);
         if (!wantFire) {
             refusedReported = false;
@@ -298,19 +306,57 @@ public class QueueFeeder {
 
     private void trackFull(double dt, boolean stagedBroken, boolean fullBroken) {
         if (stagedBroken && fullBroken) {
-            notFullReadings = 0;
+            fullResetTime = 0;
             if (lastPower > 0) {
                 fullConfirm += dt;
             }
             if (!full && fullConfirm >= s.fullConfirmSec) {
                 full = true;
             }
-        } else {
-            fullConfirm = 0;
-            // One odd reading doesn't end FULL; nor does a volley until a ball has really left (G407)
-            if (++notFullReadings >= 2 && !(firing() && !capacityFreed())) {
-                full = false;
+            return;
+        }
+        fullConfirm = 0;
+        // G407 latch: beam_full clearing doesn't end FULL (a back-off, a jam reverse or B moves ball 4 off it with all 4
+        // still inside). Egress ends it (confirmEgress, EMPTY); otherwise only a safe re-load reading: gate closed, not firing,
+        // the queue pushing forward over the whole interval, ball 1 at beam_staged and beam_full clear, unbroken for
+        // fullResetSec (4 balls would be packed back onto beam_full long before).
+        if (full && !gateOpen && !firing() && lastPower > 0 && stagedBroken) {
+            fullResetTime += dt;
+            if (fullResetTime >= s.fullResetSec - 1e-9) {
+                releaseFull("re-loaded with beam_full clear for " + s.fullResetSec + " s");
             }
+        } else {
+            fullResetTime = 0;
+        }
+    }
+
+    /** Ends the FULL latch (G407): confirmed egress or the safe re-load reading. */
+    private void releaseFull(String why) {
+        if (full) {
+            addEvent("FULL cleared (" + why + ")");
+        }
+        full = false;
+        fullConfirm = 0;
+        fullResetTime = 0;
+    }
+
+    /**
+     * Egress (G407): a counted ball is only gone once the queue has carried it closeBackoffTicks further with the gate
+     * open (net: an unjam reverse takes travel back). Closer than that, the closing back-off (FIRE let go) brings it
+     * back past beam_staged; the gate closing first drops the pending ball.
+     */
+    private void confirmEgress(int queueTicks) {
+        if (Double.isNaN(egressStartTicks)) {
+            return;
+        }
+        if (!gateOpen) {
+            egressStartTicks = Double.NaN;
+            return;
+        }
+        if (queueTicks - egressStartTicks >= s.closeBackoffTicks) {
+            egressStartTicks = Double.NaN;
+            egressed = true;
+            releaseFull("a ball left");
         }
     }
 
@@ -331,6 +377,8 @@ public class QueueFeeder {
     private void startVolley(double t) {
         volleys++;
         volleyBalls = 0;
+        egressed = false;
+        egressStartTicks = Double.NaN;
         jamsInRow = 0;
         emptied = false;
         holding = false;
@@ -458,6 +506,7 @@ public class QueueFeeder {
             power = 0;
             emptied = true;
             addEvent("EMPTY after " + volleyBalls + " balls counted");
+            releaseFull("volley EMPTY");
             beginClosing(t, State.EMPTY);
             return;
         }
@@ -515,6 +564,9 @@ public class QueueFeeder {
                 volleyBalls++;
                 jamsInRow = 0;
                 addEvent("BALL " + volleyBalls + " (beam_staged cleared)");
+                if (Double.isNaN(egressStartTicks)) {
+                    egressStartTicks = queueTicks;              // gone once carried closeBackoffTicks further
+                }
             }
             inRun = false;
         }
@@ -600,7 +652,7 @@ public class QueueFeeder {
 
     /**
      * Forget jams and stop (the driver's manual unjam). An open gate is closed the safe way on the next updates
-     * (queue stopped, beam_staged clear).
+     * (queue stopped, beam_staged clear). FULL stays latched: the balls are still inside (G407).
      */
     public void reset() {
         jams = 0;
@@ -628,7 +680,11 @@ public class QueueFeeder {
         return gateOpen;
     }
 
-    /** 4 balls held (both beams broken, packed): the intake must not take a 5th (G407). */
+    /**
+     * 4 balls held: the intake must not take a 5th (G407). Latched: set by both beams broken while packing, cleared
+     * only when a ball has left ({@link #capacityFreed()}) / EMPTY or by the safe re-load reading (gate closed, queue pushing, beam_full clear for
+     * fullResetSec), never by a back-off, JAMMED, FIRE let go or reset().
+     */
     public boolean isFull() {
         return full;
     }
@@ -644,12 +700,13 @@ public class QueueFeeder {
     }
 
     /**
-     * A ball has been counted out in this volley (and it is still feeding): only now is there room for another. Until
-     * then (back-off, gate opening, a flywheel-dip hold before the first ball) 4 can still be held: IntakeGuard keeps
+     * A ball has left in this volley (counted out at beam_staged, then carried closeBackoffTicks further with the gate
+     * open, so letting FIRE go can't pull it back) and it is still feeding: only now is there room for another. Until
+     * then (back-off, gate opening, a flywheel-dip hold, a ball just counted) 4 can still be held: IntakeGuard keeps
      * the FULL push-back and the two-beam pause, and the intake boost waits (G407).
      */
     public boolean capacityFreed() {
-        return firing() && volleyBalls > 0;
+        return firing() && egressed;
     }
 
     /** Stopped mid-volley: the flywheel dipped too deep. */

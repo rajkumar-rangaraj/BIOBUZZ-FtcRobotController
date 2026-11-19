@@ -3,8 +3,9 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 /**
  * Indexer v2: the intake power after the G407 cap and the pair-jam unjam (TeleOp, Tune and the Pedro AUTO share it).
  * <p>
- * G407 SAFE PUSH-BACK: when the queue becomes FULL (QueueFeeder; a volley only lifts this once a ball has been counted
- * out, QueueFeeder.capacityFreed(), not when it starts: back-off, gate opening, a flywheel-dip hold) the intake reverses at pushbackPower for
+ * G407 SAFE PUSH-BACK: when the queue becomes FULL (QueueFeeder.isFull(), a latch: only a ball that has left or the
+ * safe re-load reading ends it, not a back-off, JAMMED, FIRE let go or B; a volley lifts the cap here once a ball has left,
+ * QueueFeeder.capacityFreed()) the intake reverses at pushbackPower for
  * pushbackSec (a 5th ball goes back out), then, while FULL and intake IN is still asked for, runs at fullPower (a
  * gentle reverse: a 5th ball is never pulled in). A reverse asked for passes through. QueueFeeder holds ball 4 on the
  * belts meanwhile. Both beams broken while not confirmed FULL (and no ball out yet) (a ball crossing ball 4's spot on its way up) only

@@ -684,6 +684,177 @@ public class QueueFeederTest {
         assertEquals(1.0 + BioBuzzConstants.FEED_INTAKE_BOOST, teleOpIntake(s, g), 0);
     }
 
+    // ---------------- G407: the FULL latch outside a volley ----------------
+
+    /** One loop with the G407 checks: 4 still inside, so FULL and the intake never pulls in. */
+    private static void stepNoFifthBall(Sim s, IntakeGuard g, double dt, String what) {
+        s.step(dt);
+        double in = teleOpIntake(s, g);
+        assertEquals(what + ": all 4 inside", 4, s.balls.size());
+        assertTrue(what + ": still FULL (" + s.f.state() + ", t " + s.t + ")\n" + s.log(), s.f.isFull());
+        assertTrue(what + ": no 5th ball (" + s.f.state() + ", intake " + in + ")", in <= 0);
+    }
+
+    @Test
+    public void partialBackOffThenJammedKeepsFull() {
+        for (double dt : new double[]{0.02, 0.060}) {
+            QueueFeeder.Settings st = new QueueFeeder.Settings();
+            st.openBackoffTicks = 1e6;                           // never reached: the queue backs off partly, twice
+            Sim s = fillToFull(dt, st);
+            IntakeGuard g = IntakeGuard.standard();
+            s.run(0.5, dt);
+            s.fire = true;
+            boolean sawFullClear = false;
+            while (s.f.state() != QueueFeeder.State.JAMMED) {
+                assertTrue("JAMMED\n" + s.log(), s.t < 30);
+                stepNoFifthBall(s, g, dt, "back-off");
+                sawFullClear |= !s.beam(FULL_X);
+            }
+            assertTrue("the back-off moved ball 4 off beam_full", sawFullClear);
+            for (int i = 0; i < 20; i++) {
+                stepNoFifthBall(s, g, dt, "JAMMED");
+                assertEquals(QueueFeeder.State.JAMMED, s.f.state());
+            }
+            s.fire = false;                                      // the driver lets FIRE go, still asks IN
+            for (int i = 0; i < 3.0 / dt; i++) {
+                stepNoFifthBall(s, g, dt, "after JAMMED");
+                assertFalse(s.f.gateOpen());
+            }
+            assertTrue("re-packed onto beam_full", s.beam(FULL_X));
+            assertFalse(s.log().contains("FULL cleared"));
+        }
+    }
+
+    @Test
+    public void fireReleasedDuringBackOffKeepsFull() {
+        double dt = 0.02;
+        QueueFeeder.Settings st = new QueueFeeder.Settings();
+        st.openBackoffTicks = TICKS_PER_MM * 40;                 // far enough to take ball 4 off beam_full
+        st.openBackoffSec = 1.0;
+        Sim s = fillToFull(dt, st);
+        IntakeGuard g = IntakeGuard.standard();
+        s.run(0.5, dt);
+        s.fire = true;
+        while (s.beam(FULL_X)) {
+            assertTrue(s.t < 30);
+            stepNoFifthBall(s, g, dt, "back-off");
+        }
+        assertEquals(QueueFeeder.State.OPEN_BACKOFF, s.f.state());
+        s.fire = false;
+        stepNoFifthBall(s, g, dt, "FIRE released");
+        assertTrue(s.log(), s.log().contains("FIRE released during the back-off"));
+        assertFalse("not firing any more", s.f.firing());
+        for (int i = 0; i < 2.0 / dt; i++) {
+            stepNoFifthBall(s, g, dt, "after the release");
+        }
+        s.intake = false;                                        // intake let go: the queue stops, the latch stays
+        for (int i = 0; i < 2.0 / dt; i++) {
+            stepNoFifthBall(s, g, dt, "intake let go");
+        }
+        assertFalse(s.f.gateOpen());
+        assertEquals(0, s.closings);
+    }
+
+    @Test
+    public void manualResetAndUnjamKeepFull() {
+        double dt = 0.033;
+        QueueFeeder.Settings st = new QueueFeeder.Settings();
+        st.openBackoffTicks = 1e6;
+        Sim s = fillToFull(dt, st);
+        IntakeGuard g = IntakeGuard.standard();
+        s.fire = true;
+        assertTrue(s.runUntil(1.0, dt, () -> s.f.state() == QueueFeeder.State.JAMMED));
+        assertTrue(s.f.isFull());
+        s.fire = false;
+        // TeleOp B held: reset() every loop and the queue reversed at the unjam power (no update meanwhile)
+        for (int i = 0; i < 0.5 / dt; i++) {
+            s.f.reset();
+            double v = -BioBuzzConstants.QUEUE_UNJAM_POWER * VMAX * dt;
+            for (int b = 0; b < s.balls.size(); b++) {
+                s.balls.set(b, s.balls.get(b) + v);
+            }
+            s.ticks += v * TICKS_PER_MM;
+            s.t += dt;
+            assertTrue("B: still FULL", s.f.isFull());
+            assertTrue("B: no 5th ball", teleOpIntake(s, g) <= 0);
+        }
+        assertFalse("unjam moved ball 4 off beam_full", s.beam(FULL_X));
+        assertEquals(QueueFeeder.State.IDLE, s.f.state());
+        s.fire = false;                                          // B let go, the driver asks IN
+        for (int i = 0; i < 3.0 / dt; i++) {
+            stepNoFifthBall(s, g, dt, "after B");
+        }
+    }
+
+    @Test
+    public void ballThatLeftReleasesTheFullLatch() {
+        for (double dt : new double[]{0.02, 0.033, 0.060}) {
+            Sim s = fillToFull(dt);
+            IntakeGuard g = IntakeGuard.standard();
+            s.fire = true;
+            while (s.f.isFull()) {
+                assertTrue("a ball left\n" + s.log(), s.t < 30);
+                s.step(dt);
+                if (s.f.isFull()) {
+                    assertFalse(s.f.capacityFreed());
+                    assertTrue(teleOpIntake(s, g) <= 0);
+                }
+            }
+            assertTrue(s.f.volleyBalls() >= 1);
+            assertTrue("egress: the ball reached the flywheel (dt " + dt + ")", s.launchTimes.size() >= 1);
+            assertTrue(s.log(), s.log().contains("FULL cleared (a ball left)"));
+            assertTrue(s.f.capacityFreed());
+            assertEquals(1.0 + BioBuzzConstants.FEED_INTAKE_BOOST, teleOpIntake(s, g), 0);
+            s.fire = false;                                      // let go: fewer than 4 left, room again
+            assertTrue(s.f.state() + "\n" + s.log(), s.runUntil(3.0, dt,
+                    () -> s.f.state() == QueueFeeder.State.LOADING || s.f.state() == QueueFeeder.State.IDLE));
+            assertTrue(s.balls.size() < 4);
+            s.run(1.0, dt);
+            assertFalse(s.f.isFull());
+            assertEquals("not FULL, intake asked IN: pulls in", 1.0, teleOpIntake(s, g), 0);
+        }
+    }
+
+    @Test
+    public void fireReleasedRightAfterACountKeepsFull() {
+        double dt = 0.02;
+        Sim s = fillToFull(dt);
+        IntakeGuard g = IntakeGuard.standard();
+        s.fire = true;
+        assertTrue(s.log(), s.runUntil(3.0, dt, () -> s.f.volleyBalls() >= 1));
+        assertTrue("counted but not gone yet", s.f.isFull() && !s.f.capacityFreed());
+        assertTrue(teleOpIntake(s, g) <= 0);
+        s.fire = false;                                          // the closing back-off brings ball 1 back
+        for (int i = 0; i < 3.0 / dt; i++) {
+            stepNoFifthBall(s, g, dt, "released after a count");
+        }
+        assertFalse(s.f.gateOpen());
+        assertEquals(0, s.launchTimes.size());
+    }
+
+    @Test
+    public void safeReloadReadingReleasesTheFullLatch() {
+        double dt = 0.05;
+        Sim s = fillToFull(dt);
+        IntakeGuard g = IntakeGuard.standard();
+        s.run(0.5, dt);
+        Collections.sort(s.balls, Collections.reverseOrder());
+        s.balls.remove(3);                                       // ball 4 taken out by hand: 3 left, still latched
+        double start = s.t;
+        while (s.f.isFull()) {
+            assertTrue("released\n" + s.log(), s.t < 30);
+            assertEquals(QueueFeeder.State.FULL, s.f.state());
+            assertTrue("no 5th ball while latched", teleOpIntake(s, g) <= 0);
+            s.step(dt);
+        }
+        assertTrue("only after QUEUE_FULL_RESET_SEC (" + (s.t - start) + " s)",
+                s.t - start >= BioBuzzConstants.QUEUE_FULL_RESET_SEC - 1e-9);
+        assertTrue(s.log(), s.log().contains("FULL cleared (re-loaded"));
+        assertFalse(s.f.gateOpen());
+        s.run(0.5, dt);
+        assertEquals("room again: pulls in", 1.0, teleOpIntake(s, g), 0);
+    }
+
     @Test
     public void openBackoffTicksAreEightMillimetres() {
         assertEquals(BioBuzzConstants.QUEUE_TICKS_PER_BALL * 8 / 73, BioBuzzConstants.QUEUE_OPEN_BACKOFF_TICKS, 1e-9);
@@ -692,7 +863,11 @@ public class QueueFeederTest {
     // ---------------- FULL hold (G407 push-back) ----------------
 
     private static Sim fillToFull(double dt) {
-        Sim s = new Sim();
+        return fillToFull(dt, new QueueFeeder.Settings());
+    }
+
+    private static Sim fillToFull(double dt, QueueFeeder.Settings st) {
+        Sim s = new Sim(st);
         s.pendingBalls = 4;
         s.intake = true;
         assertTrue("FULL\n" + s.log(), s.runUntil(20.0, dt, s.f::isFull));

@@ -213,6 +213,12 @@ public final class BioBuzzConstants {
     // FULL (4 held, G407): both beams broken while the queue pushes forward for this long (a ball only passing the
     // beam_full spot moves off it sooner).
     public static final double QUEUE_FULL_CONFIRM_SEC = 0.5;
+    // FULL is a latch (G407): a back-off, a jam reverse or B can move ball 4 off beam_full with all 4 still inside, so
+    // the beams alone never end it. It ends only when a ball has left (counted out, then carried
+    // QUEUE_CLOSE_BACKOFF_TICKS further with the gate open) or the volley ends EMPTY, or when, with
+    // the gate closed and not firing, the queue pushes forward with ball 1 at beam_staged and beam_full clear for this
+    // long without a break (4 balls would be packed back onto beam_full within ~0.1 s at QUEUE_HOLD_POWER).
+    public static final double QUEUE_FULL_RESET_SEC = 1.0;
     // Safe push-back (G407, IntakeGuard; TeleOp, Tune, AUTO): when the queue becomes FULL (not firing) the intake runs
     // in reverse at QUEUE_FULL_PUSHBACK_POWER for QUEUE_FULL_PUSHBACK_SEC (pushes a 5th ball back out), then, while
     // FULL and the driver / AUTO still asks for intake IN, at QUEUE_FULL_INTAKE_POWER (gentle reverse: a 5th ball is
