@@ -528,16 +528,18 @@ public class BioBuzzTeleOp extends OpMode {
         }
         robot.setGateOpen(queue.gateOpen());
         boolean feeding = queue.firing();
-        if (fire && (feeding || !aimHold)) {                    // helps ball 4 into the lane; not while the aim holds
+        boolean freed = queue.capacityFreed();                  // a ball has left this volley: room for another
+        // Helps ball 4 into the lane; not while the aim holds, and in a volley only once a ball has left (G407)
+        if (fire && (feeding ? freed : !aimHold)) {
             intakePower = Math.max(intakePower, 0) + FEED_INTAKE_BOOST;
         }
         // G407: never take a 5th ball. FULL = 4 held (QueueFeeder): push-back pulse, then a gentle reverse; both beams
-        // broken while not firing pauses an IN request (a ball crossing ball 4's spot; the queue carries it up). Not FULL:
-        // the pair-jam watch on the intake current (IntakeGuard)
-        boolean queueFull = !feeding && (queue.isFull() || (staged && fullBeam));
+        // broken pauses an IN request (a ball crossing ball 4's spot; the queue carries it up). Both stay on in a volley
+        // until a ball has been counted out. Not FULL: the pair-jam watch on the intake current (IntakeGuard)
+        boolean queueFull = !freed && (queue.isFull() || (staged && fullBeam));
         double intakeT = matchTimer.seconds();
         double intakeAmps = intakeGuard.currentDue(intakeT, intakePower) ? robot.intakeCurrentAmps() : Double.NaN;
-        intakePower = intakeGuard.update(intakeT, intakePower, queue.isFull(), feeding, intakeAmps, staged, fullBeam);
+        intakePower = intakeGuard.update(intakeT, intakePower, queue.isFull(), freed, intakeAmps, staged, fullBeam);
         if (intakeGuard.event() != null) {
             diag.event("INTAKE", intakeGuard.event() + (Double.isNaN(intakeAmps) ? "" : String.format(" | %.2f A", intakeAmps)));
             if (intakeGuard.gaveUp()) {

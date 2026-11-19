@@ -3,10 +3,11 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 /**
  * Indexer v2: the intake power after the G407 cap and the pair-jam unjam (TeleOp, Tune and the Pedro AUTO share it).
  * <p>
- * G407 SAFE PUSH-BACK: when the queue becomes FULL (QueueFeeder, not firing) the intake reverses at pushbackPower for
+ * G407 SAFE PUSH-BACK: when the queue becomes FULL (QueueFeeder; a volley only lifts this once a ball has been counted
+ * out, QueueFeeder.capacityFreed(), not when it starts: back-off, gate opening, a flywheel-dip hold) the intake reverses at pushbackPower for
  * pushbackSec (a 5th ball goes back out), then, while FULL and intake IN is still asked for, runs at fullPower (a
  * gentle reverse: a 5th ball is never pulled in). A reverse asked for passes through. QueueFeeder holds ball 4 on the
- * belts meanwhile. Both beams broken while not confirmed FULL (a ball crossing ball 4's spot on its way up) only
+ * belts meanwhile. Both beams broken while not confirmed FULL (and no ball out yet) (a ball crossing ball 4's spot on its way up) only
  * pauses an IN request (power 0), as before.
  * <p>
  * PAIR JAM: two balls side by side can wedge in the funnel mouth. While intake IN is asked for and the queue is not
@@ -68,13 +69,14 @@ public class IntakeGuard {
      * @param t            seconds, monotonic
      * @param requested    intake power the driver / AUTO asks for (positive = in)
      * @param queueFull    QueueFeeder.isFull() (4 held)
-     * @param firing       QueueFeeder.firing() (the cap and the push-back don't apply)
+     * @param capacityFreed QueueFeeder.capacityFreed(): a ball has left this volley (the cap, the push-back and the
+     *                     two-beam pause don't apply)
      * @param amps         intake current (A), NaN = not read this loop
      * @param stagedBroken beam_staged broken
      * @param fullBroken   beam_full broken
      * @return intake power for this loop
      */
-    public double update(double t, double requested, boolean queueFull, boolean firing, double amps,
+    public double update(double t, double requested, boolean queueFull, boolean capacityFreed, double amps,
                          boolean stagedBroken, boolean fullBroken) {
         event = null;
         boolean beamsChanged = stagedBroken != lastStaged || fullBroken != lastFull;
@@ -85,7 +87,7 @@ public class IntakeGuard {
             lastAmpsT = t;
         }
 
-        boolean full = queueFull && !firing;
+        boolean full = queueFull && !capacityFreed;
         if (full && !wasFull) {
             pushbackUntil = t + s.pushbackSec;
             addEvent("PUSH-BACK (FULL: intake reverses " + s.pushbackSec + " s)");
@@ -106,7 +108,7 @@ public class IntakeGuard {
             return requested > 0 ? s.fullPower : requested;
         }
         pushbackUntil = Double.NEGATIVE_INFINITY;
-        if (!firing && stagedBroken && fullBroken) {             // a ball crossing ball 4's spot: pause
+        if (!capacityFreed && stagedBroken && fullBroken) {             // a ball crossing ball 4's spot: pause
             watching = false;
             overSince = Double.NaN;
             unjamUntil = Double.NEGATIVE_INFINITY;

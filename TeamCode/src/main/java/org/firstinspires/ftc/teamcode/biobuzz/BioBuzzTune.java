@@ -180,12 +180,12 @@ public class BioBuzzTune extends OpMode {
             }
         }
         robot.setGateOpen(queue.gateOpen());
-        if (fire && queue.firing()) {
+        if (fire && queue.capacityFreed()) {                    // only once a ball has left the volley (G407)
             intake = Math.max(intake, 0) + FEED_INTAKE_BOOST;
         }
         double t = clock.seconds();                             // G407 push-back + pair-jam unjam (IntakeGuard)
         double intakeAmps = intakeGuard.currentDue(t, intake) ? robot.intakeCurrentAmps() : Double.NaN;
-        intake = intakeGuard.update(t, intake, queue.isFull(), queue.firing(), intakeAmps, staged, fullBeam);
+        intake = intakeGuard.update(t, intake, queue.isFull(), queue.capacityFreed(), intakeAmps, staged, fullBeam);
         if (intakeGuard.event() != null) {
             say(intakeGuard.event());
         }

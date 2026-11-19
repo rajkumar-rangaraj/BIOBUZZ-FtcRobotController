@@ -18,14 +18,17 @@ package org.firstinspires.ftc.teamcode.biobuzz;
  * ball 4 with holdPower forward (gate closed only: the gate stops balls 1-3).
  * <p>
  * FIRE: wait for the flywheel to be ready ONCE (and the aim, TeleOp); with ball 1 staged against the paddle, first back
- * the queue off openBackoffTicks (the paddle's swing passes ~5 mm into a resting ball; at most openBackoffSec, then it
- * opens anyway); open the gate, wait gateOpenSec, then run the
+ * the queue off openBackoffTicks (the paddle's swing passes ~5 mm into a resting ball). If it hasn't backed off that far
+ * in openBackoffSec the gate stays CLOSED: the queue stops for a loop and tries the back-off once more; a second miss
+ * = JAMMED (gate closed; let FIRE go / B to clear). Then open the gate, wait gateOpenSec, then run the
  * queue at firePower. No per-ball pause: the loop is 33-76 ms, so the spacing comes from the queue speed. The queue
  * only HOLDS (power 0) when the flywheel dips too deep (flywheelDipTooDeep) and resumes when it is ready again.
  * Balls are counted from beam_staged broken -> clear edges after the gate opened (debounced by queue travel: the queue
  * must move beamMinRunTicks while the beam is broken, so a ball flickering at the beam's edge while the queue stands
  * never counts). Touching balls can keep the beam broken, so the count can be low; it is never estimated from time or
- * the encoder. The volley ends on the EMPTY rule instead: beam_staged and beam_full clear for emptyClearSec while the
+ * the encoder. A FULL queue stays FULL (G407: IntakeGuard keeps the push-back and the intake boost waits) until a
+ * ball has been counted out in the volley ({@link #capacityFreed()}), not merely when the volley starts. The volley
+ * ends on the EMPTY rule instead: beam_staged and beam_full clear for emptyClearSec while the
  * queue runs, and the queue moved emptyFlushTicks since (a ball resting between the beams, where none sees it, would
  * break beam_staged within that travel; the last ball reaches the flywheel).
  * <p>
@@ -108,6 +111,7 @@ public class QueueFeeder {
     private double closeStart = 0;
     private double backoffStartTicks = Double.NaN;              // closing: queue position when the back-off began
     private double openBackoffStartTicks = 0;                   // opening: queue position when its back-off began
+    private boolean openBackoffRetried = false;                 // ... and it timed out once already this volley
     private State closeNext = State.IDLE;
     private boolean blockedReported = false;
 
@@ -223,7 +227,7 @@ public class QueueFeeder {
                 }
                 break;
             case JAMMED:
-                power = 0;                                      // the gate stays open: a ball may be in its path
+                power = 0;                                      // the gate stays as it is: a ball may be in its path
                 if (!wantFire) {
                     jamsInRow = 0;
                     beginClosing(t, State.IDLE);
@@ -303,7 +307,8 @@ public class QueueFeeder {
             }
         } else {
             fullConfirm = 0;
-            if (++notFullReadings >= 2) {                       // one odd reading doesn't end FULL
+            // One odd reading doesn't end FULL; nor does a volley until a ball has really left (G407)
+            if (++notFullReadings >= 2 && !(firing() && !capacityFreed())) {
                 full = false;
             }
         }
@@ -329,6 +334,7 @@ public class QueueFeeder {
         jamsInRow = 0;
         emptied = false;
         holding = false;
+        openBackoffRetried = false;
         packStart = Double.NaN;
         go(State.WAIT_READY, t);
     }
@@ -355,7 +361,8 @@ public class QueueFeeder {
 
     /**
      * Ball 1 was resting against the paddle, whose swing passes ~5 mm into it: the queue backs off openBackoffTicks
-     * (at most openBackoffSec, then the gate opens anyway) before the gate opens.
+     * before the gate opens. Not that far in openBackoffSec: the gate stays closed, the queue stops for a loop and backs
+     * off once more (from the same start); a second miss is JAMMED with the gate closed.
      */
     private void openBackoff(double t, boolean wantFire, boolean stagedBroken, int queueTicks) {
         if (!wantFire) {
@@ -371,8 +378,19 @@ public class QueueFeeder {
             return;
         }
         if (!backedOff) {
-            addEvent("OPEN BACK-OFF timed out (" + Math.round(openBackoffStartTicks - queueTicks) + " of "
-                    + Math.round(s.openBackoffTicks) + " ticks): opening anyway");
+            power = 0;                                          // gate stays closed: the paddle would hit ball 1
+            String moved = Math.round(openBackoffStartTicks - queueTicks) + " of " + Math.round(s.openBackoffTicks);
+            if (!openBackoffRetried) {
+                openBackoffRetried = true;
+                stateStart = t;
+                addEvent("OPEN BACK-OFF timed out (" + moved + " ticks): gate kept closed, backing off again");
+            } else {
+                jams++;
+                addEvent("JAMMED - open back-off failed twice (" + moved + " ticks), gate kept closed: let FIRE go,"
+                        + " clear the queue (B)");
+                go(State.JAMMED, t);
+            }
+            return;
         }
         if (inRun) {                                            // ball 1's beam run went backward: count it from here
             runStartTicks = queueTicks;
@@ -623,6 +641,15 @@ public class QueueFeeder {
     /** Backing off before the gate opens, gate open or opening, or the queue feeding / unjamming with it open. */
     public boolean firing() {
         return state == State.OPEN_BACKOFF || state == State.OPENING || state == State.FIRING || state == State.UNJAM;
+    }
+
+    /**
+     * A ball has been counted out in this volley (and it is still feeding): only now is there room for another. Until
+     * then (back-off, gate opening, a flywheel-dip hold before the first ball) 4 can still be held: IntakeGuard keeps
+     * the FULL push-back and the two-beam pause, and the intake boost waits (G407).
+     */
+    public boolean capacityFreed() {
+        return firing() && volleyBalls > 0;
     }
 
     /** Stopped mid-volley: the flywheel dipped too deep. */

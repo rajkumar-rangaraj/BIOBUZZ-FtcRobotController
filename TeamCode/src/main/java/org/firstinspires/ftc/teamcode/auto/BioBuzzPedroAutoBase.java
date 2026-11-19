@@ -674,7 +674,7 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
 
     /**
      * Intake power asked for, through IntakeGuard (applied now and again in every loopTick): never pull a 5th ball in
-     * while the queue is FULL (G407 push-back, not while it fires), and the pair-jam unjam while pulling in.
+     * while the queue is FULL (G407 push-back, until a ball has left the volley), and the pair-jam unjam while pulling in.
      */
     private void intake(double power) {
         intakeWanted = power;
@@ -686,8 +686,10 @@ public abstract class BioBuzzPedroAutoBase extends LinearOpMode {
             robot.setIntake(intakeWanted > 0 ? 0 : intakeWanted);
             return;
         }
-        double amps = intakeGuard.currentDue(t, intakeWanted) ? robot.intakeCurrentAmps() : Double.NaN;
-        robot.setIntake(intakeGuard.update(t, intakeWanted, queue.isFull(), queue.firing(), amps, staged, fullBeam));
+        // In a volley the feed boost waits until a ball has left (back-off, gate opening: 4 may still be held, G407)
+        double wanted = queue.firing() && !queue.capacityFreed() ? Math.min(intakeWanted, 0) : intakeWanted;
+        double amps = intakeGuard.currentDue(t, wanted) ? robot.intakeCurrentAmps() : Double.NaN;
+        robot.setIntake(intakeGuard.update(t, wanted, queue.isFull(), queue.capacityFreed(), amps, staged, fullBeam));
         if (intakeGuard.event() != null && log != null) {
             log.row(t, "EVENT", "INTAKE " + intakeGuard.event());
         }

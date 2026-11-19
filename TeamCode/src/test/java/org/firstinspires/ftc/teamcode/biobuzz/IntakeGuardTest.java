@@ -18,7 +18,7 @@ public class IntakeGuardTest {
         final IntakeGuard g;
         double t = 0;
         double requested = 1.0;
-        boolean full = false, firing = false, staged = false, fullBeam = false;
+        boolean full = false, freed = false, staged = false, fullBeam = false;
         double amps = FREE_AMPS;
         int currentReads = 0;
         double out;
@@ -37,7 +37,7 @@ public class IntakeGuardTest {
                 a = amps;
                 currentReads++;
             }
-            out = g.update(t, requested, full, firing, a, staged, fullBeam);
+            out = g.update(t, requested, full, freed, a, staged, fullBeam);
             t += DT;
             return out;
         }
@@ -98,15 +98,29 @@ public class IntakeGuardTest {
     }
 
     @Test
-    public void noCapOrPushBackWhileFiring() {
+    public void noCapOrPushBackOnceABallHasLeft() {
         Loop l = new Loop();
-        l.firing = true;
+        l.freed = true;
         l.full = true;
         l.staged = l.fullBeam = true;
         l.requested = 0.5;
         assertEquals(0.5, l.step(), 0);
         l.run(1.0);
         assertEquals(0.5, l.out, 0);
+    }
+
+    @Test
+    public void fullProtectionStaysUntilABallHasLeft() {
+        Loop l = new Loop();                                     // FULL, a volley started (back-off / opening / hold)
+        l.full = true;
+        l.staged = l.fullBeam = true;
+        l.requested = 1.0 + BioBuzzConstants.FEED_INTAKE_BOOST;
+        l.run(1.0);
+        assertEquals("no ball out yet: still the gentle reverse", BioBuzzConstants.QUEUE_FULL_INTAKE_POWER, l.out, 0);
+        l.full = false;                                          // both beams broken, not FULL: still paused
+        assertEquals(0, l.step(), 0);
+        l.freed = true;                                          // a ball counted out: room for one more
+        assertEquals(1.0 + BioBuzzConstants.FEED_INTAKE_BOOST, l.step(), 0);
     }
 
     @Test

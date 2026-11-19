@@ -36,6 +36,7 @@ public class QueueFeederTest {
         double beamHalf = 21;                                    // beam 30 mm off the ball centre line
         boolean fire = false, intake = false, ready = true, dip = false, aimOk = true;
         boolean stuck = false, stuckStallsMotor = false;         // ball 1 stuck at the gate
+        boolean queueStuck = false;                              // the queue can't move at all (encoder stands too)
         boolean gateCmdOpen = false;
         double gateCmdT = -1e9;
         double gateSwingSec = 0.10;                              // the real paddle: a bit faster than GATE_OPEN_SEC
@@ -94,7 +95,7 @@ public class QueueFeederTest {
                 gateCmdT = t;
             }
             // physics over this loop
-            double v = p * VMAX;
+            double v = queueStuck ? 0 : p * VMAX;
             boolean motorStalled = stuck && stuckStallsMotor && v > 0;
             if (!motorStalled) {
                 ticks += v * dt * TICKS_PER_MM;
@@ -520,6 +521,7 @@ public class QueueFeederTest {
             assertTrue("ball 1 clear of the paddle by ~8 mm when it opens (" + s.balls.get(0) + ", dt " + dt + ")",
                     s.balls.get(0) <= -R - BioBuzzConstants.QUEUE_OPEN_BACKOFF_MM + 0.5);
             assertFalse("not a time-out\n" + s.log(), s.log().contains("timed out"));
+            assertFalse(s.log().contains("JAMMED"));
             double opened = s.t - dt;
             assertTrue(s.runUntil(1.0, dt, () -> s.f.state() == QueueFeeder.State.FIRING));
             assertTrue("OPENING still waits gateOpenSec", s.t - dt - opened >= BioBuzzConstants.GATE_OPEN_SEC - 1e-9);
@@ -558,19 +560,128 @@ public class QueueFeederTest {
     }
 
     @Test
-    public void backOffTimesOutAndOpensAnyway() {
+    public void failedBackOffKeepsTheGateClosedRetriesOnceThenJams() {
+        for (double dt : new double[]{0.02, 0.060}) {
+            QueueFeeder.Settings st = new QueueFeeder.Settings();
+            st.openBackoffTicks = 1e6;                           // never reached (e.g. the encoder doesn't count)
+            Sim s = new Sim(st).preload(4);
+            s.fire = true;
+            s.step(dt);
+            double start = s.t - dt;
+            assertEquals(QueueFeeder.State.OPEN_BACKOFF, s.f.state());
+            assertTrue(s.runUntil(1.0, dt, () -> s.log().contains("timed out")));
+            assertEquals("first miss after QUEUE_OPEN_BACKOFF_SEC", BioBuzzConstants.QUEUE_OPEN_BACKOFF_SEC,
+                    s.t - dt - start, dt + 1e-9);
+            assertFalse("gate kept closed", s.f.gateOpen());
+            assertEquals("the queue stops", 0, s.f.power(), 0);
+            assertEquals(QueueFeeder.State.OPEN_BACKOFF, s.f.state());
+            s.step(dt);
+            assertEquals("backs off again", -BioBuzzConstants.QUEUE_BACKOFF_POWER, s.f.power(), 0);
+            assertTrue(s.runUntil(1.0, dt, () -> s.f.state() == QueueFeeder.State.JAMMED));
+            assertTrue(s.log(), s.log().contains("JAMMED - open back-off failed twice"));
+            assertFalse("never opened", s.f.gateOpen());
+            assertFalse(s.log().contains("GATE OPEN"));
+            assertEquals(0, s.f.power(), 0);
+            assertEquals(1, s.f.jams());
+            assertFalse("JAMMED: G407 protection back on", s.f.firing() || s.f.capacityFreed());
+            s.run(1.0, dt);
+            assertEquals("stays JAMMED while FIRE is held", QueueFeeder.State.JAMMED, s.f.state());
+            s.fire = false;
+            s.run(0.5, dt);
+            assertEquals(QueueFeeder.State.IDLE, s.f.state());
+            assertEquals(0, s.closings);
+            assertEquals(4, s.balls.size());
+        }
+    }
+
+    @Test
+    public void backOffJamIsClearedByTheManualReset() {
         QueueFeeder.Settings st = new QueueFeeder.Settings();
-        st.openBackoffTicks = 1e6;                               // never reached (e.g. the encoder doesn't count)
+        st.openBackoffTicks = 1e6;
         Sim s = new Sim(st).preload(4);
         s.fire = true;
-        s.step(0.02);
-        double start = s.t - 0.02;
-        assertTrue(s.runUntil(1.0, 0.02, s.f::gateOpen));
-        double took = s.t - 0.02 - start;
-        assertEquals("opens after QUEUE_OPEN_BACKOFF_SEC", BioBuzzConstants.QUEUE_OPEN_BACKOFF_SEC, took, 0.021);
-        assertTrue(s.log(), s.log().contains("OPEN BACK-OFF timed out"));
+        assertTrue(s.runUntil(1.0, 0.02, () -> s.f.state() == QueueFeeder.State.JAMMED));
+        s.f.reset();                                             // TeleOp B
+        assertEquals(QueueFeeder.State.IDLE, s.f.state());
+        assertFalse(s.f.gateOpen());
+        assertEquals(0, s.f.jams());
+    }
+
+    @Test
+    public void backOffRetrySucceedsAndOpens() {
+        Sim s = new Sim().preload(4);
+        s.queueStuck = true;                                     // the first back-off doesn't move
+        s.fire = true;
+        assertTrue(s.runUntil(1.0, 0.02, () -> s.log().contains("timed out")));
+        assertFalse(s.f.gateOpen());
+        s.queueStuck = false;
+        assertTrue(s.log(), s.runUntil(1.0, 0.02, s.f::gateOpen));
+        Collections.sort(s.balls, Collections.reverseOrder());
+        assertTrue("ball 1 clear of the paddle when it opens", s.balls.get(0) <= -R - BioBuzzConstants.QUEUE_OPEN_BACKOFF_MM + 0.5);
         assertTrue(s.runUntil(3.0, 0.02, s.f::emptied));
         assertEquals(4, s.launchTimes.size());
+        assertFalse(s.log().contains("JAMMED"));
+    }
+
+    // ---------------- G407: no 5th ball until one has left ----------------
+
+    /** TeleOp's intake: the driver holds IN, the boost only once a ball has left, through IntakeGuard. */
+    private static double teleOpIntake(Sim s, IntakeGuard g) {
+        double asked = 1.0;
+        if (s.fire && s.f.capacityFreed()) {
+            asked += BioBuzzConstants.FEED_INTAKE_BOOST;
+        }
+        return g.update(s.t, asked, s.f.isFull(), s.f.capacityFreed(), Double.NaN, s.beam(STAGED_X), s.beam(FULL_X));
+    }
+
+    @Test
+    public void fullQueueTakesNoFifthBallDuringBackOffAndOpening() {
+        for (double dt : new double[]{0.02, 0.033, 0.060}) {
+            Sim s = fillToFull(dt);
+            IntakeGuard g = IntakeGuard.standard();
+            s.run(0.5, dt);
+            assertTrue(teleOpIntake(s, g) <= 0);
+            s.fire = true;
+            boolean sawBackoff = false, sawOpening = false;
+            while (!s.f.capacityFreed()) {
+                assertTrue("a ball left within 2 s\n" + s.log(), s.t < 30);
+                s.step(dt);
+                double in = teleOpIntake(s, g);
+                if (s.f.capacityFreed()) {
+                    break;
+                }
+                QueueFeeder.State st = s.f.state();
+                sawBackoff |= st == QueueFeeder.State.OPEN_BACKOFF;
+                sawOpening |= st == QueueFeeder.State.OPENING;
+                assertTrue("5th ball not pulled in (" + st + ", intake " + in + ", dt " + dt + ")", in <= 0);
+                assertTrue("still FULL until a ball leaves (" + st + ")", s.f.isFull());
+            }
+            assertTrue(sawBackoff && sawOpening);
+            assertTrue(s.f.volleyBalls() >= 1);
+            assertEquals("a ball left: the boost", 1.0 + BioBuzzConstants.FEED_INTAKE_BOOST, teleOpIntake(s, g), 0);
+        }
+    }
+
+    @Test
+    public void fullQueueTakesNoFifthBallWhileTheVolleyHoldsBeforeTheFirstBall() {
+        double dt = 0.033;
+        Sim s = fillToFull(dt);
+        IntakeGuard g = IntakeGuard.standard();
+        s.fire = true;
+        assertTrue(s.runUntil(1.0, dt, () -> s.f.state() == QueueFeeder.State.OPENING));
+        s.dip = true;                                            // the flywheel dips as the gate opens
+        assertTrue(s.runUntil(1.0, dt, s.f::holding));
+        for (int i = 0; i < 30; i++) {
+            s.step(dt);
+            assertTrue(s.f.firing() && s.f.holding());
+            assertFalse(s.f.capacityFreed());
+            assertTrue("held, nothing out: no 5th ball", teleOpIntake(s, g) <= 0);
+            assertTrue(s.f.isFull());
+        }
+        assertEquals(0, s.f.volleyBalls());
+        s.dip = false;
+        assertTrue(s.runUntil(2.0, dt, s.f::capacityFreed));
+        assertEquals(1.0 + BioBuzzConstants.FEED_INTAKE_BOOST, teleOpIntake(s, g), 0);
     }
 
     @Test
