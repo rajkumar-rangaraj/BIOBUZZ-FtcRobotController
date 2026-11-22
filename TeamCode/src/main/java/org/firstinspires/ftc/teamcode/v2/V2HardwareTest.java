@@ -34,8 +34,8 @@ import java.util.List;
 
 /*
  * v2 Hardware Test - tests every motor, servo, sensor and the camera ONE AT A TIME.
- * Stand-alone on purpose: it uses only the hardware map (no v1 or v2 robot classes), so it works while everything
- * else is being built. A device missing from the configuration shows MISSING; the rest still work.
+ * Stand-alone on purpose: it uses only the hardware map and the device NAMES in V2Config (no v1 or v2 robot or
+ * mechanism classes), so it works while everything else is being built. A device missing from the configuration shows MISSING; the rest still work.
  *
  * Robot ON A BOX (wheels free), no balls, hands clear of the flywheel and the gate.
  *
@@ -66,23 +66,20 @@ import java.util.List;
 @TeleOp(name = "v2 Hardware Test", group = "v2")
 public class V2HardwareTest extends LinearOpMode {
 
-    // ---------------- device names (v2 configuration; keep in step with the Driver Hub config sheet)
-    static final String[] MOTOR_NAMES = {"left_front_drive", "left_back_drive", "right_front_drive", "right_back_drive",
-            "launcher", "launcher2", "indexer", "intake"};
+    // ---------------- device names come from V2Config (the one list; must match the Driver Hub configuration)
+    static final String[] MOTOR_NAMES = V2Config.MOTORS.toArray(new String[0]);
     static final String[] MOTOR_LABEL = {"front-left wheel", "back-left wheel", "front-right wheel", "back-right wheel",
             "flywheel motor 1", "flywheel motor 2", "queue motor (belts + Geckos)", "intake roller"};
     // power limits: drive and intake gentle, the queue slow (balls / fingers), flywheels ramp up (steel disc)
     static final double[] MOTOR_LIMIT = {0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 0.4, 0.8};
     static final boolean[] MOTOR_RAMP = {false, false, false, false, true, true, false, false};
-    static final String[] CR_NAMES = {"left_intake_servo", "right_intake_servo"};
-    static final String[] POS_NAMES = {"gate", "flower_arm"};
+    static final String[] CR_NAMES = V2Config.CR_SERVOS.toArray(new String[0]);
+    static final String[] POS_NAMES = V2Config.POSITION_SERVOS.toArray(new String[0]);
     static final String[] POS_LABEL = {"gate paddle (opens 90 deg TOWARD THE INTAKE)", "flower arm"};
-    static final String[] BEAM_NAMES = {"beam_staged", "beam_full"};
+    static final String[] BEAM_NAMES = V2Config.BEAMS.toArray(new String[0]);
     static final String[] BEAM_LABEL = {"ball 1 at the gate", "ball 4 at the lane foot"};
-    static final String IMU_NAME = "imu", PINPOINT_NAME = "pinpoint", WEBCAM_NAME = "Webcam 1";
-    // Control Hub mounted on its edge: logo LEFT, USB FORWARD (same as the v1 robot)
-    static final RevHubOrientationOnRobot HUB_ORIENTATION = new RevHubOrientationOnRobot(
-            RevHubOrientationOnRobot.LogoFacingDirection.LEFT, RevHubOrientationOnRobot.UsbFacingDirection.FORWARD);
+    static final String IMU_NAME = V2Config.IMU, PINPOINT_NAME = V2Config.PINPOINT, WEBCAM_NAME = V2Config.WEBCAM;
+    static final RevHubOrientationOnRobot HUB_ORIENTATION = new RevHubOrientationOnRobot(V2Config.HUB_LOGO, V2Config.HUB_USB);
     static final double SPIN_TPS = 100;               // flywheel 'still turning' threshold (ticks/s)
     static final double RAMP_PER_SEC = 0.8;            // flywheel power slew limit (power per second)
 
