@@ -12,6 +12,12 @@ Follow these documents **in order**. Do not skip ahead: each step checks somethi
 | 3 | 03_SYSTEM_CHECK.md (coming) | Pre-match check | Not written yet |
 | 4 | 04_TELEOP.md (coming) | Driving and the 4-ball volley | Not written yet |
 
+## Plans (for review, not robot steps)
+
+| Document | What it is |
+|---|---|
+| [V2_SHOOTING_PLAN.md](V2_SHOOTING_PLAN.md) | Fast, accurate shooting: flywheel physics, flywheel controller, feed cadence, Pedro paths, aim, CELL UP check, AUTO and TeleOp, tests, questions for the reviewer |
+
 ## What is on the Driver Hub with v2
 
 Only the v2 programs. Every v1 program is still in the code, renamed **"v1 …"** and switched off with `@Disabled`
