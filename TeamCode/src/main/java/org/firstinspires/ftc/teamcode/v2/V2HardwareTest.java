@@ -73,6 +73,7 @@ public class V2HardwareTest extends LinearOpMode {
     // Control Hub mounted on its edge: logo LEFT, USB FORWARD (same as the v1 robot)
     static final RevHubOrientationOnRobot HUB_ORIENTATION = new RevHubOrientationOnRobot(
             RevHubOrientationOnRobot.LogoFacingDirection.LEFT, RevHubOrientationOnRobot.UsbFacingDirection.FORWARD);
+    static final double SPIN_TPS = 100;               // flywheel 'still turning' threshold (ticks/s)
     static final double RAMP_PER_SEC = 0.8;            // flywheel power slew limit (power per second)
 
     enum Page { MOTORS, SERVOS, SENSORS, CAMERA }
@@ -80,8 +81,8 @@ public class V2HardwareTest extends LinearOpMode {
     private final DcMotorEx[] motors = new DcMotorEx[MOTOR_NAMES.length];
     private final CRServo[] crServos = new CRServo[CR_NAMES.length];
     private final Servo[] posServos = new Servo[POS_NAMES.length];
-    private final double[] posTarget = {0.5, 0.5};
-    private final boolean[] posSent = {false, false};
+    private final double[] posTarget = new double[POS_NAMES.length];
+    private final boolean[] posSent = new boolean[POS_NAMES.length];
     private final DigitalChannel[] beams = new DigitalChannel[BEAM_NAMES.length];
     private IMU imu;
     private GoBildaPinpointDriver pinpoint;
@@ -97,7 +98,9 @@ public class V2HardwareTest extends LinearOpMode {
     private boolean armed = false;                     // triggers must be released after picking a device
     private boolean cameraFailed = false;
     private String cameraError = "";
-    private boolean streaming = false;
+    private String bNote = "";
+    private boolean reverseWait = false;
+    private final double[] lastDir = new double[MOTOR_NAMES.length];
     private int loopCount = 0;
     private final double[] ampsCache = new double[MOTOR_NAMES.length];
     private final List<String> tableErrors = new ArrayList<>();
@@ -135,16 +138,13 @@ public class V2HardwareTest extends LinearOpMode {
                 int k = Page.values().length;
                 page = Page.values()[(page.ordinal() + (pad.dpadRight ? 1 : k - 1)) % k];
                 sel = 0;
-                if (portal != null && page != Page.CAMERA && streaming) {
-                    portal.stopStreaming();
-                    streaming = false;
-                }
             }
             int n = pageSize();
             if (n > 0 && (pad.dpadDown || pad.dpadUp)) {
                 stopAllOutputs();
                 sel = (sel + (pad.dpadDown ? 1 : n - 1)) % n;
             }
+            syncCamera();
             telemetry.addLine("< " + page + " >   (D-pad L/R page, U/D device)");
             switch (page) {
                 case MOTORS: motorPage(dt); break;
@@ -166,6 +166,7 @@ public class V2HardwareTest extends LinearOpMode {
 
     // ---------------- discovery: nothing here throws; a missing device is listed and skipped
     private void findDevices() {
+        java.util.Arrays.fill(posTarget, 0.5);
         if (MOTOR_LABEL.length != MOTOR_NAMES.length || MOTOR_LIMIT.length != MOTOR_NAMES.length
                 || MOTOR_RAMP.length != MOTOR_NAMES.length) {
             tableErrors.add("MOTOR_NAMES / MOTOR_LABEL / MOTOR_LIMIT / MOTOR_RAMP lengths differ");
@@ -238,18 +239,29 @@ public class V2HardwareTest extends LinearOpMode {
     // ---------------- MOTORS
     private void motorPage(double dt) {
         DcMotorEx m = motors[sel];
+        reverseWait = false;
         double want = armed ? (gamepad1.right_trigger - gamepad1.left_trigger) * MOTOR_LIMIT[sel] : 0;
         if (!MOTOR_RAMP[sel]) {
             rampPower = want;
         } else if (want == 0 || (rampPower != 0 && Math.signum(want) != Math.signum(rampPower))) {
             rampPower = 0;                                     // release or direction change: cut at once (it coasts)
+        } else if (m != null && lastDir[sel] != 0 && Math.signum(want) != lastDir[sel]
+                && Math.abs(m.getVelocity()) > SPIN_TPS) {   // last driven the other way and still turning
+            rampPower = 0;                                     // still spinning the other way: wait
+            reverseWait = true;
         } else if (Math.abs(want) > Math.abs(rampPower)) {
             rampPower += Math.copySign(Math.min(RAMP_PER_SEC * dt, Math.abs(want) - Math.abs(rampPower)), want);  // ramp UP
         } else {
             rampPower = want;                                  // less power: at once
         }
+        if (rampPower != 0) {
+            lastDir[sel] = Math.signum(rampPower);   // direction it was really driven (encoder sign may be wrong)
+        }
         if (m != null) {
             m.setPower(rampPower);
+            if (pad.b) {
+                bNote = rampPower == 0 ? "" : "B ignored: release the trigger first";
+            }
             if (pad.b && rampPower == 0) {
                 m.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
                 m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -269,8 +281,14 @@ public class V2HardwareTest extends LinearOpMode {
         }
         telemetry.addLine("");
         telemetry.addData("Selected", "%s = %s", MOTOR_NAMES[sel], MOTOR_LABEL[sel]);
+        if (!bNote.isEmpty()) {
+            telemetry.addLine(bNote);
+        }
         telemetry.addData("Power", "%.2f (limit %.1f)%s%s", rampPower, MOTOR_LIMIT[sel], MOTOR_RAMP[sel] ? ", ramped" : "",
                 armed ? "" : "   RELEASE the triggers first");
+        if (reverseWait) {
+            telemetry.addLine("WAIT for the flywheel to stop before reversing it.");
+        }
         telemetry.addLine("CHECK: the right part moves; its encoder counts UP for + power (if DOWN: note 'reverse'); "
                 + "current stays low when it turns freely.");
         if (MOTOR_NAMES[sel].startsWith("launcher")) {
@@ -380,7 +398,6 @@ public class V2HardwareTest extends LinearOpMode {
                 portal = new VisionPortal.Builder().setCamera(webcam).setCameraResolution(new Size(640, 480))
                         .addProcessor(p).build();
                 tags = p;
-                streaming = true;
             } catch (Exception e) {
                 cameraFailed = true;                            // do not retry every loop
                 cameraError = String.valueOf(e.getMessage());
@@ -389,9 +406,6 @@ public class V2HardwareTest extends LinearOpMode {
                 telemetry.addData("Camera start FAILED", cameraError);
                 return;
             }
-        } else if (!streaming) {
-            portal.resumeStreaming();
-            streaming = true;
         }
         telemetry.addData("Camera", "%s  %.0f fps", portal.getCameraState(), portal.getFps());
         List<AprilTagDetection> d = tags.getDetections();
@@ -411,6 +425,23 @@ public class V2HardwareTest extends LinearOpMode {
     }
 
     // ---------------- helpers
+    /** the camera streams only while the CAMERA page is open; checked against its real state every loop */
+    private void syncCamera() {
+        if (portal == null) {
+            return;
+        }
+        VisionPortal.CameraState st = portal.getCameraState();
+        try {
+            if (page != Page.CAMERA && st == VisionPortal.CameraState.STREAMING) {
+                portal.stopStreaming();
+            } else if (page == Page.CAMERA && st == VisionPortal.CameraState.CAMERA_DEVICE_READY) {
+                portal.resumeStreaming();
+            }
+        } catch (Exception e) {
+            // a transition was still in progress: try again next loop
+        }
+    }
+
     private void stopAllOutputs() {
         rampPower = 0;
         armed = false;
