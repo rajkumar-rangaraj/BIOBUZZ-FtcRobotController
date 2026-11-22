@@ -52,6 +52,16 @@ import java.util.List;
  *   SENSORS  beams, IMU (A = zero the yaw), Pinpoint (Y = zero position + its IMU: keep the robot STILL), hubs.
  *            Pinpoint shows RAW pod counts (no offsets / directions set): it checks the pods count, not calibration.
  *   CAMERA   starts the camera + AprilTags the first time the page opens; it streams only while this page is open.
+ *
+ * FIRST RUN on the box, in this order:
+ *   1. Spin `launcher` gently: BOTH launcher encoders must show speed (belted to one disc). One stays at 0 = fix its
+ *      encoder cable before trusting the WAIT behaviour below.
+ *   2. Flywheel release: hold, release - power reads 0.00 at once, the disc coasts.
+ *   3. Reversal: right trigger, release, left trigger at once - WAIT until the disc slows, then it ramps.
+ *   4. Pair: spin `launcher`, pick `launcher2`, press either trigger while it coasts - WAIT.
+ *   5. Camera: leave the CAMERA page - the preview / fps stops; come back - it resumes; page through it quickly a few
+ *      times - it ends up stopped.
+ *   6. Gate servo: no twitch on the first A press.
  */
 @TeleOp(name = "v2 Hardware Test", group = "v2")
 public class V2HardwareTest extends LinearOpMode {
@@ -113,7 +123,7 @@ public class V2HardwareTest extends LinearOpMode {
         findDevices();
         hubs = hardwareMap.getAll(LynxModule.class);
         for (LynxModule h : hubs) {
-            h.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+            h.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);   // one bulk read per loop (cleared at its top)
         }
         while (opModeInInit()) {
             telemetry.addLine("v2 HARDWARE TEST - robot ON A BOX, no balls, hands clear.");
@@ -130,6 +140,9 @@ public class V2HardwareTest extends LinearOpMode {
         while (opModeIsActive()) {
             double dt = Math.min(loop.seconds(), 0.1);
             loop.reset();
+            for (LynxModule h : hubs) {
+                h.clearBulkCache();                            // every check this loop sees the same readings
+            }
             pad.update(gamepad1);
             if (gamepad1.right_trigger < 0.05 && gamepad1.left_trigger < 0.05) {
                 armed = true;
@@ -246,8 +259,8 @@ public class V2HardwareTest extends LinearOpMode {
             rampPower = want;
         } else if (want == 0 || (rampPower != 0 && Math.signum(want) != Math.signum(rampPower))) {
             rampPower = 0;                                     // release or direction change: cut at once (it coasts)
-        } else if (m != null && Math.abs(m.getVelocity()) > SPIN_TPS
-                && (pairMotor != sel || Math.signum(want) != pairDir)) {
+        } else if (!pairStopped() && (pairMotor != sel || Math.signum(want) != pairDir)) {
+            // both encoders are checked: a dead encoder on the selected motor must not hide a spinning disc
             // the flywheel pair shares one disc: while it still turns, only the motor that last drove it may add power,
             // and only the same way (unknown / the other motor's direction = unsafe: the motors may be mirrored)
             rampPower = 0;                                     // disc still turning: wait
@@ -266,8 +279,10 @@ public class V2HardwareTest extends LinearOpMode {
         }
         if (m != null) {
             m.setPower(rampPower);
-            if (pad.b) {
-                bNote = rampPower == 0 ? "" : "B ignored: release the trigger first";
+            if (pad.b && rampPower != 0) {
+                bNote = "B ignored: release the trigger first";
+            } else if (rampPower == 0) {
+                bNote = "";
             }
             if (pad.b && rampPower == 0) {
                 m.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -294,7 +309,7 @@ public class V2HardwareTest extends LinearOpMode {
         telemetry.addData("Power", "%.2f (limit %.1f)%s%s", rampPower, MOTOR_LIMIT[sel], MOTOR_RAMP[sel] ? ", ramped" : "",
                 armed ? "" : "   RELEASE the triggers first");
         if (reverseWait) {
-            telemetry.addLine("WAIT for the flywheel to stop before reversing it.");
+            telemetry.addLine("WAIT for the flywheel to stop (it is still turning from the other motor or the other way).");
         }
         telemetry.addLine("CHECK: the right part moves; its encoder counts UP for + power (if DOWN: note 'reverse'); "
                 + "current stays low when it turns freely.");
@@ -462,6 +477,7 @@ public class V2HardwareTest extends LinearOpMode {
     private void stopAllOutputs() {
         rampPower = 0;
         armed = false;
+        bNote = "";
         for (DcMotorEx m : motors) {
             if (m != null) m.setPower(0);
         }
