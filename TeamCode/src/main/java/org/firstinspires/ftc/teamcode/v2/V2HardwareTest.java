@@ -42,14 +42,16 @@ import java.util.List;
  *   D-pad LEFT / RIGHT   page: MOTORS - SERVOS - SENSORS - CAMERA
  *   D-pad UP / DOWN      pick a device on the page
  *   MOTORS   hold RIGHT trigger = forward, LEFT trigger = reverse (power = trigger x the motor's limit).
- *            The motor stops the moment the trigger is released, the page changes or another device is picked;
+ *            Releasing the trigger cuts the power at once (flywheels coast down on their own; they only RAMP UP).
+ *            Power is also cut when the page changes or another device is picked;
  *            after a change the triggers must be released once before the new device responds.
- *            B = zero its encoder.
+ *            B = zero its encoder (only when its power is 0).
  *   SERVOS   continuous servos (corner intake wheels): triggers like a motor.
  *            position servos (gate, flower arm): RB / LB = target +-0.01 (hold Y: +-0.05),
  *            A = SEND the target (the servo only moves after A), X = let go (PWM off).
- *   SENSORS  beams, IMU (A = zero the yaw), Pinpoint (A = zero position + IMU), hubs.
- *   CAMERA   starts the camera + AprilTags when the page opens; shows state, fps, tags (range, bearing).
+ *   SENSORS  beams, IMU (A = zero the yaw), Pinpoint (Y = zero position + its IMU: keep the robot STILL), hubs.
+ *            Pinpoint shows RAW pod counts (no offsets / directions set): it checks the pods count, not calibration.
+ *   CAMERA   starts the camera + AprilTags the first time the page opens; it streams only while this page is open.
  */
 @TeleOp(name = "v2 Hardware Test", group = "v2")
 public class V2HardwareTest extends LinearOpMode {
@@ -93,6 +95,13 @@ public class V2HardwareTest extends LinearOpMode {
     private int sel = 0;
     private double rampPower = 0;
     private boolean armed = false;                     // triggers must be released after picking a device
+    private boolean cameraFailed = false;
+    private String cameraError = "";
+    private boolean streaming = false;
+    private int loopCount = 0;
+    private final double[] ampsCache = new double[MOTOR_NAMES.length];
+    private final List<String> tableErrors = new ArrayList<>();
+    private double battery = Double.NaN;
     private final Buttons pad = new Buttons();
 
     @Override
@@ -106,8 +115,12 @@ public class V2HardwareTest extends LinearOpMode {
             telemetry.addLine("v2 HARDWARE TEST - robot ON A BOX, no balls, hands clear.");
             telemetry.addData("Hubs", hubs.size() + (hubs.size() < 2 ? "  (Expansion Hub MISSING?)" : "  (Control + Expansion)"));
             telemetry.addData("Missing from the configuration", missing.isEmpty() ? "none" : String.join(", ", missing));
+            for (String e : tableErrors) {
+                telemetry.addLine("CODE ERROR: " + e);
+            }
             telemetry.addLine("Press PLAY. Nothing moves until you hold a trigger or press A.");
             telemetry.update();
+            sleep(50);
         }
         ElapsedTime loop = new ElapsedTime();
         while (opModeIsActive()) {
@@ -122,6 +135,10 @@ public class V2HardwareTest extends LinearOpMode {
                 int k = Page.values().length;
                 page = Page.values()[(page.ordinal() + (pad.dpadRight ? 1 : k - 1)) % k];
                 sel = 0;
+                if (portal != null && page != Page.CAMERA && streaming) {
+                    portal.stopStreaming();
+                    streaming = false;
+                }
             }
             int n = pageSize();
             if (n > 0 && (pad.dpadDown || pad.dpadUp)) {
@@ -135,7 +152,10 @@ public class V2HardwareTest extends LinearOpMode {
                 case SENSORS: sensorPage(); break;
                 default: cameraPage(); break;
             }
-            telemetry.addData("Battery", "%.2f V", battery());
+            if (loopCount++ % 10 == 0) {
+                battery = battery();
+            }
+            telemetry.addData("Battery", "%.2f V", battery);
             telemetry.update();
         }
         stopAllOutputs();
@@ -146,6 +166,16 @@ public class V2HardwareTest extends LinearOpMode {
 
     // ---------------- discovery: nothing here throws; a missing device is listed and skipped
     private void findDevices() {
+        if (MOTOR_LABEL.length != MOTOR_NAMES.length || MOTOR_LIMIT.length != MOTOR_NAMES.length
+                || MOTOR_RAMP.length != MOTOR_NAMES.length) {
+            tableErrors.add("MOTOR_NAMES / MOTOR_LABEL / MOTOR_LIMIT / MOTOR_RAMP lengths differ");
+        }
+        if (POS_LABEL.length != POS_NAMES.length || posTarget.length != POS_NAMES.length || posSent.length != POS_NAMES.length) {
+            tableErrors.add("POS_NAMES / POS_LABEL / posTarget / posSent lengths differ");
+        }
+        if (BEAM_LABEL.length != BEAM_NAMES.length) {
+            tableErrors.add("BEAM_NAMES / BEAM_LABEL lengths differ");
+        }
         for (int i = 0; i < MOTOR_NAMES.length; i++) {
             motors[i] = hardwareMap.tryGet(DcMotorEx.class, MOTOR_NAMES[i]);
             if (motors[i] == null) {
@@ -209,27 +239,33 @@ public class V2HardwareTest extends LinearOpMode {
     private void motorPage(double dt) {
         DcMotorEx m = motors[sel];
         double want = armed ? (gamepad1.right_trigger - gamepad1.left_trigger) * MOTOR_LIMIT[sel] : 0;
-        if (MOTOR_RAMP[sel]) {
-            double step = RAMP_PER_SEC * dt;
-            rampPower += Math.max(-step, Math.min(step, want - rampPower));
-        } else {
+        if (!MOTOR_RAMP[sel]) {
             rampPower = want;
+        } else if (want == 0 || (rampPower != 0 && Math.signum(want) != Math.signum(rampPower))) {
+            rampPower = 0;                                     // release or direction change: cut at once (it coasts)
+        } else if (Math.abs(want) > Math.abs(rampPower)) {
+            rampPower += Math.copySign(Math.min(RAMP_PER_SEC * dt, Math.abs(want) - Math.abs(rampPower)), want);  // ramp UP
+        } else {
+            rampPower = want;                                  // less power: at once
         }
         if (m != null) {
             m.setPower(rampPower);
-            if (pad.b) {
+            if (pad.b && rampPower == 0) {
                 m.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
                 m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             }
         }
         for (int i = 0; i < MOTOR_NAMES.length; i++) {
+            if (motors[i] != null && (i == sel || loopCount % 10 == 0)) {
+                ampsCache[i] = amps(motors[i]);           // current is not in the bulk read: one hub call each
+            }
             String mark = i == sel ? ">> " : "   ";
             if (motors[i] == null) {
                 telemetry.addLine(mark + MOTOR_NAMES[i] + ": MISSING");
                 continue;
             }
             telemetry.addLine(String.format("%s%-17s port %d  enc %7d  %6.0f t/s  %4.2f A", mark, MOTOR_NAMES[i],
-                    motors[i].getPortNumber(), motors[i].getCurrentPosition(), motors[i].getVelocity(), amps(motors[i])));
+                    motors[i].getPortNumber(), motors[i].getCurrentPosition(), motors[i].getVelocity(), ampsCache[i]));
         }
         telemetry.addLine("");
         telemetry.addData("Selected", "%s = %s", MOTOR_NAMES[sel], MOTOR_LABEL[sel]);
@@ -237,7 +273,7 @@ public class V2HardwareTest extends LinearOpMode {
                 armed ? "" : "   RELEASE the triggers first");
         telemetry.addLine("CHECK: the right part moves; its encoder counts UP for + power (if DOWN: note 'reverse'); "
                 + "current stays low when it turns freely.");
-        if (sel == 4 || sel == 5) {
+        if (MOTOR_NAMES[sel].startsWith("launcher")) {
             telemetry.addLine("Flywheel pair: both encoders move (one motor back-drives the other through the belts).");
         }
     }
@@ -256,6 +292,7 @@ public class V2HardwareTest extends LinearOpMode {
             if (pad.rb) { posTarget[p] = Math.min(1, posTarget[p] + step); moved = true; }
             if (pad.lb) { posTarget[p] = Math.max(0, posTarget[p] - step); moved = true; }
             if (pad.a) {
+                posServos[p].setPosition(posTarget[p]);          // pulse width first, then switch PWM on
                 if (posServos[p] instanceof ServoImplEx) {
                     ((ServoImplEx) posServos[p]).setPwmEnable();
                 }
@@ -299,6 +336,7 @@ public class V2HardwareTest extends LinearOpMode {
             }
         }
         telemetry.addLine("   CHECK: put a ball in each beam - the reading must flip (Adafruit 2167: LOW = beam broken).");
+        telemetry.addLine("   Always LOW with no ball: check the emitter power and the receiver wiring first.");
         if (imu == null) {
             telemetry.addLine("IMU: MISSING");
         } else {
@@ -311,11 +349,12 @@ public class V2HardwareTest extends LinearOpMode {
         if (pinpoint == null) {
             telemetry.addLine("Pinpoint: not configured (optional)");
         } else {
-            if (pad.a) pinpoint.resetPosAndIMU();
+            if (pad.y) pinpoint.resetPosAndIMU();             // robot must be still for ~0.25 s
             pinpoint.update();
             telemetry.addLine(String.format("Pinpoint %s: encX %d  encY %d  heading %.1f deg", pinpoint.getDeviceStatus(),
                     pinpoint.getEncoderX(), pinpoint.getEncoderY(), pinpoint.getHeading(AngleUnit.DEGREES)));
-            telemetry.addLine("   CHECK: push the robot forward - one pod counts; sideways - the other.");
+            telemetry.addLine("   CHECK: push the robot forward - one pod counts; sideways - the other. (Y = zero, keep still)");
+            telemetry.addLine("   RAW counts: no pod offsets / directions here - do not read position or heading as calibrated.");
         }
         StringBuilder h = new StringBuilder();
         for (LynxModule m : hubs) {
@@ -330,15 +369,29 @@ public class V2HardwareTest extends LinearOpMode {
             telemetry.addLine(WEBCAM_NAME + ": MISSING from the configuration (check the USB cable and the config).");
             return;
         }
+        if (cameraFailed) {
+            telemetry.addData("Camera start FAILED (restart the OpMode to retry)", cameraError);
+            return;
+        }
         if (portal == null) {
             try {
-                tags = new AprilTagProcessor.Builder().setTagLibrary(AprilTagGameDatabase.getCurrentGameTagLibrary()).build();
+                AprilTagProcessor p = new AprilTagProcessor.Builder()
+                        .setTagLibrary(AprilTagGameDatabase.getCurrentGameTagLibrary()).build();
                 portal = new VisionPortal.Builder().setCamera(webcam).setCameraResolution(new Size(640, 480))
-                        .addProcessor(tags).build();
+                        .addProcessor(p).build();
+                tags = p;
+                streaming = true;
             } catch (Exception e) {
-                telemetry.addData("Camera start FAILED", e.getMessage());
+                cameraFailed = true;                            // do not retry every loop
+                cameraError = String.valueOf(e.getMessage());
+                tags = null;
+                portal = null;
+                telemetry.addData("Camera start FAILED", cameraError);
                 return;
             }
+        } else if (!streaming) {
+            portal.resumeStreaming();
+            streaming = true;
         }
         telemetry.addData("Camera", "%s  %.0f fps", portal.getCameraState(), portal.getFps());
         List<AprilTagDetection> d = tags.getDetections();
@@ -388,8 +441,8 @@ public class V2HardwareTest extends LinearOpMode {
 
     /** rising edges of the gamepad buttons used here */
     static final class Buttons {
-        boolean dpadUp, dpadDown, dpadLeft, dpadRight, a, b, x, rb, lb;
-        private boolean pu, pd, pl, pr, pa, pb, px, prb, plb;
+        boolean dpadUp, dpadDown, dpadLeft, dpadRight, a, b, x, y, rb, lb;
+        private boolean pu, pd, pl, pr, pa, pb, px, py, prb, plb;
 
         void update(Gamepad g) {
             dpadUp = g.dpad_up && !pu;
@@ -399,10 +452,11 @@ public class V2HardwareTest extends LinearOpMode {
             a = g.a && !pa;
             b = g.b && !pb;
             x = g.x && !px;
+            y = g.y && !py;
             rb = g.right_bumper && !prb;
             lb = g.left_bumper && !plb;
             pu = g.dpad_up; pd = g.dpad_down; pl = g.dpad_left; pr = g.dpad_right;
-            pa = g.a; pb = g.b; px = g.x; prb = g.right_bumper; plb = g.left_bumper;
+            pa = g.a; pb = g.b; px = g.x; py = g.y; prb = g.right_bumper; plb = g.left_bumper;
         }
     }
 }
