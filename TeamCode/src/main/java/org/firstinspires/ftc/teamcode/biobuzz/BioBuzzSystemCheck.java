@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 import static org.firstinspires.ftc.teamcode.biobuzz.BioBuzzConstants.*;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -19,7 +20,8 @@ import java.util.List;
  *   PART 2 Floor     forward, back, SLIDE RIGHT, SLIDE LEFT, turn clockwise, turn counter-clockwise
  *   PART 3 Mechanisms intake, windmill, launcher, flower arm (if calibrated)
  */
-@TeleOp(name = "BioBuzz System Check", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz System Check", group = "BioBuzz Test")
 public class BioBuzzSystemCheck extends LinearOpMode implements DriveIO {
 
     private static final String[] WHEEL_NAMES = {"LEFT FRONT", "RIGHT FRONT", "LEFT BACK", "RIGHT BACK"};

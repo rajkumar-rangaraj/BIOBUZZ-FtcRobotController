@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.biobuzz;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.Range;
@@ -16,7 +17,8 @@ import java.util.Locale;
  *   4. Y = test up / down                              X = SAVE
  *   B goes back one step at any time.
  */
-@TeleOp(name = "BioBuzz Arm Setup", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Arm Setup", group = "BioBuzz Test")
 public class BioBuzzArmSetup extends OpMode {
 
     private enum Step { REMOVE, FIT_LEVEL, FIND_DOWN, TEST_SAVE, SAVED }

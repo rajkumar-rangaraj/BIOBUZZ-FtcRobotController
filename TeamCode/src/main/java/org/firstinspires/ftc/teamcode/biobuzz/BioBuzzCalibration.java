@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 import static org.firstinspires.ftc.teamcode.biobuzz.BioBuzzConstants.*;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.Range;
@@ -25,7 +26,8 @@ import com.qualcomm.robotcore.util.Range;
  *   without stalling, then copy "Jog position" to ARM_DEPLOY_POSITION and the direction to ARM_STOW_DIRECTION.
  * Camera: park at the spot you shoot best from; note the CELL range and bearing.
  */
-@TeleOp(name = "BioBuzz Calibration", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Calibration", group = "BioBuzz Test")
 public class BioBuzzCalibration extends OpMode {
 
     private BioBuzzRobot robot;

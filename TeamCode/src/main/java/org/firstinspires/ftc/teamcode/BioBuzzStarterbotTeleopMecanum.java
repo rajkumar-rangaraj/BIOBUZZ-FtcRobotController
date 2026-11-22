@@ -68,7 +68,7 @@ import com.qualcomm.robotcore.util.Range;
  *   - Bulk reads from the hubs for a faster, more responsive loop.
  */
 
-@TeleOp(name = "Mec BioBuzz StarterBot Teleop", group = "StarterBot")
+@TeleOp(name = "v1 Mec BioBuzz StarterBot Teleop", group = "StarterBot")
 // Replaced by BioBuzz TeleOp: this one needs the old "windmillServo", which the robot no longer has.
 @Disabled
 public class BioBuzzStarterbotTeleopMecanum extends OpMode {

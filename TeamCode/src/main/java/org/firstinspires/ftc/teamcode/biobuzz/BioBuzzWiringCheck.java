@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 import static org.firstinspires.ftc.teamcode.biobuzz.BioBuzzConstants.*;
 
 import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -24,7 +25,8 @@ import java.util.List;
  *   - hubs found, IMU, camera, battery
  * Results: on the Driver Hub and in /sdcard/BioBuzzLogs/wiring_*.csv
  */
-@TeleOp(name = "BioBuzz Wiring Check", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Wiring Check", group = "BioBuzz Test")
 public class BioBuzzWiringCheck extends LinearOpMode {
     private static final int MOVED = 30;                 // ticks: clearly turning
     private static final double TURNING_AMPS = 0.15;     // current that means the motor is powered

@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 import static org.firstinspires.ftc.teamcode.biobuzz.BioBuzzConstants.*;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -53,7 +54,8 @@ import com.qualcomm.robotcore.util.Range;
  *               Options = the intake points away from you now (field-centric start heading).
  * While the arm is DEPLOYED, driving is limited to precision speed.
  */
-@TeleOp(name = "BioBuzz TeleOp", group = "BioBuzz")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz TeleOp", group = "BioBuzz")
 public class BioBuzzTeleOp extends OpMode {
 
     private BioBuzzRobot robot;

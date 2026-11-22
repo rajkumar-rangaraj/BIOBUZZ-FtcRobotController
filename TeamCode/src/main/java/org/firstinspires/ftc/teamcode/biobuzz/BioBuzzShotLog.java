@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 import static org.firstinspires.ftc.teamcode.biobuzz.BioBuzzConstants.*;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -22,7 +23,8 @@ import java.util.TreeMap;
  *   RB                        fire ONE windmill pocket (only when at speed)
  *   then A / Cross = IN the CELL,  B / Circle = MISS,  Back / Share = discard (no ball came out)
  */
-@TeleOp(name = "BioBuzz Shot Log", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Shot Log", group = "BioBuzz Test")
 public class BioBuzzShotLog extends OpMode {
     private enum State { READY, FEEDING, RECOVERING, AWAIT_RESULT }
 

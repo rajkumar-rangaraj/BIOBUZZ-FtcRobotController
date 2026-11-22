@@ -4,6 +4,7 @@ import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.FLOAT;
 
 import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -41,7 +42,9 @@ import com.qualcomm.robotcore.util.Range;
  * Robot configuration: add a motor named "indexer" (and remove "windmillServo").
  */
 
-@TeleOp(name = "TEST Indexer + Flywheel", group = "Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+
+@TeleOp(name = "v1 TEST Indexer + Flywheel", group = "Test")
 public class IndexerFlywheelTest extends OpMode {
 
     private DcMotorEx launcher;

@@ -1,10 +1,13 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-@TeleOp(name = "Motor Test", group = "Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+
+@TeleOp(name = "v1 Motor Test", group = "Test")
 public class MotorTest extends LinearOpMode {
     @Override
     public void runOpMode() {

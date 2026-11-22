@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.biobuzz;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -16,7 +17,8 @@ import java.util.Locale;
  *   4. A = spins 2 turns in place   (finds both pod positions)
  *   5. X = SAVE              B = back / stop at any time
  */
-@TeleOp(name = "BioBuzz Pinpoint Setup", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Pinpoint Setup", group = "BioBuzz Test")
 public class BioBuzzPinpointSetup extends OpMode {
 
     private enum Step { STILL, SETTLE, FORWARD, FORWARD_MOVING, LEFT, LEFT_MOVING, SPIN_READY, SPINNING, RESULT, SAVED }

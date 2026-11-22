@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.biobuzz;
 
 import static org.firstinspires.ftc.teamcode.biobuzz.BioBuzzConstants.*;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -23,7 +24,8 @@ import com.qualcomm.robotcore.util.Range;
  *   Cross / A                  reset the ball counter
  *   SHARE / Back               SAVE trim, power, pause and empty wait on the robot
  */
-@TeleOp(name = "BioBuzz Tune", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Tune", group = "BioBuzz Test")
 public class BioBuzzTune extends OpMode {
 
     private BioBuzzRobot robot;

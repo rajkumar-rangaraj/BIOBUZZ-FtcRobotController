@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.biobuzz;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -21,7 +22,8 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
  *
  * Each capture reports: detection rate, bearing mean and spread, distance error, tag height.
  */
-@TeleOp(name = "BioBuzz Vision Test", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Vision Test", group = "BioBuzz Test")
 public class BioBuzzVisionTest extends OpMode {
     private static final double CAPTURE_SEC = 3.0;
 

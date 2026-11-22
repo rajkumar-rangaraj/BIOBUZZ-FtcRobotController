@@ -5,6 +5,7 @@ import static com.pedropathing.api.Paths.line;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -23,7 +24,8 @@ import java.util.List;
  *        Y / Triangle       = which way the robot FRONT (intake side) faces
  * PLAY:  B / Circle         = STOP at once
  */
-@TeleOp(name = "BioBuzz Field Tour", group = "BioBuzz Test")
+@Disabled   // v1 (windmill robot): parked 21 Nov 2026, see v2/
+@TeleOp(name = "v1 BioBuzz Field Tour", group = "BioBuzz Test")
 public class BioBuzzFieldTour extends OpMode {
     /** Fraction of the robot's tuned top speed used for the tour. */
     static final double TOUR_SPEED_FRACTION = 0.30;
