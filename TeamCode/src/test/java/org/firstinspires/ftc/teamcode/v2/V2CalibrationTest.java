@@ -107,16 +107,16 @@ public class V2CalibrationTest {
 
     @Test
     public void halfAGateIsNotAGate() {
-        V2Calibration c = V2Calibration.parse("gate.closed=0.3\n");
+        V2Calibration c = V2Calibration.parse("gate.closed=0.3\nend=ok\n");
         assertFalse(c.gateCalibrated());
-        assertEquals(1, c.warnings().size());
+        assertEquals(c.warnings().toString(), 1, c.warnings().size());
     }
 
     @Test
     public void unknownKeysAndOtherVersionsStillLoad() {
-        V2Calibration c = V2Calibration.parse("version=2\nfuture.thing=7\nqueue.ticksPerBall=400\n");
+        V2Calibration c = V2Calibration.parse("version=2\nfuture.thing=7\nqueue.ticksPerBall=400\nend=ok\n");
         assertEquals(400, c.queueTicksPerBall());
-        assertEquals(1, c.warnings().size());          // only the version note
+        assertEquals(c.warnings().toString(), 1, c.warnings().size());   // only the version note
     }
 
     @Test
@@ -207,6 +207,44 @@ public class V2CalibrationTest {
         assertNull(V2Calibration.checkPair("gate", 0.2, 0.8, V2Calibration.MIN_GATE_TRAVEL));
         assertFalse(d.missing().contains("gate CLOSED / OPEN"));
         assertEquals(5, d.missing().size());
+    }
+
+    @Test
+    public void formatEndsWithTheCompletenessMarker() {
+        String text = full().format("x");
+        assertTrue(text.endsWith("end=ok\n"));
+        assertTrue(new V2Calibration().format("x").endsWith("end=ok\n"));
+    }
+
+    @Test
+    public void cutShortFileWarnsButKeepsWhatItRead() {
+        String text = full().format("x");
+        String cut = text.substring(0, text.indexOf("beam.staged"));      // lost the tail (and end=ok)
+        V2Calibration c = V2Calibration.parse(cut);
+        assertTrue(c.gateCalibrated());                                   // read before the cut
+        assertFalse(c.queueTicksMeasured());                              // lost
+        assertTrue(c.warnings().toString(), c.warnings().get(0).contains("incomplete"));
+    }
+
+    @Test
+    public void typoInAKnownSectionWarns() {
+        V2Calibration c = V2Calibration.parse("gate.cloesd=0.2\ndir.lancher2=REVERSE\nqueue.ticksPerBal=300\n"
+                + "beam.staged.brokenWhenLo=true\nintake.jamAmp=3\narm.stowd=0.1\nother.key=1\nend=ok\n");
+        assertEquals(c.warnings().toString(), 6, c.warnings().size());   // other.key: no known prefix, silent
+        for (String w : c.warnings()) {
+            assertTrue(w, w.startsWith("unknown key"));
+        }
+    }
+
+    @Test
+    public void everyWrittenKeyIsKnown() {
+        V2Calibration c = V2Calibration.parse(full().format("x"));
+        assertTrue(c.warnings().toString(), c.warnings().isEmpty());
+        for (String line : full().format("x").split("\n")) {
+            if (line.isEmpty() || line.startsWith("#")) continue;
+            String key = line.substring(0, line.indexOf('='));
+            assertTrue(key, V2Calibration.knownKeys().contains(key));
+        }
     }
 
     // ---------------- V2Config

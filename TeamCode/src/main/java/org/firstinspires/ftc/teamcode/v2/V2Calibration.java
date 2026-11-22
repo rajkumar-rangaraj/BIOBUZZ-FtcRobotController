@@ -10,6 +10,7 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,10 +30,16 @@ import java.util.Map;
  * default and adds a warning, unknown keys are ignored (so older and newer files both load).
  * Values that must be measured start as "not calibrated" ({@link #missing()} lists them); code that depends on
  * them (e.g. firing needs the gate) must refuse to run until they are set.
+ * The SETTERS are strict: a bad value throws IllegalArgumentException and changes nothing, so callers (v2 Setup)
+ * must catch it and show the message. Only parse()/load() are forgiving.
+ * The last line of a saved file is "end=ok"; a file without it was cut short and loads with a warning.
  */
 public final class V2Calibration {
     public static final String FILE_NAME = "biobuzz_v2_calibration.txt";
     public static final int FORMAT_VERSION = 1;
+    static final String END_KEY = "end";
+    /** keys this version understands; an unknown key with one of the known prefixes is probably a typo */
+    static final String[] KNOWN_PREFIXES = {"dir.", "gate.", "arm.", "beam", "queue.", "intake."};
 
     // limits for measured values (anything outside is a typo or a bad measurement)
     static final double MIN_GATE_TRAVEL = 0.05;            // servo units between gate CLOSED and OPEN
@@ -200,6 +207,7 @@ public final class V2Calibration {
         if (intakeJamMeasured) {
             sb.append(String.format(Locale.US, "intake.jamAmps=%.2f\n", intakeJamAmps));
         }
+        sb.append(END_KEY).append("=ok\n");                  // must stay the last line (completeness marker)
         return sb.toString();
     }
 
@@ -221,6 +229,19 @@ public final class V2Calibration {
                 continue;
             }
             kv.put(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+        }
+        if (!"ok".equals(kv.get(END_KEY))) {
+            c.warnings.add("file looks incomplete (no 'end=ok' last line): check the values or run v2 Setup again");
+        }
+        java.util.Set<String> known = knownKeys();
+        for (String k : kv.keySet()) {
+            if (known.contains(k)) continue;
+            for (String pre : KNOWN_PREFIXES) {
+                if (k.startsWith(pre)) {
+                    c.warnings.add("unknown key '" + k + "' (typo?): ignored");
+                    break;
+                }
+            }
         }
         String ver = kv.get("version");
         if (ver != null && !ver.equals(String.valueOf(FORMAT_VERSION))) {
@@ -290,6 +311,17 @@ public final class V2Calibration {
             }
         }
         return c;
+    }
+
+    /** every key this version reads or writes */
+    static java.util.Set<String> knownKeys() {
+        java.util.Set<String> k = new java.util.HashSet<>(Arrays.asList("version", "savedAt", END_KEY,
+                "directions.checked", "gate.closed", "gate.open", "arm.stowed", "arm.deployed",
+                "beam.staged.brokenWhenLow", "beam.full.brokenWhenLow", "beams.checked", "queue.ticksPerBall",
+                "intake.jamAmps"));
+        for (String m : V2Config.MOTORS) k.add("dir." + m);
+        for (String sv : V2Config.CR_SERVOS) k.add("dir." + sv);
+        return k;
     }
 
     private Boolean readDir(Map<String, String> kv, String key) {
@@ -363,8 +395,11 @@ public final class V2Calibration {
             throw new IOException("cannot create " + dir);
         }
         File tmp = new File(dir, f.getName() + ".tmp");
-        try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8)) {
+        try (FileOutputStream fos = new FileOutputStream(tmp);
+             Writer w = new OutputStreamWriter(fos, StandardCharsets.UTF_8)) {
             w.write(format(stamp));
+            w.flush();
+            fos.getFD().sync();                                // on the storage before the old file is replaced
         }
         if (f.exists() && !f.delete()) {
             throw new IOException("cannot replace " + f);

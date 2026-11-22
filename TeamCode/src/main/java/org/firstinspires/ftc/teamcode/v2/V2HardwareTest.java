@@ -68,11 +68,37 @@ public class V2HardwareTest extends LinearOpMode {
 
     // ---------------- device names come from V2Config (the one list; must match the Driver Hub configuration)
     static final String[] MOTOR_NAMES = V2Config.MOTORS.toArray(new String[0]);
-    static final String[] MOTOR_LABEL = {"front-left wheel", "back-left wheel", "front-right wheel", "back-right wheel",
-            "flywheel motor 1", "flywheel motor 2", "queue motor (belts + Geckos)", "intake roller"};
-    // power limits: drive and intake gentle, the queue slow (balls / fingers), flywheels ramp up (steel disc)
-    static final double[] MOTOR_LIMIT = {0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 0.4, 0.8};
-    static final boolean[] MOTOR_RAMP = {false, false, false, false, true, true, false, false};
+    // per-motor behaviour is looked up by NAME, never by position: reordering V2Config.MOTORS cannot change which
+    // motor ramps, gets the flywheel WAIT check or which power limit applies
+    private static final java.util.Map<String, String> MOTOR_LABELS = new java.util.HashMap<>();
+    static {
+        MOTOR_LABELS.put(V2Config.LEFT_FRONT, "front-left wheel");
+        MOTOR_LABELS.put(V2Config.LEFT_BACK, "back-left wheel");
+        MOTOR_LABELS.put(V2Config.RIGHT_FRONT, "front-right wheel");
+        MOTOR_LABELS.put(V2Config.RIGHT_BACK, "back-right wheel");
+        MOTOR_LABELS.put(V2Config.LAUNCHER, "flywheel motor 1");
+        MOTOR_LABELS.put(V2Config.LAUNCHER2, "flywheel motor 2");
+        MOTOR_LABELS.put(V2Config.QUEUE, "queue motor (belts + Geckos)");
+        MOTOR_LABELS.put(V2Config.INTAKE, "intake roller");
+    }
+
+    /** a flywheel motor: ramps up, coasts, shares the disc (WAIT check) */
+    static boolean isFlywheel(String name) {
+        return V2Config.LAUNCHER.equals(name) || V2Config.LAUNCHER2.equals(name);
+    }
+
+    /** power limit: flywheels 1.0 (ramped), queue 0.4 (balls / fingers), intake 0.8, drive and anything else 0.5 */
+    static double motorLimit(String name) {
+        if (isFlywheel(name)) return 1.0;
+        if (V2Config.QUEUE.equals(name)) return 0.4;
+        if (V2Config.INTAKE.equals(name)) return 0.8;
+        return 0.5;
+    }
+
+    static String motorLabel(String name) {
+        String l = MOTOR_LABELS.get(name);
+        return l != null ? l : name;
+    }
     static final String[] CR_NAMES = V2Config.CR_SERVOS.toArray(new String[0]);
     static final String[] POS_NAMES = V2Config.POSITION_SERVOS.toArray(new String[0]);
     static final String[] POS_LABEL = {"gate paddle (opens 90 deg TOWARD THE INTAKE)", "flower arm"};
@@ -178,10 +204,6 @@ public class V2HardwareTest extends LinearOpMode {
     // ---------------- discovery: nothing here throws; a missing device is listed and skipped
     private void findDevices() {
         java.util.Arrays.fill(posTarget, 0.5);
-        if (MOTOR_LABEL.length != MOTOR_NAMES.length || MOTOR_LIMIT.length != MOTOR_NAMES.length
-                || MOTOR_RAMP.length != MOTOR_NAMES.length) {
-            tableErrors.add("MOTOR_NAMES / MOTOR_LABEL / MOTOR_LIMIT / MOTOR_RAMP lengths differ");
-        }
         if (POS_LABEL.length != POS_NAMES.length || posTarget.length != POS_NAMES.length || posSent.length != POS_NAMES.length) {
             tableErrors.add("POS_NAMES / POS_LABEL / posTarget / posSent lengths differ");
         }
@@ -251,8 +273,10 @@ public class V2HardwareTest extends LinearOpMode {
     private void motorPage(double dt) {
         DcMotorEx m = motors[sel];
         reverseWait = false;
-        double want = armed ? (gamepad1.right_trigger - gamepad1.left_trigger) * MOTOR_LIMIT[sel] : 0;
-        if (!MOTOR_RAMP[sel]) {
+        String name = MOTOR_NAMES[sel];
+        boolean flywheel = isFlywheel(name);
+        double want = armed ? (gamepad1.right_trigger - gamepad1.left_trigger) * motorLimit(name) : 0;
+        if (!flywheel) {
             rampPower = want;
         } else if (want == 0 || (rampPower != 0 && Math.signum(want) != Math.signum(rampPower))) {
             rampPower = 0;                                     // release or direction change: cut at once (it coasts)
@@ -267,7 +291,7 @@ public class V2HardwareTest extends LinearOpMode {
         } else {
             rampPower = want;                                  // less power: at once
         }
-        if (MOTOR_RAMP[sel] && rampPower != 0) {
+        if (flywheel && rampPower != 0) {
             pairDir = Math.signum(rampPower);           // direction the disc was really driven (not the encoder sign)
             pairMotor = sel;
         } else if (pairMotor >= 0 && pairStopped()) {
@@ -299,18 +323,18 @@ public class V2HardwareTest extends LinearOpMode {
                     motors[i].getPortNumber(), motors[i].getCurrentPosition(), motors[i].getVelocity(), ampsCache[i]));
         }
         telemetry.addLine("");
-        telemetry.addData("Selected", "%s = %s", MOTOR_NAMES[sel], MOTOR_LABEL[sel]);
+        telemetry.addData("Selected", "%s = %s", name, motorLabel(name));
         if (!bNote.isEmpty()) {
             telemetry.addLine(bNote);
         }
-        telemetry.addData("Power", "%.2f (limit %.1f)%s%s", rampPower, MOTOR_LIMIT[sel], MOTOR_RAMP[sel] ? ", ramped" : "",
+        telemetry.addData("Power", "%.2f (limit %.1f)%s%s", rampPower, motorLimit(name), flywheel ? ", ramped" : "",
                 armed ? "" : "   RELEASE the triggers first");
         if (reverseWait) {
             telemetry.addLine("WAIT for the flywheel to stop (it is still turning from the other motor or the other way).");
         }
         telemetry.addLine("CHECK: the right part moves; its encoder counts UP for + power (if DOWN: note 'reverse'); "
                 + "current stays low when it turns freely.");
-        if (MOTOR_NAMES[sel].startsWith("launcher")) {
+        if (flywheel) {
             telemetry.addLine("Flywheel pair: both encoders move (one motor back-drives the other through the belts).");
         }
     }
@@ -444,10 +468,10 @@ public class V2HardwareTest extends LinearOpMode {
     }
 
     // ---------------- helpers
-    /** both flywheel motors (the ramped ones) turn slower than SPIN_TPS; a missing motor counts as stopped */
+    /** both flywheel motors turn slower than SPIN_TPS; a missing motor counts as stopped */
     private boolean pairStopped() {
         for (int i = 0; i < MOTOR_NAMES.length; i++) {
-            if (MOTOR_RAMP[i] && motors[i] != null && Math.abs(motors[i].getVelocity()) > SPIN_TPS) {
+            if (isFlywheel(MOTOR_NAMES[i]) && motors[i] != null && Math.abs(motors[i].getVelocity()) > SPIN_TPS) {
                 return false;
             }
         }
