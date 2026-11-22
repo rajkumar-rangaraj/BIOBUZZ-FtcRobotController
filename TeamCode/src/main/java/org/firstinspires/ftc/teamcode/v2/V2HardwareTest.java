@@ -100,7 +100,8 @@ public class V2HardwareTest extends LinearOpMode {
     private String cameraError = "";
     private String bNote = "";
     private boolean reverseWait = false;
-    private final double[] lastDir = new double[MOTOR_NAMES.length];
+    private double pairDir = 0;                        // flywheel pair: last driven direction, -1 / +1, 0 = unknown
+    private int pairMotor = -1;                        // which launcher motor drove it (index), -1 = none
     private int loopCount = 0;
     private final double[] ampsCache = new double[MOTOR_NAMES.length];
     private final List<String> tableErrors = new ArrayList<>();
@@ -245,17 +246,23 @@ public class V2HardwareTest extends LinearOpMode {
             rampPower = want;
         } else if (want == 0 || (rampPower != 0 && Math.signum(want) != Math.signum(rampPower))) {
             rampPower = 0;                                     // release or direction change: cut at once (it coasts)
-        } else if (m != null && lastDir[sel] != 0 && Math.signum(want) != lastDir[sel]
-                && Math.abs(m.getVelocity()) > SPIN_TPS) {   // last driven the other way and still turning
-            rampPower = 0;                                     // still spinning the other way: wait
+        } else if (m != null && Math.abs(m.getVelocity()) > SPIN_TPS
+                && (pairMotor != sel || Math.signum(want) != pairDir)) {
+            // the flywheel pair shares one disc: while it still turns, only the motor that last drove it may add power,
+            // and only the same way (unknown / the other motor's direction = unsafe: the motors may be mirrored)
+            rampPower = 0;                                     // disc still turning: wait
             reverseWait = true;
         } else if (Math.abs(want) > Math.abs(rampPower)) {
             rampPower += Math.copySign(Math.min(RAMP_PER_SEC * dt, Math.abs(want) - Math.abs(rampPower)), want);  // ramp UP
         } else {
             rampPower = want;                                  // less power: at once
         }
-        if (rampPower != 0) {
-            lastDir[sel] = Math.signum(rampPower);   // direction it was really driven (encoder sign may be wrong)
+        if (MOTOR_RAMP[sel] && rampPower != 0) {
+            pairDir = Math.signum(rampPower);           // direction the disc was really driven (not the encoder sign)
+            pairMotor = sel;
+        } else if (pairMotor >= 0 && pairStopped()) {
+            pairDir = 0;                                // forget it only once the disc has stopped
+            pairMotor = -1;
         }
         if (m != null) {
             m.setPower(rampPower);
@@ -425,6 +432,16 @@ public class V2HardwareTest extends LinearOpMode {
     }
 
     // ---------------- helpers
+    /** both flywheel motors (the ramped ones) turn slower than SPIN_TPS; a missing motor counts as stopped */
+    private boolean pairStopped() {
+        for (int i = 0; i < MOTOR_NAMES.length; i++) {
+            if (MOTOR_RAMP[i] && motors[i] != null && Math.abs(motors[i].getVelocity()) > SPIN_TPS) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** the camera streams only while the CAMERA page is open; checked against its real state every loop */
     private void syncCamera() {
         if (portal == null) {
