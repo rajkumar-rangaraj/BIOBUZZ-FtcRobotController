@@ -1,6 +1,6 @@
 # v2 shooting plan (for review): fast and accurate, built on Pedro Pathing
 
-Status: **plan only, no code yet**, revision 3 (21 Nov 2026). Branch `v2`, folder `C:\repo\FtcRobotController-v2`.
+Status: **plan only, no code yet**, revision 4 (21 Nov 2026). Branch `v2`, folder `C:\repo\FtcRobotController-v2`.
 This document is written so a reviewer who has not seen our chat can check it. Numbers marked **(est.)** are calculated,
 not measured; section 15 says how each one gets measured. Section 17 lists what is still open.
 
@@ -21,7 +21,7 @@ not measured; section 15 says how each one gets measured. Section 17 lists what 
 
 | # | Change | Sections |
 |---|---|---|
-| S1 | **Feed stop rule fixed:** the queue no longer stops when `beam_staged` clears (ball 1 still has ~40 mm to the wheel then). It stops on the dip **or** after one ball pitch, whichever is first | 5 |
+| S1 | **Feed stop rule fixed:** the queue no longer stops when `beam_staged` clears (ball 1 still has ~40 mm to the wheel then). It stops on the dip **or** after one ball pitch, whichever is first. **Replaced by T1** (revision 4) | 5 |
 | S2 | **Mode A conflict fixed:** AUTO paths are built at INIT; a TeleOp mode A path is built when the button is pressed. The whole path's footprint is checked, not only its end pose | 7.3 |
 | S3 | **Inertia measurement fixed:** coast-down alone can't separate inertia from friction. Powered acceleration with current + coast-down at the same speed | 4.3, 15 |
 | S4 | READY must be **settled** (slope limit), not just passing through the band. The ball-left dip threshold is re-calibrated for v2, and a ball only counts as gone when the dip **recovers** (a jam also makes a dip) | 4.4, 5 |
@@ -33,6 +33,17 @@ not measured; section 15 says how each one gets measured. Section 17 lists what 
 | S10 | TeleOp: mode B first; pose at TeleOp start (from AUTO, or re-zero on a field mark); pre-spin is a setting | 12 |
 | S11 | Disc safety steps; full-match electrical endurance test; park deadline from measured travel time | 4.3, 11, 15 |
 | S12 | Disc inertia hand check (ring with the Ø32 bore ≈ 1.4e-4 with screws; a solid-disc 1.07e-4 does not apply). The frame "rotation" worry is noted as unlikely (v1's Pedro AUTO ran with the plain +72 shift), but the independent check stays | 4.1, 7.2 |
+
+### Changes in revision 4
+
+| # | Change | Sections |
+|---|---|---|
+| T1 | **Feed rule (replaces S1):** FEED_ONE moves **exactly one pitch** and stops. Stopping on the dip left ball 2 only ~40–45 mm along its 73 mm pitch, short of the staged spot, so ShotGate row 7 failed and the volley stalled after ball 1; and the dip is only seen 20–40 ms after the wheel has the ball, so it never prevented pushing during capture anyway. Position keeps ball k+1 out of the wheel; the dip only **confirms** the shot. A vs B becomes a phase 2 question | 5, 14, 15 |
+| T2 | **Cadence budget:** the READY logic's own delays (80 ms reading lag, 40 ms hold, slope test) and ball k+1's 40 mm travel are added to the time per ball. Phase 1: **0.30–0.40 s per ball** (fits the 1.6 s milestone); 0.25–0.30 s is the phase 2 target. The simulation reports time between balls with the full READY logic | 3, 4.3, 14 |
+| T3 | **READY slope limit** is set from the same noise measurement as the band; 1 % per 100 ms is only a starting value | 4.4 |
+| T4 | **Phase 2 needs no Pedro:** it shoots from a hand-placed robot on a taped pose. Step 8 needs V2Field/PedroFrame and the camera/lens calibration, not the Pedro re-tune or Path Check | 16 |
+| T5 | **TIPPING false alarms:** threshold from the height noise of a still CELL, and the change must show on **2 consecutive unique frames**. New test: false TIPPING events with nothing moving, pass = 0 | 9, 15 |
+| T6 | **Mode B heading control:** the two options are named, with a recommended default; the choice is open question 17.2.9 | 12, 17 |
 
 ---
 
@@ -91,7 +102,7 @@ shot pose (3 of 4 balls launched, the first scored).
 | Target | Value | Measured how |
 |---|---|---|
 | **Volley time** (arrive at the shot pose → last of 4 balls out) | milestones (S7): **≤ 2.4 s** first working, **≤ 1.6 s** competition-ready, **≤ 1.2 s** stretch (v1: about 5–8 s) | log timestamps |
-| **Time between balls** | ≤ 0.30 s (stretch) | log |
+| **Time between balls** | **0.30–0.40 s** phase 1; ≤ 0.30 s phase 2 / stretch (T2) | log |
 | **Accuracy** | **≥ 80 % IN** first working, **≥ 85 %** competition-ready, over **≥ 100 shots** (several batteries, balls and shot poses) | labelled shots |
 | **Never fire into a down CELL** | 0 shots | log + video |
 | **Path end error** | ≤ 1.0 in, ≤ 1.0° | Path Check (section 7.5) |
@@ -99,7 +110,10 @@ shot pose (3 of 4 balls launched, the first scored).
 **Accuracy comes before speed.** A milestone's volley time only counts once its accuracy target is met; the volley is
 made faster only after that. A robot that reliably scores 4 in 2 s beats one that sometimes scores 4 in 1.2 s.
 
-Time budget for the stretch volley (est.):
+**Phase 1 volley (est., T2):** settle ≤ 0.2 s + ball 1 ~0.1 s + 3 × **0.30–0.40 s** ≈ **1.2–1.5 s**, inside the
+1.6 s competition-ready milestone. The time per ball includes the READY logic's own delays (section 4.3).
+
+Time budget for the stretch volley (phase 2, est.):
 
 | Phase | Time | Why it is short |
 |---|---|---|
@@ -109,7 +123,7 @@ Time budget for the stretch volley (est.):
 | Gate open | 0 s on the clock | opened during the end of the path; the queue holds the balls (section 5, R3) |
 | Settle | ≤ 0.2 s | measured stillness and pose error, not a fixed 0.5 s (section 7.4) |
 | Ball 1 | ~0.1 s | queue travel from the gate to the wheel (measure) |
-| Balls 2–4 | 3 × 0.25–0.30 s | recovery-limited (section 4.3) |
+| Balls 2–4 | 3 × 0.25–0.30 s | phase 2: the next pitch starts before READY, timed so the ball arrives as the speed returns (sections 4.3, 5) |
 | **Total** | **≈ 1.0–1.2 s** | |
 
 If the gate cannot open early (for example, the opening paddle disturbs ball 1), add the gate time
@@ -160,8 +174,20 @@ If the gate cannot open early (for example, the opening paddle disturbs ball 1),
 - v1's measured time constant was about 1.8× the ideal one (battery sag under load, friction, the hub controller).
   Expect v2 to derate **a little more**: two motors draw twice the recovery current from the same battery, so the sag
   part grows. Plan on **0.16–0.20 s**.
-- So the time between balls is set by recovery plus the time for the next ball to reach the wheel.
-  **0.25–0.30 s per ball** is the plan.
+- **Time between balls, phase 1 (T2)**, ball k taken → ball k+1 taken, all est.:
+
+  | Part | Time |
+  |---|---|
+  | Recovery to the band | 0.16–0.20 s |
+  | READY reading lag (80 ms window) | ~0.04 s |
+  | Hold in the band | 0.04 s |
+  | Slope test (settled) | usually inside the hold; more if the speed overshoots |
+  | Ball k+1's ~40 mm to the tread | ~0.07 s at full queue power, ~0.17 s at 0.4 |
+  | **Total** | **0.30–0.40 s** (more at low queue power) |
+
+  In phase 1 the next pitch only starts after READY, so these add up. **0.25–0.30 s per ball is the phase 2 target**,
+  where the next pitch starts early (section 5). The `FlywheelController` simulation must report the time between
+  balls **with the full READY logic** (reading window, hold, slope), not just the recovery time.
 
 **Spin-up from rest** (full power).
 - τ = I ω_f ÷ (n τ_s) = 3.5e-4 × 628 ÷ 0.288 = 0.76 s ideal, about 1.4 s derated. To reach ω_f/2: τ ln 2 = **0.5 s
@@ -218,8 +244,10 @@ per motor (spec; check it with a short stall test). Repeat at 3 speeds; the answ
    false faults near zero speed. This is the same idea as `pairStopped()` in v2 Hardware Test.
 5. **READY:** the READY speed inside the band (point 3) **for 40 ms** (a time, not a sample count: the loop time
    changes when Pedro and the camera run), **and settled (S4):** the READY speed's slope over the last 80 ms is below a
-   limit (start: 1 % of target per 100 ms), so a speed still rising through the band after a dip doesn't count. The
-   scoring window is ±4.2 %; the band leaves room for the dip spread and the set-speed error.
+   limit, so a speed still rising through the band after a dip doesn't count. **The limit is set from the same noise
+   measurement as the band (T3).** 1 % of target per 100 ms is only a starting value: at 6 t/s resolution it is about
+   2 steps per 80 ms window, so noise alone could fail it. The scoring window is ±4.2 %; the band leaves room for the
+   dip spread and the set-speed error.
 
 ---
 
@@ -234,30 +262,39 @@ per motor (spec; check it with a short stall test). Repeat at 3 speeds; the answ
   aborted, the gate closes again. If the geometry rules this out, the gate opens at settle and the budget grows
   (section 3).
 - **Volley state machine** (pure Java, fake clock, unit-tested):
-  `IDLE → GATE_OPENING (early, above) → ARMED (ShotGate true) → FEED_ONE (queue advances until ball k is taken) →
-  WAIT_DIP → WAIT_READY → FEED_ONE … → EMPTY (no staged beam, no dip within a timeout) → CLOSE_GATE → IDLE`.
+  `IDLE → GATE_OPENING (early, above) → ARMED (ShotGate true) → FEED_ONE (exactly one pitch, T1) → CONFIRM (dip seen
+  during the pitch, then recovering) → WAIT_READY → FEED_ONE … → EMPTY (no ball under beam_staged after a pitch) →
+  CLOSE_GATE → IDLE`.
 - **"A ball left" (S4):** a dip of at least the v2 threshold **that then recovers**. v1's 35 t/s threshold is not
   reused: v2's expected dip is about 145 t/s, so the threshold is re-calibrated from the characterization (start
   ~0.5 × the measured median dip). A ball jammed against the wheel also makes a dip, but the speed stays down and the
   current stays high; that is a JAM, not a shot. Option for later: a third break beam at the hood exit (4 beams were
   bought, 2 are used) to see each ball leave; CAD space to be checked (17.2).
-- **Phase 1 (safe) requires option A (R2):** the queue **stops as soon as the wheel has taken the ball**: the dip is
-  seen, **or** the queue has moved one ball pitch (`queue.ticksPerBall`), whichever comes first (S1). Not when
-  `beam_staged` clears: the beam is at ball 1's waiting spot, and the ball still has about 40 mm to go to the wheel
-  after it clears, so stopping there could leave ball 1 short of the wheel. The balls sit touching in a single-file
-  lane, so if the queue kept pushing (option B), ball k+1 would follow ball k straight into the wheel during recovery
-  and "feed k+1 only when READY" would never be in control. With A, ball k+1 stops at the staged spot and waits; the
-  lane is uphill, so it can't roll on by itself.
-  - Ball k+1 is fed only when the flywheel is READY again and ShotGate is still true. That alone should give
-    0.25–0.30 s per ball (section 4.3).
-  - A is also the v1 lesson: a ball still being pushed while the wheel grabs it got extra, uneven friction (33 % IN vs
-    59 %).
-- **Phase 2 (later, only if phase 1 is accurate):** start ball k+1 early by the measured queue travel time, so it reaches
-  the wheel just as the speed comes back into the band. This is where a gentle continuous push (option B) can be
-  tried: 40 labelled shots each, kept only if labelled shots show no loss.
+- **Phase 1 feed rule (T1, replaces S1):** FEED_ONE moves the queue **exactly one pitch** (`queue.ticksPerBall`,
+  position-controlled: a move to a target tick count, then hold with BRAKE) and stops.
+  - Ball k is taken by the wheel partway through the move (after about 40 mm). Ball k+1 ends the move at the staged
+    spot, under `beam_staged`, about 40 mm short of the tread. **Position, not the dip, keeps ball k+1 out of the
+    wheel.** The lane is uphill, so it can't roll on by itself.
+  - Why not stop on the dip (S1): the dip almost always comes after about 40 mm, so the queue and ball k+1 would have
+    moved only about 40–45 mm of the 73 mm pitch. Ball k+1 then sits short of the staged spot, ShotGate row 7 ("a ball
+    staged") fails and the volley stalls after ball 1. And the dip is only detected 20–40 ms after the wheel has the
+    ball, so stopping on it never prevented pushing during capture.
+  - **The dip confirms the shot; it doesn't stop the queue.** No dip by the end of the pitch (plus a short grace) =
+    miss-feed; a dip that doesn't recover = JAM (as above).
+  - The next pitch starts only when the flywheel is READY again and ShotGate is still true: 0.30–0.40 s per ball
+    (section 4.3, T2).
+  - The balls sit touching in a single-file lane, so a queue that ran continuously would send ball k+1 into the wheel
+    during recovery and READY would control nothing. One pitch at a time prevents that.
+- **Phase 2 (later, only if phase 1 is accurate):** option A vs B is now **only** a phase 2 question: whether to start
+  the next pitch **before** READY, timed by the measured queue travel so the ball reaches the wheel just as the speed
+  comes back into the band. Judged by labelled shots (40 each), kept only if they show no loss.
+- **Phase 2 experiment, gentle arrival:** slow the queue over the last ~20 mm before the wheel, so the ball reaches the
+  tread gently. That is what v1's 33 % vs 59 % pointed at (a ball still being pushed hard while the wheel grabs it gets
+  extra, uneven friction). Judged by labelled shots.
 - **Faults:**
   - queue stall (no ticks for 0.15 s at power) → back off ¼ ball and retry, up to 3 times, then JAMMED;
-  - a ball that doesn't leave (no dip within 0.6 s of feeding) → count it as a miss-feed and retry once;
+  - a ball that doesn't leave (no dip by the end of the pitch, plus a short grace) → count it as a miss-feed and
+    retry once;
   - FLYWHEEL FAULT, or the CELL not UP → stop the queue at once and close the gate.
 
 ## 6. Shot gate: every ball must pass all of these
@@ -377,8 +414,9 @@ The robot is heavier with indexer v2, so the 4 Nov Foresight values in `pedro/Co
   advises pausing while a HIVE is tipping, because balls arriving then may disrupt the tip. **Our own volley can tip
   it.** Balls already launched can't be recalled: at 0.3 s between balls and about 0.5–0.7 s of flight (to measure),
   2–3 balls can be in the air at once.
-  - TIPPING = the CELL height (or orientation) changing between consecutive **unique** frames (capture timestamps,
-    not loop count) faster than a threshold. The queue stops and the gate closes at once.
+  - TIPPING = the CELL height (or orientation) changing faster than a threshold, seen on **2 consecutive unique
+    frames** (capture timestamps, not loop count), so one odd frame can't raise it. The threshold is set from the
+    **height noise measured on a still CELL** (T5). The queue stops and the gate closes at once.
   - Measure the delay from a frame's capture to the queue stopping (logged, section 13).
   - Find out what triggers a tip (Competition Manual section 10: a ball count, a weight, a timer?). If a tip can be
     predicted, slow the cadence, or hold the last balls, when one is near (17.2).
@@ -438,6 +476,16 @@ The robot is heavier with indexer v2, so the 4 Nov Foresight values in `pedro/Co
   odometry (camera-checked). The flywheel speed follows the odometry distance, and while the trigger is held each ball
   fires when ShotGate is true. Moving shots are not allowed in phase 1: ShotGate needs the robot still. In mode B, row
   3's "distance to the planned end pose" is replaced by "stick released for 40 ms". Moving shots are a later phase.
+- **Who turns the robot in mode B (T6, not decided: 17.2.9).** Two options:
+  - **Pedro's follower in TeleOp drive** with a heading target: one controller for AUTO and TeleOp, using the tuned
+    Foresight heading terms. Needs a check that Pedro 3.0.2's TeleOp drive accepts a heading target while the driver
+    controls translation, and how it behaves when the target jumps.
+  - **Our own heading controller:** a PD on the heading error (+ a small static term) that sets the turn power, mixed
+    with the driver's translation in field-centric mecanum. Simple and fully under our control, but it needs its own
+    tuning and tests.
+  - Recommended default until 17.2.9 is answered: **our own controller**, because it can be unit-tested now; switch
+    to Pedro's if the API check shows it supports this cleanly. Either way the heading tolerance and "settled" use the
+    same ShotGate rows 3 and 4.
 - **Pre-spin is a setting (S10).** Default: spin at the table speed when we hold ≥ 1 ball **and** are within a set
   distance of our HIVE, plus a driver toggle. The hold current is small (4.3); confirm it in section 15.
 - Telemetry and rumble: READY, CELL UP/TIPPING/DOWN/UNKNOWN, and the first failing ShotGate reason.
@@ -467,9 +515,9 @@ The robot is heavier with indexer v2, so the 4 Nov Foresight values in `pedro/Co
 
 | Class | Kind | Tests |
 |---|---|---|
-| `FlywheelController` (FF + P + bang, READY speed, READY band, fault) | pure Java | plant simulation: inertia, motor curve, injected dips, battery sag, a dead encoder, **28-tick quantization** |
+| `FlywheelController` (FF + P + bang, READY speed, READY band, fault) | pure Java | plant simulation: inertia, motor curve, injected dips, battery sag, a dead encoder, **28-tick quantization**; reports the **time between balls with the full READY logic** (T2) |
 | `FlywheelModel` (the plant used by the tests) | pure Java | spin-up and recovery match section 4 |
-| `VolleyStateMachine` | pure Java, fake clock | every transition, every fault, CELL tipping mid-volley, early gate open and close-on-abort, stop on dip or one pitch, dip without recovery = JAM |
+| `VolleyStateMachine` | pure Java, fake clock | every transition, every fault, CELL tipping mid-volley, early gate open and close-on-abort, **exactly one pitch per ball; ball k+1 staged afterwards; no dip by pitch end = miss-feed** (T1), dip without recovery = JAM |
 | `ShotGate` | pure Java | truth table, reason codes, raw vs corrected camera difference |
 | `CellCheck` (v2) | pure Java | v1 tests + UNKNOWN / stale frames / slow-frame filter / orientation veto never yields UP / TIPPING from changing heights, using capture times |
 | `V2Field` + `PedroFrame` | pure Java | conversion, mirror, visualizer points, poses legal, swept footprint of every AUTO path, release-point aim headings |
@@ -485,7 +533,7 @@ The robot is heavier with indexer v2, so the 4 Nov Foresight values in `pedro/Co
 | Bench, no disc | **Flywheel characterization:** kS and kV ramp; spin-up; hold power and current at 1200/1400/1600; **READY-speed noise at each** (sets the band, 4.4.3); dip and recovery with hand-fed balls; both encoders; logged at about 100 Hz | the controller holds the band; band ≤ ±2.5 % (else fit the Through Bore); recovery is measured; the model is updated |
 | Bench, with disc | safety steps first (4.3); the same again + the inertia from powered acceleration with current + coast-down (4.3, S3) | 3 inertia results within ~10 %; recovery ≤ 0.2 s; spin-up time recorded |
 | START current | AUTO start on the field with the flywheel from rest | lowest battery logged; no brownout; decide stagger / cap (4.3) |
-| Feed geometry | gate servo time for 90°; with the queue stopped and the gate open, ball 2 stays at the staged spot; the opening paddle doesn't push or lift ball 1; one pitch puts ball 1 into the wheel | all four true, or sections 3 and 5 updated |
+| Feed geometry | gate servo time for 90°; with the queue stopped and the gate open, ball 2 stays at the staged spot; the opening paddle doesn't push or lift ball 1; one pitch puts ball 1 into the wheel; **after one pitch, ball 2 reads under `beam_staged`** (T1) | all five true, or sections 3 and 5 updated |
 | Feed | volleys of 4 into the flywheel, robot on the box: time between balls, double feeds, jams; phase 1 = option A | ≤ 0.30 s per ball, 0 double feeds in 20 volleys |
 | Pedro | frame check (7.2), v2 AutoTune, then Path Check (7.5) | visualizer points agree; 9/10 within 1 in / 1°, none over 1.5 in / 1.5° |
 | Aim | 20 balls from each shot pose, with the camera vs odometry check | ≥ 90 % within the CELL width; median bearing error ≤ 1° |
@@ -493,7 +541,7 @@ The robot is heavier with indexer v2, so the 4 Nov Foresight values in `pedro/Co
 | Speed table | section 10 (20 shots per distance to tune) | then **≥ 100 shots** over several batteries, balls and shot poses: ≥ 80 % (first working), ≥ 85 % (competition-ready) |
 | AUTO | 10 full runs | volley within the current milestone (section 3), ≥ 80 % IN, park every time |
 | Electrical (S11) | full-match endurance: 2:30 of driving, collecting and shooting, with a full and a part-used battery | battery voltage under load, motor currents and temperatures, recovery time and loop time (Pedro + camera + logging running) all logged and within limits; the flywheel stops on any fault, STOP or OpMode end |
-| CELL tipping (S6) | tip the HIVE by hand while a volley runs (robot on the box, balls into a net) | queue stops; capture-to-stop delay measured |
+| CELL tipping (S6, T5) | (a) tip the HIVE by hand while a volley runs (robot on the box, balls into a net); (b) a few minutes with nothing moving, counting false TIPPING events | (a) queue stops, capture-to-stop delay measured; (b) **0 false TIPPING events** |
 | TeleOp | drivers, timed, both modes | the drivers pick the default mode |
 
 ## 16. Order of work
@@ -507,7 +555,7 @@ The robot is heavier with indexer v2, so the 4 Nov Foresight values in `pedro/Co
 | 5 | FlywheelModel + FlywheelController + characterization OpMode; **READY-speed noise measured and band set** | 2 (bench without the disc now, **again with the disc**) |
 | 6 | **Feed geometry checks (section 1)**, then port the queue/gate/intake logic + VolleyStateMachine + ShotGate | 3, 5 |
 | 7 | **Pedro frame check**, v2 Pedro re-tune, V2Field/PedroFrame, Path Check | 2 |
-| 8 | CellCheck v2, aim (odometry + camera check), camera/lens calibration | 7 |
+| 8 | CellCheck v2, aim (odometry + camera check), camera/lens calibration | 2 + **V2Field/PedroFrame** from step 7 (not the re-tune or Path Check, T4) |
 | 9 | Shot speed table | **disc fitted**, 5–8 |
 | 10 | AUTO sequence + START current test | 6–9 |
 | 11 | TeleOp modes A and B (+ the override decision, 17.2) | 6–9 |
@@ -522,7 +570,7 @@ parallel with the shooter characterization):
 | Phase | Steps | Exit |
 |---|---|---|
 | 1. Reliable mechanical shooter | 2–6 (+ the disc) | 20 volleys with no jam or double feed; flywheel characterized |
-| 2. Accurate stationary shooting | 8–9 from one fixed pose | ≥ 80 % IN over ≥ 100 shots; CELL check right every time |
+| 2. Accurate stationary shooting | 8–9, from a **hand-placed robot on a taped pose, no Pedro** (T4): Pinpoint is set to the taped pose, so the aim and the distance still come from odometry | ≥ 80 % IN over ≥ 100 shots; CELL check right every time |
 | 3. Pedro AUTO | 7, 10 | 10 good AUTO runs |
 | 4. TeleOp assistance | 11 (mode B, then A) | drivers prefer it |
 | 5. Speed | phase 2 feed timing, the 1.2 s volley, then shooting while moving | milestones in section 3 |
@@ -534,7 +582,7 @@ parallel with the shooter characterization):
 2. **Own loop vs the hub's:** own loop, one power for both motors; copying the hub's power isn't possible (4.4.1).
 3. **Velocity resolution:** a 40 ms difference doesn't help; sum both encoders over 80 ms, set the band from measured
    noise, Through Bore as the fallback (4.4.3).
-4. **Feed A vs B:** A for phase 1, because B bypasses READY; B is a phase 2 experiment (5).
+4. **Feed A vs B:** A for phase 1, because B bypasses READY; B is a phase 2 experiment (5). Revision 4 (T1): phase 1 moves exactly one pitch per ball; A vs B is now only whether phase 2 starts the next pitch before READY.
 5. **Pedro settle:** `!isBusy()` isn't proof of arrival; add the pose error, re-aim from the settled pose, 9/10
    acceptance (7.4, 7.5, 8).
 6. **CELL orientation:** veto only (9).
@@ -550,6 +598,8 @@ parallel with the shooter characterization):
    ball-to-ball spacing in the lane, camera latency.
 7. **HIVE tipping:** what triggers a tip, and how should the cadence change when one is near (section 9, S6)?
 8. **Third break beam** at the hood exit: worth the CAD change (section 5)?
+9. **Mode B heading control (T6):** Pedro's follower in TeleOp drive with a heading target, or our own heading
+   controller (section 12)? Check what Pedro 3.0.2's TeleOp drive supports first.
 
 ## 18. Decisions already made (team, 21 Nov)
 
@@ -558,5 +608,5 @@ parallel with the shooter characterization):
 - Camera: **checks the odometry aim** and corrects it when they differ by 2–6° (section 8); more than 6° stops the shot.
 - Steel disc: **ordered**. The speed table waits for it; the controller is characterized again once it is fitted.
 - v1 code stays untouched (tag `biobuzz-v1`); v2 never imports v1 classes.
-- Feed phase 1 uses option A (queue stops once the wheel has the ball); **added in revision 2, team to confirm.**
+- Feed phase 1: **exactly one pitch per ball**, the next pitch only after READY (revision 4, T1; replaces the revision 2/3 wording); **team to confirm.**
 - **Accuracy before speed** (revision 3): the volley-time milestones only count once their accuracy target is met.
