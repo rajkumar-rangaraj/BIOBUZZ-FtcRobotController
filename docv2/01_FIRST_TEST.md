@@ -116,7 +116,7 @@ After picking another device you must **release the triggers once** before it re
 - **Gate** (`gate`): the **drop gate** (since 25 Nov): its two prongs slide straight down. Press A (goes to 0.50),
   then RB / LB in small steps. Find and write down:
   - **CLOSED**: prong tops level with the middle of a ball (they hold ball 1); the servo arm points up the lane.
-  - **OPEN**: prongs 40 mm lower, their tops below the bottom belts. About 90° of servo turn from CLOSED.
+  - **OPEN**: prongs 45 mm lower, their tops below the bottom belts. About 90° of servo turn from CLOSED.
   - Don't drive the servo past either end: the arm's pin hits the end of the carriage slot. Stop at once if it binds.
   - With a ball resting at the gate, opening must **not** push the ball back.
 - **Flower arm** (`flower_arm`): same way, write down **STOWED** and **DEPLOYED**.
@@ -160,7 +160,7 @@ Date: ____________ Tested by: ____________ Battery: ______ V
 |---|---|
 | left_intake_servo | + power pulls IN? ☐ yes ☐ no |
 | right_intake_servo | + power pulls IN? ☐ yes ☐ no |
-| gate | CLOSED = ______ OPEN = ______ (drop gate: prongs 40 mm down) |
+| gate | CLOSED = ______ OPEN = ______ (drop gate: prongs 45 mm down) |
 | flower_arm | STOWED = ______ DEPLOYED = ______ |
 
 **Sensors**
