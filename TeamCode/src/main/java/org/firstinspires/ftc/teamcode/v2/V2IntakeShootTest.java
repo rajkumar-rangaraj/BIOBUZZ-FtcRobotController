@@ -17,8 +17,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *            the wheel must turn the same (throwing) way for both; then use BOTH. Two motors pushing against each other
  *            stall and get hot (current > ~4 A each at low speed = fighting: stop at once).
  *   D-pad L / R   flywheel power -/+ 0.05 (0.30..0.90)
- *   RB (hold)     intake IN                                 LB (hold)  intake OUT
- *   RT (hold)     queue toward the flywheel (power = trigger, max 0.6)
+ *   RB (hold)     intake IN (auto-unjams a side-by-side pair)  LB (hold)  intake OUT
+ *   RT (hold)     queue toward the flywheel (power = trigger, up to full)
  *   LT (hold)     queue back toward the intake (max 0.4)
  *   with the flywheel OFF only:
  *     X  flip the intake direction   Y  flip the queue direction
@@ -31,7 +31,11 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 public class V2IntakeShootTest extends LinearOpMode {
 
     static final double RAMP_PER_SEC = 0.6;          // flywheel power ramp up (steel disc: no step to full power)
-    static final double QUEUE_MAX = 0.6, QUEUE_BACK_MAX = 0.4, INTAKE_POWER = 0.8;
+    static final double QUEUE_MAX = 1.0, QUEUE_BACK_MAX = 0.5, INTAKE_POWER = 0.6;   // queue faster than the intake:
+                                                                                     // it pulls balls apart (single file)
+    // pair-jam unjam: two balls side by side wedge at the lane mouth. Intake current above JAM_A for JAM_SEC while
+    // pulling in -> reverse UNJAM_SEC, then pull in again. CALIBRATE JAM_A from the V2INT log (free vs wedged).
+    static final double JAM_A = 3.0, JAM_SEC = 0.3, UNJAM_SEC = 0.25, UNJAM_POWER = 0.6;
 
     @Override
     public void runOpMode() {
@@ -63,6 +67,8 @@ public class V2IntakeShootTest extends LinearOpMode {
         boolean pBack = false;
         double stallSince = -1;
         int stallTrips = 0;
+        double jamSince = -1, unjamUntil = -1;
+        int unjams = 0;
         final String[] WHICH = {"BOTH", "ONLY launcher", "ONLY launcher2"};
         boolean pA = false, pB = false, pX = false, pY = false, pU = false, pD = false, pL = false, pR = false;
 
@@ -132,6 +138,23 @@ public class V2IntakeShootTest extends LinearOpMode {
             else if (gamepad1.left_trigger > 0.05) qp = -gamepad1.left_trigger * QUEUE_BACK_MAX;
             if (queue != null) queue.setPower(queueRev ? -qp : qp);
             double ip = gamepad1.right_bumper ? INTAKE_POWER : gamepad1.left_bumper ? -INTAKE_POWER : 0;
+            double ia = intake != null ? intake.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
+            double now = getRuntime();
+            if (unjamUntil > now) {
+                ip = -UNJAM_POWER;                                   // knocking one ball of the pair back
+            } else if (ip > 0 && ia > JAM_A) {
+                if (jamSince < 0) jamSince = now;
+                if (now - jamSince > JAM_SEC) {
+                    unjamUntil = now + UNJAM_SEC;
+                    unjams++;
+                    jamSince = -1;
+                }
+            } else {
+                jamSince = -1;
+            }
+            if (ip != 0 || ia > 0.3) {
+                com.qualcomm.robotcore.util.RobotLog.ii("V2INT", "intake power=%.2f amps=%.2f queue=%.2f unjams=%d", ip, ia, qp, unjams);
+            }
             if (intake != null) intake.setPower(intakeRev ? -ip : ip);
 
             double v1 = fly1 != null ? fly1.getVelocity() : 0, v2 = fly2 != null ? fly2.getVelocity() : 0;
@@ -152,7 +175,7 @@ public class V2IntakeShootTest extends LinearOpMode {
                 telemetry.addLine("!! launcher2 FIGHTS launcher: press B, then D-pad UP");
             }
             telemetry.addData("Queue", "power %.2f%s (RT forward, LT back)", qp, queueRev ? " [flipped]" : "");
-            telemetry.addData("Intake", "power %.2f%s (RB in, LB out)", ip, intakeRev ? " [flipped]" : "");
+            telemetry.addData("Intake", "power %.2f  %.1f A%s (RB in, LB out)  auto-unjams %d", ip, ia, intakeRev ? " [flipped]" : "", unjams);
             telemetry.addData("Directions to note", "flywheel %s, launcher2 %s, queue %s, intake %s",
                     flyRev ? "REVERSE" : "FORWARD", fly2Flip ? "opposite to launcher" : "same as launcher",
                     queueRev ? "REVERSE" : "FORWARD", intakeRev ? "REVERSE" : "FORWARD");
