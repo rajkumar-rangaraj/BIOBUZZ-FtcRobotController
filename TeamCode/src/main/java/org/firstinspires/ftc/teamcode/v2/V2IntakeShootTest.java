@@ -13,6 +13,9 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  *
  * Controls (gamepad 1):
  *   A        flywheel ON (ramps up to the set power)        B  flywheel OFF (coasts)
+ *   BACK     (flywheel off) which flywheel motor runs: BOTH / ONLY launcher / ONLY launcher2. Run each ALONE first:
+ *            the wheel must turn the same (throwing) way for both; then use BOTH. Two motors pushing against each other
+ *            stall and get hot (current > ~4 A each at low speed = fighting: stop at once).
  *   D-pad L / R   flywheel power -/+ 0.05 (0.30..0.90)
  *   RB (hold)     intake IN                                 LB (hold)  intake OUT
  *   RT (hold)     queue toward the flywheel (power = trigger, max 0.6)
@@ -56,6 +59,9 @@ public class V2IntakeShootTest extends LinearOpMode {
         boolean flyRev = false, fly2Flip = true, queueRev = false, intakeRev = false;   // launcher2 is mounted mirrored
         double setPower = 0.55, flyPower = 0;
         boolean flyOn = false;
+        int which = 1;                                   // 0 BOTH, 1 ONLY launcher, 2 ONLY launcher2 (start safe)
+        boolean pBack = false;
+        final String[] WHICH = {"BOTH", "ONLY launcher", "ONLY launcher2"};
         boolean pA = false, pB = false, pX = false, pY = false, pU = false, pD = false, pL = false, pR = false;
 
         while (!isStarted() && !isStopRequested()) {
@@ -85,7 +91,9 @@ public class V2IntakeShootTest extends LinearOpMode {
                 if (y && !pY) queueRev = !queueRev;
                 if (up && !pU) fly2Flip = !fly2Flip;
                 if (dn && !pD) flyRev = !flyRev;
+                if (gamepad1.back && !pBack) which = (which + 1) % 3;
             }
+            pBack = gamepad1.back;
             pA = a; pB = b; pX = x; pY = y; pU = up; pD = dn; pL = lf; pR = rt;
 
             // flywheel: ramp up only, cut at once
@@ -93,8 +101,8 @@ public class V2IntakeShootTest extends LinearOpMode {
             flyPower = want > flyPower ? Math.min(want, flyPower + RAMP_PER_SEC * dt) : want;
             double p1 = flyRev ? -flyPower : flyPower;
             double p2 = fly2Flip ? -p1 : p1;
-            if (fly1 != null) fly1.setPower(p1);
-            if (fly2 != null) fly2.setPower(p2);
+            if (fly1 != null) fly1.setPower(which == 2 ? 0 : p1);
+            if (fly2 != null) fly2.setPower(which == 1 ? 0 : p2);
 
             double qp = 0;
             if (gamepad1.right_trigger > 0.05) qp = gamepad1.right_trigger * QUEUE_MAX;
@@ -106,7 +114,13 @@ public class V2IntakeShootTest extends LinearOpMode {
             double v1 = fly1 != null ? fly1.getVelocity() : 0, v2 = fly2 != null ? fly2.getVelocity() : 0;
             // seen from the disc: launcher2's encoder counts the other way when it is mounted mirrored
             double v2disc = fly2Flip ? -v2 : v2;
-            telemetry.addData("Flywheel", "%s  power %.2f (set %.2f, D-pad L/R)", flyOn ? "ON" : "OFF", flyPower, setPower);
+            telemetry.addData("Flywheel", "%s  power %.2f (set %.2f, D-pad L/R)  motors: %s (BACK)", flyOn ? "ON" : "OFF", flyPower, setPower, WHICH[which]);
+            double a1 = fly1 != null ? fly1.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
+            double a2 = fly2 != null ? fly2.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
+            telemetry.addData("Current A", "launcher %.1f   launcher2 %.1f", a1, a2);
+            if (flyPower > 0.2 && Math.max(a1, a2) > 4.0 && Math.abs(v1) < 600) {
+                telemetry.addLine("!! HIGH CURRENT, LOW SPEED: motors fighting or the wheel is stuck - press B NOW");
+            }
             telemetry.addData("Speed t/s", "launcher %.0f   launcher2 %.0f (as the disc: %.0f)", v1, v2, v2disc);
             if (flyPower > 0.2 && Math.abs(v1) > 100 && Math.signum(v1) != Math.signum(v2disc)) {
                 telemetry.addLine("!! launcher2 FIGHTS launcher: press B, then D-pad UP");
