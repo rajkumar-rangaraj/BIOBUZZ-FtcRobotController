@@ -54,7 +54,8 @@ not measured; section 15 says how each one gets measured. Section 17 lists what 
 - **Rule G417:** never launch into a downward CELL. Our code must **fail safe**: if it doesn't know, it doesn't fire.
 - **Indexer v2** (new this season, CAD in goBildaStarter `indexer-v2`):
   - a 40° single-file ball lane (the **queue**: belts plus Gecko wheels, one motor, `indexer`);
-  - a **gate** servo paddle at the end of the lane. It opens +90° toward the intake; turning it the other way hits the hood;
+  - a **drop gate** at the end of the lane (25 Nov, replaces the swinging paddle): two prongs that slide straight
+    **down** 40 mm to open, driven by the gate servo through an arm and slot, so opening never pushes into ball 1;
   - two break beams: `beam_staged`, with a ball waiting at the gate, and `beam_full`, with the lane full. The robot
     holds up to 4 balls (G407). The intake stops as soon as `beam_full` shows 4, so a 5th ball is not collected; the
     push-back from the `indexer-v2` branch is only the backup (S8);
@@ -68,11 +69,15 @@ not measured; section 15 says how each one gets measured. Section 17 lists what 
     gravity holds ball 2 back.
   - **Where ball 2 stops:** the queue moves one ball pitch per ball (`queue.ticksPerBall`), so after ball 1 is taken,
     ball 2 sits at the staged spot behind the gate, about 40 mm short of the wheel. Confirm on the robot (section 15).
-  - **The paddle** (two prongs between the bottom belts, 3 mm in front of ball 1) opens by tipping toward the intake
-    and under the lane floor, through the swing slots. It never reaches ball 2. The check is **ball 1**: the prong tips
-    must not push it back or lift it while they swing (section 15).
+  - **The gate** (two prongs between the bottom belts, 3 mm in front of ball 1). The first design tipped toward the
+    intake about a pivot below and behind it; a CAD sweep (25 Nov) showed its prongs passing through ball 1 (up to
+    2.7 cm³ at 40°), and no back-off short of 66 mm cleared it. **Replaced by a drop gate:** the prongs slide straight
+    down 40 mm (prong tops from the ball centre line to 5 mm below the lowest ball point), so nothing moves toward
+    ball 1. Checks: 4.5 mm gap to ball 1 closed, ≥ 3 mm round the ball path open (CAD).
   - **Gate servo:** goBILDA 2000-0025-0003 (Speed), about 0.09 s per 60° rated (6 V, no load), so **about 0.15–0.2 s
-    for 90°** on the hub's servo power (est.; measure it).
+    for 90°** on the hub's servo power (est.; measure it). The drop gate uses the same 90° of servo turn (arm + slot).
+    The old code's open/close back-offs (8 mm before opening) are not needed any more; the close back-off (nothing in
+    the prongs' path) still is.
 - **Drive:** mecanum, goBILDA Pinpoint odometry (4-bar pods), **Pedro Pathing 3.0.2** (`com.pedropathing:revhub`) with
   the AutoTune page at `http://192.168.43.1:10158`. Pedro 3's API is new; don't use Pedro 1.x/2.x examples.
 - **Field frame used by v1 (`auto/AutoField`, `fieldtour/FieldMap`):** origin at the field centre, +X toward the BLUE

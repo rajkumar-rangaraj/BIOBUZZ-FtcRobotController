@@ -32,7 +32,7 @@ public final class V2Config {
     // ---------------- servos
     public static final String LEFT_INTAKE_SERVO = "left_intake_servo";    // continuous: corner intake wheel
     public static final String RIGHT_INTAKE_SERVO = "right_intake_servo";  // continuous: corner intake wheel
-    public static final String GATE = "gate";                              // position (servo mode): queue gate paddle
+    public static final String GATE = "gate";                              // position (servo mode): queue drop gate
     public static final String FLOWER_ARM = "flower_arm";                  // position (servo mode)
 
     public static final List<String> CR_SERVOS = Collections.unmodifiableList(Arrays.asList(

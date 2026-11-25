@@ -113,10 +113,12 @@ After picking another device you must **release the triggers once** before it re
 
 **SERVOS page**
 - Corner wheels (`left_intake_servo`, `right_intake_servo`): right trigger – does it pull a ball **IN**?
-- **Gate** (`gate`): press A (goes to 0.50), then RB / LB in small steps. Find and write down:
-  - **CLOSED**: both prongs standing up across the lane (they hold ball 1).
-  - **OPEN**: swung **90° toward the intake**, lying under the lane floor.
-  - **Never** move it the other way (toward the flywheel): it hits the hood. Stop at once if it binds.
+- **Gate** (`gate`): the **drop gate** (since 25 Nov): its two prongs slide straight down. Press A (goes to 0.50),
+  then RB / LB in small steps. Find and write down:
+  - **CLOSED**: prong tops level with the middle of a ball (they hold ball 1); the servo arm points up the lane.
+  - **OPEN**: prongs 40 mm lower, their tops below the bottom belts. About 90° of servo turn from CLOSED.
+  - Don't drive the servo past either end: the arm's pin hits the end of the carriage slot. Stop at once if it binds.
+  - With a ball resting at the gate, opening must **not** push the ball back.
 - **Flower arm** (`flower_arm`): same way, write down **STOWED** and **DEPLOYED**.
 - X lets a servo go limp when you are done.
 
@@ -158,7 +160,7 @@ Date: ____________ Tested by: ____________ Battery: ______ V
 |---|---|
 | left_intake_servo | + power pulls IN? ☐ yes ☐ no |
 | right_intake_servo | + power pulls IN? ☐ yes ☐ no |
-| gate | CLOSED = ______ OPEN = ______ (90° toward the intake) |
+| gate | CLOSED = ______ OPEN = ______ (drop gate: prongs 40 mm down) |
 | flower_arm | STOWED = ______ DEPLOYED = ______ |
 
 **Sensors**

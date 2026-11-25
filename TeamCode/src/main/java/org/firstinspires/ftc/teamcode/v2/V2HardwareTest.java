@@ -101,7 +101,7 @@ public class V2HardwareTest extends LinearOpMode {
     }
     static final String[] CR_NAMES = V2Config.CR_SERVOS.toArray(new String[0]);
     static final String[] POS_NAMES = V2Config.POSITION_SERVOS.toArray(new String[0]);
-    static final String[] POS_LABEL = {"gate paddle (opens 90 deg TOWARD THE INTAKE)", "flower arm"};
+    static final String[] POS_LABEL = {"drop gate (prongs slide DOWN to open)", "flower arm"};
     static final String[] BEAM_NAMES = V2Config.BEAMS.toArray(new String[0]);
     static final String[] BEAM_LABEL = {"ball 1 at the gate", "ball 4 at the lane foot"};
     static final String IMU_NAME = V2Config.IMU, PINPOINT_NAME = V2Config.PINPOINT, WEBCAM_NAME = V2Config.WEBCAM;
