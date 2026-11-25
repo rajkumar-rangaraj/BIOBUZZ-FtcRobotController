@@ -61,6 +61,8 @@ public class V2IntakeShootTest extends LinearOpMode {
         boolean flyOn = false;
         int which = 1;                                   // 0 BOTH, 1 ONLY launcher, 2 ONLY launcher2 (start safe)
         boolean pBack = false;
+        double stallSince = -1;
+        int stallTrips = 0;
         final String[] WHICH = {"BOTH", "ONLY launcher", "ONLY launcher2"};
         boolean pA = false, pB = false, pX = false, pY = false, pU = false, pD = false, pL = false, pR = false;
 
@@ -103,6 +105,27 @@ public class V2IntakeShootTest extends LinearOpMode {
             double p2 = fly2Flip ? -p1 : p1;
             if (fly1 != null) fly1.setPower(which == 2 ? 0 : p1);
             if (fly2 != null) fly2.setPower(which == 1 ? 0 : p2);
+            // stall guard: high current with the wheel hardly turning for 0.4 s = cut the flywheel (protects the motors)
+            double c1 = fly1 != null ? fly1.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
+            double c2 = fly2 != null ? fly2.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
+            double w1 = fly1 != null ? fly1.getVelocity() : 0, w2 = fly2 != null ? fly2.getVelocity() : 0;
+            if (flyPower > 0.25 && Math.max(c1, c2) > 3.5 && Math.max(Math.abs(w1), Math.abs(w2)) < 400) {
+                if (stallSince < 0) stallSince = getRuntime();
+                if (getRuntime() - stallSince > 0.4) {
+                    flyOn = false;
+                    flyPower = 0;
+                    if (fly1 != null) fly1.setPower(0);
+                    if (fly2 != null) fly2.setPower(0);
+                    stallTrips++;
+                    stallSince = -1;
+                }
+            } else {
+                stallSince = -1;
+            }
+            if (flyPower > 0 || Math.max(c1, c2) > 0.3) {
+                com.qualcomm.robotcore.util.RobotLog.ii("V2FLY", "mode=%s power=%.2f p1=%.2f p2=%.2f v1=%.0f v2=%.0f a1=%.2f a2=%.2f trips=%d",
+                        WHICH[which], flyPower, which == 2 ? 0 : p1, which == 1 ? 0 : p2, w1, w2, c1, c2, stallTrips);
+            }
 
             double qp = 0;
             if (gamepad1.right_trigger > 0.05) qp = gamepad1.right_trigger * QUEUE_MAX;
@@ -118,6 +141,9 @@ public class V2IntakeShootTest extends LinearOpMode {
             double a1 = fly1 != null ? fly1.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
             double a2 = fly2 != null ? fly2.getCurrent(org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.AMPS) : 0;
             telemetry.addData("Current A", "launcher %.1f   launcher2 %.1f", a1, a2);
+            if (stallTrips > 0) {
+                telemetry.addLine("!! STALL CUT-OFF tripped " + stallTrips + "x: the flywheel was stopped to protect the motors");
+            }
             if (flyPower > 0.2 && Math.max(a1, a2) > 4.0 && Math.abs(v1) < 600) {
                 telemetry.addLine("!! HIGH CURRENT, LOW SPEED: motors fighting or the wheel is stuck - press B NOW");
             }
